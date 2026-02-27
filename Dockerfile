@@ -5,10 +5,10 @@ RUN apk add --no-cache git
 
 WORKDIR /build
 COPY tls-sidecar/go.mod tls-sidecar/go.sum* ./
-RUN go mod download
+RUN go mod download || true
 
 COPY tls-sidecar/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o tls-sidecar .
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o tls-sidecar .
 
 # ── Stage 2: Node.js 应用 ──
 # 使用官方Node.js运行时作为基础镜像
