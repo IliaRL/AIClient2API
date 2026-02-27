@@ -64,8 +64,9 @@ const httpsAgent = new https.Agent({
     sigalgs: CHROME_SIGALGS,
     minVersion: 'TLSv1.2',
     maxVersion: 'TLSv1.3',
-    // Chrome 的 ALPN 协商顺序: h2 优先
-    ALPNProtocols: ['h2', 'http/1.1'],
+    // axios 仅支持 HTTP/1.1，不能协商 h2（否则服务端返回 H2 帧会解析失败）
+    // 注意：真实 Chrome 会协商 h2，但 Node.js http 模块不支持
+    ALPNProtocols: ['http/1.1'],
     // Chrome 支持的 EC 曲线
     ecdhCurve: 'X25519:P-256:P-384',
     // 允许不安全的旧版协商 (Chrome 也允许)
