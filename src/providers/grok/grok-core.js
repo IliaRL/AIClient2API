@@ -108,10 +108,10 @@ export class GrokApiService {
         this.chatApi = `${this.baseUrl}/rest/app-chat/conversations/new`;
         this.isInitialized = false;
         
-        // 使用全局转换器实例，确保与适配器层使用的是同一个实例，从而共享 SSO token 和基础 URL 配置
+        // 使用全局转换器实例，确保与适配器层使用的是同一个实例
         this.converter = ConverterFactory.getConverter(MODEL_PROTOCOL_PREFIX.GROK);
-        if (this.converter) {
-            this.converter.setSsoToken(this.token);
+        if (this.converter && this.uuid) {
+            this.converter.setUuid(this.uuid);
         }
         
         this.lastSyncAt = null;
@@ -520,8 +520,8 @@ export class GrokApiService {
             if (resp.rolloutId) collected.rolloutId = resp.rolloutId;
             
             // 同步私有字段到最终结果
-            if (resp._ssoToken) collected._ssoToken = resp._ssoToken;
             if (resp._requestBaseUrl) collected._requestBaseUrl = resp._requestBaseUrl;
+            if (resp._uuid) collected._uuid = resp._uuid;
             
             if (resp.modelResponse) collected.modelResponse = resp.modelResponse;
             if (resp.cardAttachment) collected.cardAttachment = resp.cardAttachment;
@@ -595,9 +595,11 @@ export class GrokApiService {
     }
 
     async * generateContentStream(model, requestBody) {
-        // 确保全局转换器拥有最新的 SSO token 和基础 URL
+        // 确保全局转换器拥有最新的基础 URL 和 UUID
         if (this.converter) {
-            this.converter.setSsoToken(this.token);
+            if (this.uuid) {
+                this.converter.setUuid(this.uuid);
+            }
             if (requestBody._requestBaseUrl) {
                 this.converter.setRequestBaseUrl(requestBody._requestBaseUrl);
             }
@@ -705,9 +707,9 @@ export class GrokApiService {
                 try {
                     const json = JSON.parse(dataStr);
                     if (json.result?.response) {
-                        // 注入 SSO token 和基础 URL，以便全局转换器能获取到
-                        json.result.response._ssoToken = this.token;
+                        // 注入基础 URL 和 UUID，以便全局转换器能获取到
                         json.result.response._requestBaseUrl = requestBody._requestBaseUrl;
+                        json.result.response._uuid = this.uuid;
                         
                         if (json.result.response.responseId) {
                             lastResponseId = json.result.response.responseId;
@@ -730,8 +732,8 @@ export class GrokApiService {
                     response: { 
                         isDone: true, 
                         responseId: lastResponseId,
-                        _ssoToken: this.token,
-                        _requestBaseUrl: requestBody._requestBaseUrl
+                        _requestBaseUrl: requestBody._requestBaseUrl,
+                        _uuid: this.uuid
                     } 
                 } 
             };

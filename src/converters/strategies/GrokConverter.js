@@ -13,28 +13,14 @@ import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
  * 实现Grok协议到其他协议的转换
  */
 export class GrokConverter extends BaseConverter {
-    // 静态属性，确保所有实例共享最新的认证和基础 URL 配置
-    static sharedSsoToken = null;
+    // 静态属性，确保所有实例共享最新的基础 URL 和 UUID 配置
     static sharedRequestBaseUrl = "";
+    static sharedUuid = null;
 
     constructor() {
         super('grok');
         // 用于跟踪每个请求的状态
         this.requestStates = new Map();
-    }
-
-    /**
-     * 设置 Grok SSO token
-     */
-    setSsoToken(token) {
-        if (!token) return;
-        
-        // 如果 token 包含 sso= 前缀，则去掉它
-        let processedToken = token;
-        if (processedToken.startsWith("sso=")) {
-            processedToken = processedToken.substring(4);
-        }
-        GrokConverter.sharedSsoToken = processedToken;
     }
 
     /**
@@ -47,13 +33,22 @@ export class GrokConverter extends BaseConverter {
     }
 
     /**
-     * 为 assets.grok.com 域名的资源 URL 添加 sso 参数，并转换为本地代理 URL
+     * 设置账号的 UUID
+     */
+    setUuid(uuid) {
+        if (uuid) {
+            GrokConverter.sharedUuid = uuid;
+        }
+    }
+
+    /**
+     * 为 assets.grok.com 域名的资源 URL 添加 uuid 参数，并转换为本地代理 URL
      */
     _appendSsoToken(url, state = null) {
-        const ssoToken = state?.ssoToken || GrokConverter.sharedSsoToken;
         const requestBaseUrl = state?.requestBaseUrl || GrokConverter.sharedRequestBaseUrl;
+        const uuid = state?.uuid || GrokConverter.sharedUuid;
 
-        if (!url || !ssoToken) return url;
+        if (!url || !uuid) return url;
         
         // 检查是否为 assets.grok.com 域名或相对路径
         const isGrokAsset = url.includes('assets.grok.com') || (!url.startsWith('http') && !url.startsWith('data:'));
@@ -67,7 +62,10 @@ export class GrokConverter extends BaseConverter {
         }
 
         // 返回本地代理接口 URL
-        const proxyPath = `/api/grok/assets?url=${encodeURIComponent(originalUrl)}&sso=${encodeURIComponent(ssoToken)}`;
+        // 使用 uuid 以提高安全性，防止 token 泄露在链接中
+        const authParam = `uuid=${encodeURIComponent(uuid)}`;
+
+        const proxyPath = `/api/grok/assets?url=${encodeURIComponent(originalUrl)}&${authParam}`;
         if (requestBaseUrl) {
             return `${requestBaseUrl}${proxyPath}`;
         }
@@ -78,8 +76,8 @@ export class GrokConverter extends BaseConverter {
      * 在文本中查找并替换所有 assets.grok.com 的资源链接为绝对代理链接
      */
     _processGrokAssetsInText(text, state = null) {
-        const ssoToken = state?.ssoToken || GrokConverter.sharedSsoToken;
-        if (!text || !ssoToken) return text;
+        const uuid = state?.uuid || GrokConverter.sharedUuid;
+        if (!text || !uuid) return text;
         
         // 更宽松的正则匹配 assets.grok.com 的 URL
         const grokUrlRegex = /https?:\/\/assets\.grok\.com\/[^\s\)\"\'\>]+/g;
@@ -106,8 +104,8 @@ export class GrokConverter extends BaseConverter {
                 has_tool_call: false,
                 rollout_id: "",
                 in_tool_call: false, // 是否处于 <tool_call> 块内
-                ssoToken: null,
                 requestBaseUrl: "",
+                uuid: null,
                 pending_text_buffer: "" // 用于处理流式输出中被截断的 URL
             });
         }
@@ -345,32 +343,32 @@ export class GrokConverter extends BaseConverter {
     /**
      * 渲染图片为 Markdown
      */
-    _renderImage(url, imageId = "image") {
+    _renderImage(url, imageId = "image", state = null) {
         let finalUrl = url;
         if (!url.startsWith('http')) {
             finalUrl = `https://assets.grok.com${url.startsWith('/') ? '' : '/'}${url}`;
         }
-        finalUrl = this._appendSsoToken(finalUrl);
+        finalUrl = this._appendSsoToken(finalUrl, state);
         return `![${imageId}](${finalUrl})`;
     }
 
     /**
      * 渲染视频为 Markdown/HTML (render_video)
      */
-    _renderVideo(videoUrl, thumbnailImageUrl = "") {
+    _renderVideo(videoUrl, thumbnailImageUrl = "", state = null) {
         let finalVideoUrl = videoUrl;
         if (!videoUrl.startsWith('http')) {
             finalVideoUrl = `https://assets.grok.com${videoUrl.startsWith('/') ? '' : '/'}${videoUrl}`;
         }
-        finalVideoUrl = this._appendSsoToken(finalVideoUrl);
+        finalVideoUrl = this._appendSsoToken(finalVideoUrl, state);
         
         let finalThumbUrl = thumbnailImageUrl;
         if (thumbnailImageUrl && !thumbnailImageUrl.startsWith('http')) {
             finalThumbUrl = `https://assets.grok.com${thumbnailImageUrl.startsWith('/') ? '' : '/'}${thumbnailImageUrl}`;
         }
-        finalThumbUrl = this._appendSsoToken(finalThumbUrl);
+        finalThumbUrl = this._appendSsoToken(finalThumbUrl, state);
 
-        const defaultThumb = this._appendSsoToken('https://assets.grok.com/favicon.ico');
+        const defaultThumb = this._appendSsoToken('https://assets.grok.com/favicon.ico', state);
         return `\n[![video](${finalThumbUrl || defaultThumb})](${finalVideoUrl})\n[Play Video](${finalVideoUrl})\n`;
     }
 
@@ -455,15 +453,11 @@ export class GrokConverter extends BaseConverter {
         const modelHash = grokResponse.llmInfo?.modelHash || "";
         
         const state = this._getState(this._formatResponseId(responseId));
-        if (grokResponse._ssoToken) {
-            let processedToken = grokResponse._ssoToken;
-            if (processedToken.startsWith("sso=")) {
-                processedToken = processedToken.substring(4);
-            }
-            state.ssoToken = processedToken;
-        }
         if (grokResponse._requestBaseUrl) {
             state.requestBaseUrl = grokResponse._requestBaseUrl;
+        }
+        if (grokResponse._uuid) {
+            state.uuid = grokResponse._uuid;
         }
 
         // 过滤内容并处理其中的 Grok 资源链接
@@ -534,16 +528,12 @@ export class GrokConverter extends BaseConverter {
         const responseId = this._formatResponseId(rawResponseId);
         const state = this._getState(responseId);
         
-        // 从响应块中同步 token 和基础 URL
-        if (resp._ssoToken) {
-            let processedToken = resp._ssoToken;
-            if (processedToken.startsWith("sso=")) {
-                processedToken = processedToken.substring(4);
-            }
-            state.ssoToken = processedToken;
-        }
+        // 从响应块中同步 uuid 和基础 URL
         if (resp._requestBaseUrl) {
             state.requestBaseUrl = resp._requestBaseUrl;
+        }
+        if (resp._uuid) {
+            state.uuid = resp._uuid;
         }
 
         if (resp.llmInfo?.modelHash && !state.fingerprint) {

@@ -115,7 +115,7 @@ export function createRequestHandler(config, providerPoolManager) {
 
         // Grok assets proxy endpoint
         if (method === 'GET' && path === '/api/grok/assets') {
-            await handleGrokAssetsProxy(req, res, currentConfig);
+            await handleGrokAssetsProxy(req, res, currentConfig, providerPoolManager);
             return true;
         }
 

@@ -8,12 +8,14 @@ import { MODEL_PROVIDER } from './common.js';
  * @param {http.IncomingMessage} req 原始请求
  * @param {http.ServerResponse} res 原始响应
  * @param {Object} config 全局配置
+ * @param {Object} providerPoolManager 提供商号池管理器
  */
-export async function handleGrokAssetsProxy(req, res, config) {
+export async function handleGrokAssetsProxy(req, res, config, providerPoolManager) {
     try {
         const requestUrl = new URL(req.url, `http://${req.headers.host}`);
         const targetUrl = requestUrl.searchParams.get('url');
         let ssoToken = requestUrl.searchParams.get('sso');
+        const uuid = requestUrl.searchParams.get('uuid');
 
         if (!targetUrl) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -21,9 +23,20 @@ export async function handleGrokAssetsProxy(req, res, config) {
             return;
         }
 
+        // 优先尝试从 uuid 换取 token，提高安全性
+        if (!ssoToken && uuid && providerPoolManager) {
+            const providerConfig = providerPoolManager.findProviderByUuid(uuid);
+            if (providerConfig) {
+                ssoToken = providerConfig.GROK_COOKIE_TOKEN;
+                logger.debug(`[Grok Proxy] Resolved SSO token from uuid: ${uuid}`);
+            } else {
+                logger.warn(`[Grok Proxy] Could not find provider configuration for uuid: ${uuid}`);
+            }
+        }
+
         if (!ssoToken) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Missing sso parameter' }));
+            res.end(JSON.stringify({ error: 'Missing sso parameter or valid uuid' }));
             return;
         }
 
