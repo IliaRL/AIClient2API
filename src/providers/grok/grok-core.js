@@ -4,7 +4,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as tls from 'tls';
 import { v4 as uuidv4 } from 'uuid';
-import { API_ACTIONS, isRetryableNetworkError } from '../../utils/common.js';
+import { API_ACTIONS, isRetryableNetworkError, MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 import { getProviderModels } from '../provider-models.js';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { getTLSSidecar } from '../../utils/tls-sidecar.js';
@@ -107,7 +107,13 @@ export class GrokApiService {
         this.baseUrl = config.GROK_BASE_URL || 'https://grok.com';
         this.chatApi = `${this.baseUrl}/rest/app-chat/conversations/new`;
         this.isInitialized = false;
-        this.converter = new GrokConverter();
+        
+        // 使用全局转换器实例，确保与适配器层使用的是同一个实例，从而共享 SSO token 和基础 URL 配置
+        this.converter = ConverterFactory.getConverter(MODEL_PROTOCOL_PREFIX.GROK);
+        if (this.converter) {
+            this.converter.setSsoToken(this.token);
+        }
+        
         this.lastSyncAt = null;
     }
 
@@ -169,7 +175,7 @@ export class GrokApiService {
 
         const payload = {
             "requestKind": "DEFAULT",
-            "modelName": "grok-4-1-thinking-1129", // Default model for checking limits
+            "modelName": "grok-3", // Default model for checking limits
         };
 
         const axiosConfig = {
@@ -188,17 +194,29 @@ export class GrokApiService {
         try {
             const response = await axios(axiosConfig);
             const data = response.data;
+            logger.info('[Grok] Raw rate limits response:', JSON.stringify(data));
             
             let remaining = data.remainingTokens;
             if (remaining === undefined) {
                 remaining = data.remainingQueries !== undefined ? data.remainingQueries : data.totalQueries;
             }
             
-            // 注入固定总量逻辑 (根据反馈：查询总数固定为 80)
-            if (data.remainingQueries !== undefined || data.totalQueries !== undefined) {
+            // 注入用量逻辑
+            if (data.totalQueries > 0) {
+                // 付费账号：totalQueries > 0 时用 totalQueries - remainingQueries 计算已用量
+                data.totalLimit = data.totalQueries;
+                data.usedQueries = Math.max(0, data.totalQueries - (data.remainingQueries !== undefined ? data.remainingQueries : 0));
+                data.unit = 'queries';
+            } else if (data.totalQueries === 0) {
+                // 免费账号：totalQueries = 0 时用 token 额度（totalTokens - remainingTokens）
+                data.totalLimit = data.totalTokens || 0;
+                data.usedQueries = Math.max(0, (data.totalTokens || 0) - (data.remainingTokens || 0));
+                data.unit = 'tokens';
+            } else if (data.remainingQueries !== undefined || data.totalQueries !== undefined) {
+                // 保底逻辑
                 data.totalLimit = 80;
-                // 计算已用次数
                 data.usedQueries = Math.max(0, 80 - (data.remainingQueries !== undefined ? data.remainingQueries : data.totalQueries));
+                data.unit = 'queries';
             }
             
             this.lastSyncAt = Date.now();
@@ -501,6 +519,10 @@ export class GrokApiService {
             if (resp.llmInfo) Object.assign(collected.llmInfo, resp.llmInfo);
             if (resp.rolloutId) collected.rolloutId = resp.rolloutId;
             
+            // 同步私有字段到最终结果
+            if (resp._ssoToken) collected._ssoToken = resp._ssoToken;
+            if (resp._requestBaseUrl) collected._requestBaseUrl = resp._requestBaseUrl;
+            
             if (resp.modelResponse) collected.modelResponse = resp.modelResponse;
             if (resp.cardAttachment) collected.cardAttachment = resp.cardAttachment;
             
@@ -573,6 +595,23 @@ export class GrokApiService {
     }
 
     async * generateContentStream(model, requestBody) {
+        // 确保全局转换器拥有最新的 SSO token 和基础 URL
+        if (this.converter) {
+            this.converter.setSsoToken(this.token);
+            if (requestBody._requestBaseUrl) {
+                this.converter.setRequestBaseUrl(requestBody._requestBaseUrl);
+            }
+        }
+
+        // 临时存储 monitorRequestId
+        if (requestBody._monitorRequestId) {
+            this.config._monitorRequestId = requestBody._monitorRequestId;
+            delete requestBody._monitorRequestId;
+        }
+        if (requestBody._requestBaseUrl) {
+            delete requestBody._requestBaseUrl;
+        }
+
         // 检查是否即将到期（需要同步用量），如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
@@ -665,8 +704,14 @@ export class GrokApiService {
                 
                 try {
                     const json = JSON.parse(dataStr);
-                    if (json.result?.response?.responseId) {
-                        lastResponseId = json.result.response.responseId;
+                    if (json.result?.response) {
+                        // 注入 SSO token 和基础 URL，以便全局转换器能获取到
+                        json.result.response._ssoToken = this.token;
+                        json.result.response._requestBaseUrl = requestBody._requestBaseUrl;
+                        
+                        if (json.result.response.responseId) {
+                            lastResponseId = json.result.response.responseId;
+                        }
                     }
                     yield json;
                 } catch (e) {
@@ -684,7 +729,9 @@ export class GrokApiService {
                 result: { 
                     response: { 
                         isDone: true, 
-                        responseId: lastResponseId
+                        responseId: lastResponseId,
+                        _ssoToken: this.token,
+                        _requestBaseUrl: requestBody._requestBaseUrl
                     } 
                 } 
             };

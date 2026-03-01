@@ -13,10 +13,80 @@ import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
  * 实现Grok协议到其他协议的转换
  */
 export class GrokConverter extends BaseConverter {
+    // 静态属性，确保所有实例共享最新的认证和基础 URL 配置
+    static sharedSsoToken = null;
+    static sharedRequestBaseUrl = "";
+
     constructor() {
         super('grok');
         // 用于跟踪每个请求的状态
         this.requestStates = new Map();
+    }
+
+    /**
+     * 设置 Grok SSO token
+     */
+    setSsoToken(token) {
+        if (!token) return;
+        
+        // 如果 token 包含 sso= 前缀，则去掉它
+        let processedToken = token;
+        if (processedToken.startsWith("sso=")) {
+            processedToken = processedToken.substring(4);
+        }
+        GrokConverter.sharedSsoToken = processedToken;
+    }
+
+    /**
+     * 设置请求的基础 URL
+     */
+    setRequestBaseUrl(baseUrl) {
+        if (baseUrl) {
+            GrokConverter.sharedRequestBaseUrl = baseUrl;
+        }
+    }
+
+    /**
+     * 为 assets.grok.com 域名的资源 URL 添加 sso 参数，并转换为本地代理 URL
+     */
+    _appendSsoToken(url, state = null) {
+        const ssoToken = state?.ssoToken || GrokConverter.sharedSsoToken;
+        const requestBaseUrl = state?.requestBaseUrl || GrokConverter.sharedRequestBaseUrl;
+
+        if (!url || !ssoToken) return url;
+        
+        // 检查是否为 assets.grok.com 域名或相对路径
+        const isGrokAsset = url.includes('assets.grok.com') || (!url.startsWith('http') && !url.startsWith('data:'));
+        
+        if (!isGrokAsset) return url;
+
+        // 构造完整的原始 URL
+        let originalUrl = url;
+        if (!url.startsWith('http')) {
+            originalUrl = `https://assets.grok.com${url.startsWith('/') ? '' : '/'}${url}`;
+        }
+
+        // 返回本地代理接口 URL
+        const proxyPath = `/api/grok/assets?url=${encodeURIComponent(originalUrl)}&sso=${encodeURIComponent(ssoToken)}`;
+        if (requestBaseUrl) {
+            return `${requestBaseUrl}${proxyPath}`;
+        }
+        return proxyPath;
+    }
+
+    /**
+     * 在文本中查找并替换所有 assets.grok.com 的资源链接为绝对代理链接
+     */
+    _processGrokAssetsInText(text, state = null) {
+        const ssoToken = state?.ssoToken || GrokConverter.sharedSsoToken;
+        if (!text || !ssoToken) return text;
+        
+        // 更宽松的正则匹配 assets.grok.com 的 URL
+        const grokUrlRegex = /https?:\/\/assets\.grok\.com\/[^\s\)\"\'\>]+/g;
+        
+        return text.replace(grokUrlRegex, (url) => {
+            return this._appendSsoToken(url, state);
+        });
     }
 
     /**
@@ -35,7 +105,10 @@ export class GrokConverter extends BaseConverter {
                 content_buffer: "", // 用于缓存内容以解析工具调用
                 has_tool_call: false,
                 rollout_id: "",
-                in_tool_call: false // 是否处于 <tool_call> 块内
+                in_tool_call: false, // 是否处于 <tool_call> 块内
+                ssoToken: null,
+                requestBaseUrl: "",
+                pending_text_buffer: "" // 用于处理流式输出中被截断的 URL
             });
         }
         return this.requestStates.get(requestId);
@@ -277,6 +350,7 @@ export class GrokConverter extends BaseConverter {
         if (!url.startsWith('http')) {
             finalUrl = `https://assets.grok.com${url.startsWith('/') ? '' : '/'}${url}`;
         }
+        finalUrl = this._appendSsoToken(finalUrl);
         return `![${imageId}](${finalUrl})`;
     }
 
@@ -288,13 +362,16 @@ export class GrokConverter extends BaseConverter {
         if (!videoUrl.startsWith('http')) {
             finalVideoUrl = `https://assets.grok.com${videoUrl.startsWith('/') ? '' : '/'}${videoUrl}`;
         }
+        finalVideoUrl = this._appendSsoToken(finalVideoUrl);
         
         let finalThumbUrl = thumbnailImageUrl;
         if (thumbnailImageUrl && !thumbnailImageUrl.startsWith('http')) {
             finalThumbUrl = `https://assets.grok.com${thumbnailImageUrl.startsWith('/') ? '' : '/'}${thumbnailImageUrl}`;
         }
+        finalThumbUrl = this._appendSsoToken(finalThumbUrl);
 
-        return `\n[![video](${finalThumbUrl || 'https://assets.grok.com/favicon.ico'})](${finalVideoUrl})\n[Play Video](${finalVideoUrl})\n`;
+        const defaultThumb = this._appendSsoToken('https://assets.grok.com/favicon.ico');
+        return `\n[![video](${finalThumbUrl || defaultThumb})](${finalVideoUrl})\n[Play Video](${finalVideoUrl})\n`;
     }
 
     /**
@@ -376,22 +453,35 @@ export class GrokConverter extends BaseConverter {
         const responseId = grokResponse.responseId || `chatcmpl-${uuidv4()}`;
         let content = grokResponse.message || "";
         const modelHash = grokResponse.llmInfo?.modelHash || "";
+        
+        const state = this._getState(this._formatResponseId(responseId));
+        if (grokResponse._ssoToken) {
+            let processedToken = grokResponse._ssoToken;
+            if (processedToken.startsWith("sso=")) {
+                processedToken = processedToken.substring(4);
+            }
+            state.ssoToken = processedToken;
+        }
+        if (grokResponse._requestBaseUrl) {
+            state.requestBaseUrl = grokResponse._requestBaseUrl;
+        }
 
-        // 过滤内容
+        // 过滤内容并处理其中的 Grok 资源链接
         content = this._filterToken(content, responseId);
+        content = this._processGrokAssetsInText(content, state);
 
         // 收集图片并追加
         const imageUrls = this._collectImages(grokResponse);
         if (imageUrls.length > 0) {
             content += "\n";
             for (const url of imageUrls) {
-                content += this._renderImage(url) + "\n";
+                content += this._renderImage(url, "image", state) + "\n";
             }
         }
 
         // 处理视频 (非流式模式)
         if (grokResponse.finalVideoUrl) {
-            content += this._renderVideo(grokResponse.finalVideoUrl, grokResponse.finalThumbnailUrl);
+            content += this._renderVideo(grokResponse.finalVideoUrl, grokResponse.finalThumbnailUrl, state);
         }
 
         // 解析工具调用
@@ -444,6 +534,18 @@ export class GrokConverter extends BaseConverter {
         const responseId = this._formatResponseId(rawResponseId);
         const state = this._getState(responseId);
         
+        // 从响应块中同步 token 和基础 URL
+        if (resp._ssoToken) {
+            let processedToken = resp._ssoToken;
+            if (processedToken.startsWith("sso=")) {
+                processedToken = processedToken.substring(4);
+            }
+            state.ssoToken = processedToken;
+        }
+        if (resp._requestBaseUrl) {
+            state.requestBaseUrl = resp._requestBaseUrl;
+        }
+
         if (resp.llmInfo?.modelHash && !state.fingerprint) {
             state.fingerprint = resp.llmInfo.modelHash;
         }
@@ -473,12 +575,11 @@ export class GrokConverter extends BaseConverter {
         // 处理结束标志
         if (resp.isDone) {
             let finalContent = "";
-            /*
-            if (state.think_opened) {
-                finalContent += "\n</think>\n";
-                state.think_opened = false;
+            // 处理剩余的缓冲区
+            if (state.pending_text_buffer) {
+                finalContent += this._processGrokAssetsInText(state.pending_text_buffer, state);
+                state.pending_text_buffer = "";
             }
-            */
 
             // 处理 buffer 中的工具调用
             const { text, toolCalls } = this.parseToolCalls(state.content_buffer);
@@ -493,7 +594,7 @@ export class GrokConverter extends BaseConverter {
                     choices: [{
                         index: 0,
                         delta: { 
-                            content: ((/* finalContent + */ "") + (text || "")).trim() || null,
+                            content: (finalContent + (text || "")).trim() || null,
                             tool_calls: toolCalls 
                         },
                         finish_reason: "tool_calls"
@@ -508,7 +609,7 @@ export class GrokConverter extends BaseConverter {
                     system_fingerprint: state.fingerprint,
                     choices: [{
                         index: 0,
-                        delta: { content: /* finalContent || */ null },
+                        delta: { content: finalContent || null },
                         finish_reason: "stop"
                     }]
                 });
@@ -558,7 +659,7 @@ export class GrokConverter extends BaseConverter {
                 }
                 */
                 state.video_think_active = false;
-                deltaContent += this._renderVideo(vid.videoUrl, vid.thumbnailImageUrl);
+                deltaContent += this._renderVideo(vid.videoUrl, vid.thumbnailImageUrl, state);
             }
         }
 
@@ -576,7 +677,7 @@ export class GrokConverter extends BaseConverter {
 
             const imageUrls = this._collectImages(mr);
             for (const url of imageUrls) {
-                deltaContent += this._renderImage(url) + "\n";
+                deltaContent += this._renderImage(url, "image", state) + "\n";
             }
 
             if (mr.metadata?.llm_info?.modelHash) {
@@ -590,9 +691,14 @@ export class GrokConverter extends BaseConverter {
             if (card.jsonData) {
                 try {
                     const cardData = JSON.parse(card.jsonData);
-                    const original = cardData.image?.original;
+                    let original = cardData.image?.original;
                     const title = cardData.image?.title || "image";
                     if (original) {
+                        // 确保是绝对路径
+                        if (!original.startsWith('http')) {
+                            original = `https://assets.grok.com${original.startsWith('/') ? '' : '/'}${original}`;
+                        }
+                        original = this._appendSsoToken(original, state);
                         deltaContent += `![${title}](${original})\n`;
                     }
                 } catch (e) {
@@ -611,25 +717,54 @@ export class GrokConverter extends BaseConverter {
             if (inThink) {
                 deltaReasoning += filtered;
             } else {
-                // 工具调用抑制逻辑：不向客户端输出 <tool_call> 块及其内容
-                let outputToken = filtered;
+                // 将新 token 加入待处理缓冲区，解决 URL 被截断的问题
+                state.pending_text_buffer += filtered;
                 
-                // 简单的状态切换检测
-                if (outputToken.includes('<tool_call>')) {
-                    state.in_tool_call = true;
-                    state.has_tool_call = true;
-                    // 移除标签之后的部分（如果有）
-                    outputToken = outputToken.split('<tool_call>')[0];
-                } else if (state.in_tool_call && outputToken.includes('</tool_call>')) {
-                    state.in_tool_call = false;
-                    // 只保留标签之后的部分
-                    outputToken = outputToken.split('</tool_call>')[1] || "";
-                } else if (state.in_tool_call) {
-                    // 处于块内，完全抑制
-                    outputToken = "";
+                let outputFromBuffer = "";
+                
+                // 启发式逻辑：检查缓冲区是否包含完整的 URL
+                if (state.pending_text_buffer.includes("https://assets.grok.com")) {
+                    const lastUrlIndex = state.pending_text_buffer.lastIndexOf("https://assets.grok.com");
+                    const textAfterUrl = state.pending_text_buffer.slice(lastUrlIndex);
+                    
+                    // 检查 URL 是否结束（空格、右括号、引号、换行、大于号等）
+                    const terminatorMatch = textAfterUrl.match(/[\s\)\"\'\>\n]/);
+                    if (terminatorMatch) {
+                        // URL 已结束，可以安全地处理并输出缓冲区
+                        outputFromBuffer = this._processGrokAssetsInText(state.pending_text_buffer, state);
+                        state.pending_text_buffer = "";
+                    } else if (state.pending_text_buffer.length > 1000) {
+                        // 缓冲区过长，强制处理输出，避免过度延迟
+                        outputFromBuffer = this._processGrokAssetsInText(state.pending_text_buffer, state);
+                        state.pending_text_buffer = "";
+                    }
+                } else {
+                    // 不包含 Grok URL，直接输出
+                    outputFromBuffer = state.pending_text_buffer;
+                    state.pending_text_buffer = "";
                 }
 
-                deltaContent += outputToken;
+                if (outputFromBuffer) {
+                    // 工具调用抑制逻辑：不向客户端输出 <tool_call> 块及其内容
+                    let outputToken = outputFromBuffer;
+                    
+                    // 简单的状态切换检测
+                    if (outputToken.includes('<tool_call>')) {
+                        state.in_tool_call = true;
+                        state.has_tool_call = true;
+                        // 移除标签之后的部分（如果有）
+                        outputToken = outputToken.split('<tool_call>')[0];
+                    } else if (state.in_tool_call && outputToken.includes('</tool_call>')) {
+                        state.in_tool_call = false;
+                        // 只保留标签之后的部分
+                        outputToken = outputToken.split('</tool_call>')[1] || "";
+                    } else if (state.in_tool_call) {
+                        // 处于块内，完全抑制
+                        outputToken = "";
+                    }
+
+                    deltaContent += outputToken;
+                }
                 
                 // 将内容加入 buffer 用于最终解析工具调用
                 state.content_buffer += filtered;
