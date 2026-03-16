@@ -101,7 +101,9 @@ export async function handleUpdateConfig(req, res, currentConfig) {
 
         // TLS Sidecar settings
         if (newConfig.TLS_SIDECAR_ENABLED !== undefined) currentConfig.TLS_SIDECAR_ENABLED = newConfig.TLS_SIDECAR_ENABLED;
+        if (newConfig.TLS_SIDECAR_ENABLED_PROVIDERS !== undefined) currentConfig.TLS_SIDECAR_ENABLED_PROVIDERS = newConfig.TLS_SIDECAR_ENABLED_PROVIDERS;
         if (newConfig.TLS_SIDECAR_PORT !== undefined) currentConfig.TLS_SIDECAR_PORT = newConfig.TLS_SIDECAR_PORT;
+        if (newConfig.TLS_SIDECAR_PROXY_URL !== undefined) currentConfig.TLS_SIDECAR_PROXY_URL = newConfig.TLS_SIDECAR_PROXY_URL;
 
         // Log settings
         if (newConfig.LOG_ENABLED !== undefined) currentConfig.LOG_ENABLED = newConfig.LOG_ENABLED;
@@ -171,7 +173,9 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 LOG_MAX_FILE_SIZE: currentConfig.LOG_MAX_FILE_SIZE,
                 LOG_MAX_FILES: currentConfig.LOG_MAX_FILES,
                 TLS_SIDECAR_ENABLED: currentConfig.TLS_SIDECAR_ENABLED,
-                TLS_SIDECAR_PORT: currentConfig.TLS_SIDECAR_PORT
+                TLS_SIDECAR_ENABLED_PROVIDERS: currentConfig.TLS_SIDECAR_ENABLED_PROVIDERS,
+                TLS_SIDECAR_PORT: currentConfig.TLS_SIDECAR_PORT,
+                TLS_SIDECAR_PROXY_URL: currentConfig.TLS_SIDECAR_PROXY_URL
             };
 
             writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');

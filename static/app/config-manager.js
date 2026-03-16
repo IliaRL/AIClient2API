@@ -26,6 +26,12 @@ function updateConfigProviderConfigs(configs) {
     if (proxyProvidersEl) {
         renderProviderTags(proxyProvidersEl, configs, false);
     }
+
+    // 渲染 TLS Sidecar 设置中的提供商选择
+    const tlsSidecarProvidersEl = document.getElementById('tlsSidecarProviders');
+    if (tlsSidecarProvidersEl) {
+        renderProviderTags(tlsSidecarProvidersEl, configs, false);
+    }
     
     // 重新加载当前配置以恢复选中状态
     loadConfiguration();
@@ -210,8 +216,25 @@ async function loadConfiguration() {
         // TLS Sidecar 配置
         const tlsSidecarEnabledEl = document.getElementById('tlsSidecarEnabled');
         const tlsSidecarPortEl = document.getElementById('tlsSidecarPort');
+        const tlsSidecarProxyUrlEl = document.getElementById('tlsSidecarProxyUrl');
+        const tlsSidecarProvidersEl = document.getElementById('tlsSidecarProviders');
+
         if (tlsSidecarEnabledEl) tlsSidecarEnabledEl.checked = data.TLS_SIDECAR_ENABLED || false;
         if (tlsSidecarPortEl) tlsSidecarPortEl.value = data.TLS_SIDECAR_PORT || 9090;
+        if (tlsSidecarProxyUrlEl) tlsSidecarProxyUrlEl.value = data.TLS_SIDECAR_PROXY_URL || '';
+        
+        if (tlsSidecarProvidersEl) {
+            const enabledProviders = data.TLS_SIDECAR_ENABLED_PROVIDERS || [];
+            const tags = tlsSidecarProvidersEl.querySelectorAll('.provider-tag');
+            tags.forEach(tag => {
+                const value = tag.getAttribute('data-value');
+                if (enabledProviders.includes(value)) {
+                    tag.classList.add('selected');
+                } else {
+                    tag.classList.remove('selected');
+                }
+            });
+        }
         
     } catch (error) {
         console.error('Failed to load configuration:', error);
@@ -314,6 +337,15 @@ async function saveConfiguration() {
     // TLS Sidecar 配置
     config.TLS_SIDECAR_ENABLED = document.getElementById('tlsSidecarEnabled')?.checked || false;
     config.TLS_SIDECAR_PORT = parseInt(document.getElementById('tlsSidecarPort')?.value || 9090);
+    config.TLS_SIDECAR_PROXY_URL = document.getElementById('tlsSidecarProxyUrl')?.value?.trim() || null;
+    
+    const tlsSidecarProvidersEl = document.getElementById('tlsSidecarProviders');
+    if (tlsSidecarProvidersEl) {
+        config.TLS_SIDECAR_ENABLED_PROVIDERS = Array.from(tlsSidecarProvidersEl.querySelectorAll('.provider-tag.selected'))
+            .map(tag => tag.getAttribute('data-value'));
+    } else {
+        config.TLS_SIDECAR_ENABLED_PROVIDERS = [];
+    }
 
     try {
         await window.apiClient.post('/config', config);

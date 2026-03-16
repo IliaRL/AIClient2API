@@ -147,7 +147,19 @@
                         <input type="number" id="tlsSidecarPort" class="form-control" min="1024" max="65535" value="9090">
                     </div>
                 </div>
-                <small class="form-text" data-i18n="config.proxy.tlsSidecarNote">启用后 Grok 请求将通过 Go uTLS sidecar 转发，完美模拟 Chrome TLS/H2 指纹绕过 Cloudflare（需重启服务）</small>
+                <div class="form-group">
+                    <label for="tlsSidecarProxyUrl" data-i18n="config.proxy.tlsSidecarProxyUrl">Sidecar 上游代理</label>
+                    <input type="text" id="tlsSidecarProxyUrl" class="form-control" data-i18n-placeholder="config.proxy.urlPlaceholder" placeholder="例如: http://127.0.0.1:7890">
+                    <small class="form-text" data-i18n="config.proxy.urlNote">TLS Sidecar 专用上游代理，留空则不使用代理</small>
+                </div>
+                <div class="form-group pool-section">
+                    <label data-i18n="config.proxy.tlsSidecarEnabledProviders">启用 TLS Sidecar 的提供商</label>
+                    <div id="tlsSidecarProviders" class="provider-tags">
+                        <!-- 动态渲染 -->
+                    </div>
+                    <small class="form-text" data-i18n="config.proxy.enabledProvidersNote">点击选择需要通过 TLS Sidecar 访问的提供商</small>
+                </div>
+                <small class="form-text" data-i18n="config.proxy.tlsSidecarNote">启用后选中的提供商请求将通过 Go uTLS sidecar 转发，完美模拟 Chrome TLS/H2 指纹绕过 Cloudflare（需重启服务）</small>
             </div>
 
             <!-- 服务治理与高可用 -->

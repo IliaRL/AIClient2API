@@ -132,7 +132,13 @@ export class CodexConverter extends BaseConverter {
     
         // 确保 input 数组中的每个项都有 type: "message"，并将系统角色转换为开发者角色
         if (codexRequest.input && Array.isArray(codexRequest.input)) {
-            codexRequest.input = codexRequest.input.map(item => {
+            codexRequest.input = codexRequest.input.filter(item => {
+                // 如果 instructions 已存在，过滤掉 input 中的 system/developer 消息以避免重复
+                if (codexRequest.instructions && (item.role === 'system' || item.role === 'developer')) {
+                    return false;
+                }
+                return true;
+            }).map(item => {
                 // 如果没有 type 或者 type 不是 message，则添加 type: "message"
                 if (!item.type || item.type !== 'message') {
                     item = { type: "message", ...item };
@@ -160,7 +166,7 @@ export class CodexConverter extends BaseConverter {
         const codexRequest = {
             model: data.model,
             instructions: this.buildInstructions(data),
-            input: this.convertMessages(data.messages || []),
+            input: this.convertMessages((data.messages || []).filter(m => m.role !== 'system' && m.role !== 'developer')),
             stream: true,
             store: false,
             metadata: data.metadata || {},
@@ -193,7 +199,7 @@ export class CodexConverter extends BaseConverter {
         if (data.input && Array.isArray(data.input) && codexRequest.input.length === 0) {
              // 如果是 OpenAI Responses 格式的 input
              for (const item of data.input) {
-                if (item.type === 'message') {
+                if (item.type === 'message' && item.role !== 'system' && item.role !== 'developer') {
                     codexRequest.input.push({
                         type: 'message',
                         role: item.role === 'system' ? 'developer' : item.role,

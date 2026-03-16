@@ -191,6 +191,22 @@ export function cleanJsonSchemaProperties(schema) {
                 sanitized[key] = cleanProperties;
             } else if (key === 'items') {
                 sanitized[key] = cleanJsonSchemaProperties(value);
+            } else if (key === 'type') {
+                // Google Gemini API 不支持数组形式的 type (如 ["string", "null"])
+                // 必须是单个字符串，且通常需要大写 (STRING, NUMBER, OBJECT, ARRAY, BOOLEAN, INTEGER)
+                if (Array.isArray(value)) {
+                    // 如果包含 null，设置 nullable 为 true
+                    if (value.includes('null')) {
+                        sanitized.nullable = true;
+                    }
+                    // 取第一个非 null 类型
+                    const actualType = value.find(t => t !== 'null');
+                    if (actualType) {
+                        sanitized[key] = actualType.toUpperCase();
+                    }
+                } else if (typeof value === 'string') {
+                    sanitized[key] = value.toUpperCase();
+                }
             } else {
                 sanitized[key] = value;
             }

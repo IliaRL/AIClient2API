@@ -6,6 +6,7 @@ import path from 'path';
 import os from 'os';
 import { refreshCodexTokensWithRetry } from '../../auth/oauth-handlers.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
+import { configureTLSSidecar } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProxyConfigForProvider } from '../../utils/proxy-utils.js';
 import { getProviderModels } from '../provider-models.js';
@@ -36,6 +37,10 @@ export class CodexApiService {
         // 会话缓存管理
         this.conversationCache = new Map(); // key: model-userId, value: {id, expire}
         this.startCacheCleanup();
+    }
+
+    _applySidecar(axiosConfig) {
+        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.CODEX_API, this.baseUrl);
     }
 
     /**
@@ -196,7 +201,15 @@ export class CodexApiService {
                 config.httpsAgent = proxyConfig.httpsAgent;
             }
 
-            const response = await axios.post(url, body, config);
+            const axiosRequestConfig = {
+                method: 'post',
+                url,
+                data: body,
+                ...config
+            };
+            this._applySidecar(axiosRequestConfig);
+
+            const response = await axios.request(axiosRequestConfig);
 
             return this.parseNonStreamResponse(response.data);
         } catch (error) {
@@ -265,7 +278,15 @@ export class CodexApiService {
                 config.httpsAgent = proxyConfig.httpsAgent;
             }
 
-            const response = await axios.post(url, body, config);
+            const axiosRequestConfig = {
+                method: 'post',
+                url,
+                data: body,
+                ...config
+            };
+            this._applySidecar(axiosRequestConfig);
+
+            const response = await axios.request(axiosRequestConfig);
 
             yield* this.parseSSEStream(response.data);
         } catch (error) {
@@ -673,7 +694,14 @@ export class CodexApiService {
                 config.httpsAgent = proxyConfig.httpsAgent;
             }
 
-            const response = await axios.get(url, config);
+            const axiosRequestConfig = {
+                method: 'get',
+                url,
+                ...config
+            };
+            this._applySidecar(axiosRequestConfig);
+
+            const response = await axios.request(axiosRequestConfig);
             
             // 解析响应数据并转换为通用格式
             const data = response.data;

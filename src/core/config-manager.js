@@ -86,8 +86,10 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         LOG_MAX_FILE_SIZE: 10485760,
         LOG_MAX_FILES: 10,
         TLS_SIDECAR_ENABLED: false, // 启用 Go uTLS sidecar（需要编译 tls-sidecar 二进制）
+        TLS_SIDECAR_ENABLED_PROVIDERS: [], // 启用 TLS Sidecar 的提供商列表
         TLS_SIDECAR_PORT: 9090,     // sidecar 监听端口
-        TLS_SIDECAR_BINARY_PATH: null // 自定义二进制路径（默认自动搜索）
+        TLS_SIDECAR_BINARY_PATH: null, // 自定义二进制路径（默认自动搜索）
+        TLS_SIDECAR_PROXY_URL: null    // TLS Sidecar 专用的上游代理地址
     };
 
     let currentConfig = { ...defaultConfig };

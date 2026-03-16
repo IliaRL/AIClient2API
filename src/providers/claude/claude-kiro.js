@@ -15,7 +15,7 @@ import {
     processContent as processContentUtil,
     getContentText as getContentTextUtil
 } from '../../utils/token-utils.js';
-import { configureAxiosProxy } from '../../utils/proxy-utils.js';
+import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 
@@ -487,6 +487,10 @@ export class KiroApiService {
         this.isInitialized = true;
     }
 
+    _applySidecar(axiosConfig) {
+        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.KIRO_API);
+    }
+
 /**
  * 加载凭证信息（不执行刷新）
  */
@@ -684,11 +688,20 @@ async saveCredentialsToFile(filePath, newData) {
             let response = null;
             // 使用更短的超时时间进行 token 刷新，避免阻塞其他请求
             const refreshConfig = { timeout: KIRO_CONSTANTS.TOKEN_REFRESH_TIMEOUT };
+            
+            const axiosConfig = {
+                method: 'post',
+                url: refreshUrl,
+                data: requestBody,
+                ...refreshConfig
+            };
+            this._applySidecar(axiosConfig);
+
             if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
-                response = await this.axiosSocialRefreshInstance.post(refreshUrl, requestBody, refreshConfig);
+                response = await this.axiosSocialRefreshInstance.request(axiosConfig);
                 logger.info('[Kiro Auth] Token refresh social response: ok');
             } else {
-                response = await this.axiosInstance.post(refreshUrl, requestBody, refreshConfig);
+                response = await this.axiosInstance.request(axiosConfig);
                 logger.info('[Kiro Auth] Token refresh idc response: ok');
             }
 
@@ -1484,7 +1497,14 @@ async saveCredentialsToFile(filePath, newData) {
 
             // 当 model 以 kiro-amazonq 开头时，使用 amazonQUrl，否则使用 baseUrl
             const requestUrl = model.startsWith('amazonq') ? this.amazonQUrl : this.baseUrl;
-            const response = await this.axiosInstance.post(requestUrl, requestData, { headers });
+            const axiosConfig = {
+                method: 'post',
+                url: requestUrl,
+                data: requestData,
+                headers
+            };
+            this._applySidecar(axiosConfig);
+            const response = await this.axiosInstance.request(axiosConfig);
             return response;
         } catch (error) {
             const status = error.response?.status;
@@ -1980,10 +2000,15 @@ async saveCredentialsToFile(filePath, newData) {
 
         let stream = null;
         try {
-            const response = await this.axiosInstance.post(requestUrl, requestData, { 
+            const axiosConfig = {
+                method: 'post',
+                url: requestUrl,
+                data: requestData,
                 headers,
                 responseType: 'stream'
-            });
+            };
+            this._applySidecar(axiosConfig);
+            const response = await this.axiosInstance.request(axiosConfig);
 
             stream = response.data;
             let buffer = '';
@@ -2961,8 +2986,15 @@ async saveCredentialsToFile(filePath, newData) {
             'Connection': 'close'
         };
 
+        const axiosConfig = {
+            method: 'get',
+            url: fullUrl,
+            headers
+        };
+        this._applySidecar(axiosConfig);
+
         try {
-            const response = await this.axiosInstance.get(fullUrl, { headers });
+            const response = await this.axiosInstance.request(axiosConfig);
             logger.info('[Kiro] Usage limits fetched successfully');
             return response.data;
         } catch (error) {
