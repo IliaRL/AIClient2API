@@ -351,16 +351,16 @@ export class GeminiApiService {
     }
 
     async initializeAuth(forceRefresh = false) {
-        // 检查是否需要刷新 Token
-        const needsRefresh = forceRefresh
+        // 首先执行基础凭证加载
+        await this.loadCredentials();
+
+        // 检查是否需要刷新 Token（加载凭证后评估）
+        const needsRefresh = forceRefresh || this.isTokenExpiringSoon();
 
         if (this.authClient.credentials.access_token && !needsRefresh) {
             // Token 有效且不需要刷新
             return;
         }
-
-        // 首先执行基础凭证加载
-        await this.loadCredentials();
 
         // 只有在明确要求刷新，或者 AccessToken 确实缺失时，才执行刷新/认证
         // 注意：在 V2 架构下，此方法主要由 PoolManager 的后台队列调用
@@ -809,6 +809,17 @@ export class GeminiApiService {
             logger.error(`[Gemini] Error checking expiry date: ${error.message}`);
             return false;
         }
+    }
+
+    isTokenExpiringSoon() {
+        if (!this.authClient.credentials.expiry_date) {
+            return false;
+        }
+        const currentTime = Date.now();
+        const expiryTime = this.authClient.credentials.expiry_date;
+        const REFRESH_SKEW = 3000; // 50分钟
+        const refreshSkewMs = REFRESH_SKEW * 1000;
+        return expiryTime <= (currentTime + refreshSkewMs);
     }
 
     /**

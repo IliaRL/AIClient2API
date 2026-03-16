@@ -783,18 +783,18 @@ export class AntigravityApiService {
     }
 
     async initializeAuth(forceRefresh = false) {
-        // 检查是否需要刷新 Token
+        const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
+        
+        // 首先执行基础凭证加载
+        await this.loadCredentials();
+
+        // 检查是否需要刷新 Token（在加载凭证后重新评估）
         const needsRefresh = forceRefresh || this.isTokenExpiringSoon();
 
         if (this.authClient.credentials.access_token && !needsRefresh) {
             // Token 有效且不需要刷新
             return;
         }
-
-        const credPath = this.oauthCredsFilePath || path.join(os.homedir(), CREDENTIALS_DIR, CREDENTIALS_FILE);
-        
-        // 首先执行基础凭证加载
-        await this.loadCredentials();
 
         // 只有在明确要求刷新，或者 AccessToken 确实缺失时，才执行刷新/认证
         // 注意：在 V2 架构下，此方法主要由 PoolManager 的后台队列调用
@@ -1484,8 +1484,12 @@ export class AntigravityApiService {
                             
                             // 遍历模型数据，提取配额信息
                             for (const [modelId, modelData] of Object.entries(modelsData)) {
-                                const aliasName = modelName2Alias(modelId);
-                                if (aliasName == null || aliasName === '') continue; // 跳过不支持的模型
+                                // 参考 fetchAvailableModels 的逻辑修复 modelName2Alias 不存在的问题
+                                if (!modelId || (!ANTIGRAVITY_MODELS.includes(modelId) && !modelId.startsWith('claude-'))) {
+                                    continue;
+                                }
+
+                                const aliasName = modelId.startsWith('claude-') ? `gemini-${modelId}` : modelId;
                                 
                                 const modelInfo = {
                                     remaining: 0,
