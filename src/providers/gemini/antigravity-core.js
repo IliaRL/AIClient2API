@@ -1312,8 +1312,8 @@ export class AntigravityApiService {
 
         let selectedModel = model;
         if (!this.availableModels.includes(model)) {
-            logger.warn(`[Antigravity] Model '${model}' not found. Using default model: '${this.availableModels[0]}'`);
-            selectedModel = this.availableModels[0];
+            logger.warn(`[Antigravity] Model '${model}' not found. Using default model: 'gemini-3-flash'`);
+            selectedModel = 'gemini-3-flash';
         }
 
         // 移除 gemini- 前缀以获取实际模型名称（针对 claude 模型）
@@ -1390,8 +1390,8 @@ export class AntigravityApiService {
 
         let selectedModel = model;
         if (!this.availableModels.includes(model)) {
-            logger.warn(`[Antigravity] Model '${model}' not found. Using default model: '${this.availableModels[0]}'`);
-            selectedModel = this.availableModels[0];
+            logger.warn(`[Antigravity] Model '${model}' not found. Using default model: 'gemini-3-flash'`);
+            selectedModel = 'gemini-3-flash';
         }
 
         // 移除 gemini- 前缀以获取实际模型名称（针对 claude 模型）
