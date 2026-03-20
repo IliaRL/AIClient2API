@@ -2759,20 +2759,50 @@ function showAuthModal(authUrl, authInfo) {
             'OAuthAuthWindow',
             `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
         );
-        
+
+        let pollTimer = null;
+        const cleanupAuthListeners = () => {
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+            window.removeEventListener('oauth_success_event', handleOAuthSuccess);
+            window.removeEventListener('message', handlePopupMessage);
+        };
+
         // 监听 OAuth 成功事件，自动关闭窗口和模态框
         const handleOAuthSuccess = () => {
             if (authWindow && !authWindow.closed) {
                 authWindow.close();
             }
             modal.remove();
-            window.removeEventListener('oauth_success_event', handleOAuthSuccess);
+            cleanupAuthListeners();
             
             // 授权成功后刷新配置和提供商列表
             loadProviders();
             loadConfigList();
         };
+
+        // 回调页主动 postMessage 时，优先使用父页面关闭子窗口
+        const handlePopupMessage = (event) => {
+            if (event.origin !== window.location.origin) {
+                return;
+            }
+
+            const data = event.data;
+            if (!data || data.type !== 'oauth-popup-complete') {
+                return;
+            }
+
+            if (data.provider && data.provider !== authInfo.provider) {
+                return;
+            }
+
+            handleOAuthSuccess();
+        };
+
         window.addEventListener('oauth_success_event', handleOAuthSuccess);
+        window.addEventListener('message', handlePopupMessage);
         
         if (authWindow) {
             showToast(t('common.info'), t('oauth.window.opened'), 'info');
@@ -2806,7 +2836,10 @@ function showAuthModal(authUrl, authInfo) {
                     const url = new URL(cleanUrlStr);
                     
                     if (url.searchParams.has('code') || url.searchParams.has('token')) {
-                        clearInterval(pollTimer);
+                        if (pollTimer) {
+                            clearInterval(pollTimer);
+                            pollTimer = null;
+                        }
                         // 构造本地可处理的 URL，只修改 hostname，保持原始 URL 的端口号不变
                         const localUrl = new URL(url.href);
                         localUrl.hostname = window.location.hostname;
@@ -2816,10 +2849,6 @@ function showAuthModal(authUrl, authInfo) {
                         
                         // 如果是手动输入，直接通过 fetch 请求处理，然后关闭子窗口
                         if (isManualInput) {
-                            // 关闭子窗口
-                            if (authWindow && !authWindow.closed) {
-                                authWindow.close();
-                            }
                             // 通过服务端API处理手动输入的回调URL
                             window.apiClient.post('/oauth/manual-callback', {
                                 provider: authInfo.provider,
@@ -2829,6 +2858,7 @@ function showAuthModal(authUrl, authInfo) {
                                 .then(response => {
                                     if (response.success) {
                                         console.log('OAuth 回调处理成功');
+                                        handleOAuthSuccess();
                                         showToast(t('common.success'), t('oauth.success.msg'), 'success');
                                     } else {
                                         console.error('OAuth 回调处理失败:', response.error);
@@ -2874,10 +2904,10 @@ function showAuthModal(authUrl, authInfo) {
             });
 
             // 启动定时器轮询子窗口 URL
-            const pollTimer = setInterval(() => {
+            pollTimer = setInterval(() => {
                 try {
                     if (authWindow.closed) {
-                        clearInterval(pollTimer);
+                        cleanupAuthListeners();
                         return;
                     }
                     // 如果能读到说明回到了同域
