@@ -178,14 +178,18 @@ export class GrokApiService {
     async initialize() {
         if (this.isInitialized) return;
         this.isInitialized = true;
-        this.getUsageLimits()
-            .catch((error) => {
-                logger.warn('[Grok] Initial usage sync failed:', error.message);
-            });
+        // this.getUsageLimits()
+        //     .catch((error) => {
+        //         logger.warn('[Grok] Initial usage sync failed:', error.message);
+        //     });
     }
 
     async refreshToken() {
-        try { await this.getUsageLimits(); return Promise.resolve(); } catch (error) { return Promise.reject(error); }
+        try { 
+            // await this.getUsageLimits(); return Promise.resolve(); 
+        } catch (error) { 
+            return Promise.reject(error); 
+        }
     }
 
     async getUsageLimits() {
