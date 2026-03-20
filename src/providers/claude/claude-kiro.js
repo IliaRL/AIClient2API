@@ -38,7 +38,7 @@ const KIRO_CONSTANTS = {
     AXIOS_TIMEOUT: 120000, // 2 minutes timeout for normal requests
     TOKEN_REFRESH_TIMEOUT: 15000, // 15 seconds timeout for token refresh (shorter to avoid blocking)
     USER_AGENT: 'KiroIDE',
-    KIRO_VERSION: '0.8.140',
+    KIRO_VERSION: '0.11.63',
     CONTENT_TYPE_JSON: 'application/json',
     ACCEPT_JSON: 'application/json',
     AUTH_METHOD_SOCIAL: 'social',
@@ -463,10 +463,12 @@ export class KiroApiService {
             headers: {
                 'Content-Type': KIRO_CONSTANTS.CONTENT_TYPE_JSON,
                 'Accept': KIRO_CONSTANTS.ACCEPT_JSON,
-                'amz-sdk-request': 'attempt=1; max=1',
+                'amz-sdk-invocation-id': uuidv4(),
+                'amz-sdk-request': 'attempt=1; max=3',
+                'x-amzn-codewhisperer-optout': true,
                 'x-amzn-kiro-agent-mode': 'vibe',
-                'x-amz-user-agent': `aws-sdk-js/1.0.0 KiroIDE-${kiroVersion}-${machineId}`,
-                'user-agent': `aws-sdk-js/1.0.0 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererruntime#1.0.0 m/E KiroIDE-${kiroVersion}-${machineId}`,
+                'x-amz-user-agent': `aws-sdk-js/1.0.34 KiroIDE-${kiroVersion}-${machineId}`,
+                'user-agent': `aws-sdk-js/1.0.34 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererstreaming#1.0.34 m/E KiroIDE-${kiroVersion}-${machineId}`,
                 'Connection': 'close'
             },
         };
@@ -1290,6 +1292,7 @@ async saveCredentialsToFile(filePath, newData) {
 
         const request = {
             conversationState: {
+                agentTaskType: "vibe",
                 chatTriggerType: KIRO_CONSTANTS.CHAT_TRIGGER_TYPE_MANUAL,
                 conversationId: conversationId,
                 currentMessage: {} // Will be populated as userInputMessage
@@ -2979,8 +2982,8 @@ async saveCredentialsToFile(filePath, newData) {
 
         const headers = {
             'Authorization': `Bearer ${this.accessToken}`,
-            'x-amz-user-agent': `aws-sdk-js/1.0.0 KiroIDE-${kiroVersion}-${machineId}`,
-            'user-agent': `aws-sdk-js/1.0.0 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererruntime#1.0.0 m/E KiroIDE-${kiroVersion}-${machineId}`,
+            'x-amz-user-agent': `aws-sdk-js/1.0.34 KiroIDE-${kiroVersion}-${machineId}`,
+            'user-agent': `aws-sdk-js/1.0.34 ua/2.1 os/${osName} lang/js md/nodejs#${nodeVersion} api/codewhispererstreaming#1.0.34 m/E KiroIDE-${kiroVersion}-${machineId}`,
             'amz-sdk-invocation-id': uuidv4(),
             'amz-sdk-request': 'attempt=1; max=1',
             'Connection': 'close'

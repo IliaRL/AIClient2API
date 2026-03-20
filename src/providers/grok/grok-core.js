@@ -3,10 +3,9 @@ import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { v4 as uuidv4 } from 'uuid';
-import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
+import { MODEL_PROTOCOL_PREFIX, MODEL_PROVIDER, isRetryableNetworkError } from '../../utils/common.js';
 import { getProviderModels } from '../provider-models.js';
 import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
-import { MODEL_PROVIDER } from '../../utils/common.js';
 import { ConverterFactory } from '../../converters/ConverterFactory.js';
 import * as readline from 'readline';
 import { getProviderPoolManager } from '../../services/service-manager.js';
@@ -101,15 +100,13 @@ export class GrokApiService {
     async acceptTos() {
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/accept-tos`, headers: this.buildHeaders(), data: {}, httpAgent, httpsAgent, timeout: 15000 };
         configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
-        try { await axios(axiosConfig); } catch (e) { logger.debug(`[Grok TOS] ${e.message}`); }
+        try { await this.callApi(axiosConfig); } catch (e) { logger.debug(`[Grok TOS] ${e.message}`); }
     }
 
     async setBirthDate() {
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/set-birth-date`, headers: this.buildHeaders(), data: { "birthDate": "1990-01-01" }, httpAgent, httpsAgent, timeout: 15000 };
         configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
-        try { await axios(axiosConfig); } catch (e) { logger.debug(`[Grok Birth] ${e.message}`); }
+        try { await this.callApi(axiosConfig); } catch (e) { logger.debug(`[Grok Birth] ${e.message}`); }
     }
 
     async enableNsfwAccount() {
@@ -128,23 +125,103 @@ export class GrokApiService {
         headers['x-user-agent'] = 'connect-es/2.1.1';
         headers['referer'] = `${this.baseUrl}/?_s=data`;
 
-        const axiosConfig = { 
-            method: 'post', 
-            url: `${this.baseUrl}/auth_mgmt.AuthManagement/UpdateUserFeatureControls`, 
-            headers, 
-            data: payload, 
-            httpAgent, 
-            httpsAgent, 
+        const axiosConfig = {
+            method: 'post',
+            url: `${this.baseUrl}/auth_mgmt.AuthManagement/UpdateUserFeatureControls`,
+            headers,
+            data: payload,
+            httpAgent,
+            httpsAgent,
             timeout: 15000,
-            responseType: 'arraybuffer' 
+            responseType: 'arraybuffer'
         };
         configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
-        try { await axios(axiosConfig); } catch (e) { throw e; }
+        try { await this.callApi(axiosConfig); } catch (e) { throw e; }
     }
 
     _applySidecar(axiosConfig) {
         return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+    }
+
+    async callApi(axiosConfig, retryCount = 0) {
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
+
+        try {
+            this._applySidecar(axiosConfig);
+            const response = await axios(axiosConfig);
+            return response.data;
+        } catch (error) {
+            const status = error.response?.status;
+            const isNetworkError = isRetryableNetworkError(error);
+
+            if (status === 401 || status === 403) {
+                this.handleApiError(error);
+            }
+
+            if ((status === 429 || (status >= 500 && status < 600) || isNetworkError) && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const reason = status ? `Status ${status}` : (error.code || 'Network error');
+                logger.info(`[Grok API] ${reason}. Retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.callApi(axiosConfig, retryCount + 1);
+            }
+            this.handleApiError(error);
+        }
+    }
+
+    async * _streamChat(axiosConfig, reqBaseUrl, payload, retryCount = 0) {
+        const maxRetries = this.config.REQUEST_MAX_RETRIES || 3;
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
+
+        try {
+            this._applySidecar(axiosConfig);
+            const response = await axios(axiosConfig);
+            const rl = readline.createInterface({ input: response.data, terminal: false });
+            let lastResponseId = payload.responseMetadata?.requestModelDetails?.modelId || "final";
+
+            for await (const line of rl) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                let dataStr = trimmed.startsWith('data: ') ? trimmed.slice(6).trim() : trimmed;
+                if (dataStr === '[DONE]') break;
+                try {
+                    const json = JSON.parse(dataStr);
+                    if (json.result?.response) {
+                        const resp = json.result.response;
+                        resp._requestBaseUrl = reqBaseUrl;
+                        resp._uuid = this.uuid;
+                        if (resp.responseId) lastResponseId = resp.responseId;
+                        if (resp.streamingVideoGenerationResponse) {
+                            const vid = resp.streamingVideoGenerationResponse;
+                            if (vid.progress === 100 && vid.videoUrl && (payload.responseMetadata?.modelConfigOverride?.modelMap?.videoGenModelConfig?.resolutionName === "720p")) {
+                                const hdUrl = await this.upscaleVideo(vid.videoUrl);
+                                if (hdUrl) vid.videoUrl = hdUrl;
+                            }
+                        }
+                    }
+                    yield json;
+                } catch (e) {}
+            }
+            yield { result: { response: { isDone: true, responseId: lastResponseId, _requestBaseUrl: reqBaseUrl, _uuid: this.uuid } } };
+        } catch (error) {
+            const status = error.response?.status;
+            const isNetworkError = isRetryableNetworkError(error);
+
+            if (status === 401 || status === 403) {
+                this.handleApiError(error);
+            }
+
+            if ((status === 429 || (status >= 500 && status < 600) || isNetworkError) && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const reason = status ? `Status ${status}` : (error.code || 'Network error');
+                logger.info(`[Grok API] ${reason} during stream. Retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this._streamChat(axiosConfig, reqBaseUrl, payload, retryCount + 1);
+                return;
+            }
+            this.handleApiError(error);
+        }
     }
 
     async initialize() {
@@ -165,10 +242,8 @@ export class GrokApiService {
         const payload = { "requestKind": "DEFAULT", "modelName": "grok-3" };
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/rate-limits`, headers, data: payload, httpAgent, httpsAgent, timeout: 30000 };
         configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
         try {
-            const response = await axios(axiosConfig);
-            const data = response.data;
+            const data = await this.callApi(axiosConfig);
             let remaining = data.remainingTokens !== undefined ? data.remainingTokens : (data.remainingQueries !== undefined ? data.remainingQueries : data.totalQueries);
             if (data.totalQueries > 0) {
                 data.totalLimit = data.totalQueries;
@@ -245,10 +320,9 @@ export class GrokApiService {
 
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/media/post/create`, headers, data: payload, httpAgent, httpsAgent, timeout: 30000 };
         configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
         try {
-            const response = await axios(axiosConfig);
-            const postId = response.data?.post?.id;
+            const data = await this.callApi(axiosConfig);
+            const postId = data?.post?.id;
             if (postId) logger.info(`[Grok Post] Media post created: ${postId} (type=${mediaType})`);
             return postId;
         } catch (error) {
@@ -265,10 +339,9 @@ export class GrokApiService {
         const videoId = idMatch[1];
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/media/video/upscale`, headers: this.buildHeaders(), data: { videoId }, httpAgent, httpsAgent, timeout: 30000 };
         configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
         try {
-            const response = await axios(axiosConfig);
-            return response.data?.hdMediaUrl || videoUrl;
+            const data = await this.callApi(axiosConfig);
+            return data?.hdMediaUrl || videoUrl;
         } catch (error) { return videoUrl; }
     }
 
@@ -292,10 +365,9 @@ export class GrokApiService {
             timeout: 15000
         };
         configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
         try {
-            const response = await axios(axiosConfig);
-            const shareLink = response.data?.shareLink;
+            const data = await this.callApi(axiosConfig);
+            const shareLink = data?.shareLink;
             if (shareLink) {
                 // 从 shareLink 中提取 ID (通常与输入的 postId 一致)
                 const idMatch = shareLink.match(/\/post\/([0-9a-fA-F-]{36}|[0-9a-fA-F]{32})/);
@@ -477,8 +549,7 @@ export class GrokApiService {
         if (!b64) return null;
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/upload-file`, headers: this.buildHeaders(), data: { fileName: `file.${mime.split("/")[1] || "bin"}`, fileMimeType: mime, content: b64 }, httpAgent, httpsAgent, timeout: 30000 };
         configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
-        try { return (await axios(axiosConfig)).data; } catch (error) { return null; }
+        try { return await this.callApi(axiosConfig); } catch (error) { return null; }
     }
 
     async * generateContentStream(model, requestBody) {
@@ -571,43 +642,20 @@ export class GrokApiService {
         const payload = this.buildPayload(model, requestBody);
         const axiosConfig = { method: 'post', url: this.chatApi, headers: this.buildHeaders(), data: payload, responseType: 'stream', httpAgent, httpsAgent, timeout: 60000, maxRedirects: 0 };
         configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
 
-        try {
-            const response = await axios(axiosConfig);
-            const rl = readline.createInterface({ input: response.data, terminal: false });
-            let lastResponseId = payload.responseMetadata?.requestModelDetails?.modelId || "final";
-
-            for await (const line of rl) {
-                const trimmed = line.trim();
-                if (!trimmed) continue;
-                let dataStr = trimmed.startsWith('data: ') ? trimmed.slice(6).trim() : trimmed;
-                if (dataStr === '[DONE]') break;
-                try {
-                    const json = JSON.parse(dataStr);
-                    if (json.result?.response) {
-                        const resp = json.result.response;
-                        resp._requestBaseUrl = reqBaseUrl;
-                        resp._uuid = this.uuid;
-                        if (resp.responseId) lastResponseId = resp.responseId;
-                        if (resp.streamingVideoGenerationResponse) {
-                            const vid = resp.streamingVideoGenerationResponse;
-                            if (vid.progress === 100 && vid.videoUrl && (requestBody.videoGenModelConfig?.resolutionName === "720p")) {
-                                const hdUrl = await this.upscaleVideo(vid.videoUrl);
-                                if (hdUrl) vid.videoUrl = hdUrl;
-                            }
-                        }
-                    }
-                    yield json;
-                } catch (e) {}
-            }
-            yield { result: { response: { isDone: true, responseId: lastResponseId, _requestBaseUrl: reqBaseUrl, _uuid: this.uuid } } };
-        } catch (error) { this.handleApiError(error); }
+        yield* this._streamChat(axiosConfig, reqBaseUrl, payload);
     }
 
     handleApiError(error) {
         const status = error.response?.status;
-        if (status === 401 || status === 403) { error.shouldSwitchCredential = true; error.message = 'Grok authentication failed (SSO token invalid or expired)'; }
+        if (status === 401 || status === 403) {
+            error.shouldSwitchCredential = true;
+            error.message = 'Grok authentication failed (SSO token invalid or expired)';
+        } else if (isRetryableNetworkError(error)) {
+            // 网络超时等可重试错误，触发凭证切换而不立即增加错误计数（避免因偶发波动导致节点下线）
+            error.shouldSwitchCredential = true;
+            error.skipErrorCount = true;
+        }
         throw error;
     }
 
