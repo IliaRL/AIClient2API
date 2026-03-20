@@ -3,7 +3,7 @@ import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { v4 as uuidv4 } from 'uuid';
-import { MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
+import { MODEL_PROTOCOL_PREFIX, isRetryableNetworkError } from '../../utils/common.js';
 import { getProviderModels } from '../provider-models.js';
 import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER } from '../../utils/common.js';
@@ -83,6 +83,34 @@ export class GrokApiService {
         this.converter = ConverterFactory.getConverter(MODEL_PROTOCOL_PREFIX.GROK);
         if (this.converter && this.uuid) this.converter.setUuid(this.uuid);
         this.lastSyncAt = null;
+    }
+
+    getMaxRequestRetries() {
+        const requestMaxRetries = Number.parseInt(this.config.REQUEST_MAX_RETRIES, 10);
+        if (Number.isFinite(requestMaxRetries) && requestMaxRetries > 0) {
+            return requestMaxRetries;
+        }
+
+        return 3;
+    }
+
+    classifyApiError(error) {
+        const status = error.response?.status;
+        const errorCode = error.code;
+        const errorMessage = error.message || '';
+        const isNetworkError = isRetryableNetworkError(error);
+
+        if (status === 401 || status === 403) {
+            error.shouldSwitchCredential = true;
+            error.message = 'Grok authentication failed (SSO token invalid or expired)';
+        } else if (isNetworkError) {
+            // Network jitter or request timeout should not immediately degrade account health.
+            // Let the upper retry layer switch credential without incrementing the provider error count.
+            error.shouldSwitchCredential = true;
+            error.skipErrorCount = true;
+        }
+
+        return { status, errorCode, errorMessage, isNetworkError };
     }
 
     async setupNsfw() {
@@ -481,7 +509,11 @@ export class GrokApiService {
         try { return (await axios(axiosConfig)).data; } catch (error) { return null; }
     }
 
-    async * generateContentStream(model, requestBody) {
+    async * generateContentStream(model, requestBody, retryCount = 0) {
+        const maxRetries = this.getMaxRequestRetries();
+        const baseDelay = this.config.REQUEST_BASE_DELAY || 1000;
+        let hasYieldedData = false;
+
         if (this.converter) {
             if (this.uuid) this.converter.setUuid(this.uuid);
             if (requestBody._requestBaseUrl) this.converter.setRequestBaseUrl(requestBody._requestBaseUrl);
@@ -598,17 +630,42 @@ export class GrokApiService {
                             }
                         }
                     }
+                    hasYieldedData = true;
                     yield json;
                 } catch (e) {}
             }
             yield { result: { response: { isDone: true, responseId: lastResponseId, _requestBaseUrl: reqBaseUrl, _uuid: this.uuid } } };
-        } catch (error) { this.handleApiError(error); }
-    }
+        } catch (error) {
+            const { status, errorCode, errorMessage, isNetworkError } = this.classifyApiError(error);
+            const canRetryInRequest = !hasYieldedData && retryCount < maxRetries;
 
-    handleApiError(error) {
-        const status = error.response?.status;
-        if (status === 401 || status === 403) { error.shouldSwitchCredential = true; error.message = 'Grok authentication failed (SSO token invalid or expired)'; }
-        throw error;
+            if (status === 429 && canRetryInRequest) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                logger.info(`[Grok API] Received 429 during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.generateContentStream(model, requestBody, retryCount + 1);
+                return;
+            }
+
+            if (status >= 500 && status < 600 && canRetryInRequest) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                logger.info(`[Grok API] Received ${status} server error during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.generateContentStream(model, requestBody, retryCount + 1);
+                return;
+            }
+
+            if (isNetworkError && canRetryInRequest) {
+                const delay = baseDelay * Math.pow(2, retryCount);
+                const errorIdentifier = errorCode || errorMessage.substring(0, 50);
+                logger.info(`[Grok API] Network error (${errorIdentifier}) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                yield* this.generateContentStream(model, requestBody, retryCount + 1);
+                return;
+            }
+
+            throw error;
+        }
     }
 
     async listModels() {
