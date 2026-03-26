@@ -185,10 +185,15 @@ export class GrokApiService {
     }
 
     async refreshToken() {
-        try { 
-            // await this.getUsageLimits(); return Promise.resolve(); 
-        } catch (error) { 
-            return Promise.reject(error); 
+        try {
+            // await this.getUsageLimits(); return Promise.resolve();
+            const poolManager = getProviderPoolManager();
+            if (poolManager && this.uuid) {
+                poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.GROK_CUSTOM, this.uuid);
+            }
+        } catch (error) {
+            logger.error('[Grok] Failed to initialize authentication:', error);
+            throw new Error(`Failed to refreshToken.`);
         }
     }
 
