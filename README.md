@@ -466,36 +466,7 @@ Support excluding unsupported models through `notSupportedModels` configuration,
 - Some accounts cannot access specific models due to quota or permission restrictions
 - Need to assign different model access permissions to different accounts
 
-#### 3. Provider Priority Configuration
-
-Support deterministic account ordering through a per-node `priority` field in `provider_pools.json`.
-
-**Configuration** (smaller number = higher priority):
-
-```json
-{
-  "claude-kiro-oauth": [
-    {
-      "uuid": "primary-node-uuid",
-      "priority": 1,
-      "checkHealth": true
-    },
-    {
-      "uuid": "backup-node-uuid",
-      "priority": 2,
-      "checkHealth": true
-    }
-  ]
-}
-```
-
-**How It Works**:
-- The pool manager first filters healthy/available nodes by the lowest `priority` value
-- Only nodes in that highest-priority tier participate in LRU/score-based balancing
-- If the whole highest-priority tier becomes unavailable, the next priority tier is used automatically
-- If `priority` is omitted or invalid, default `100` is applied (backward compatible behavior)
-
-#### 4. Cross-Type Fallback Configuration
+#### 3. Cross-Type Fallback Configuration
 
 When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted due to 429 quota limits or marked as unhealthy, the system can automatically fallback to another compatible Provider Type (e.g., `gemini-antigravity`) instead of returning an error directly.
 
@@ -529,7 +500,7 @@ When all accounts under a Provider Type (e.g., `gemini-cli-oauth`) are exhausted
 - Fallback only occurs between protocol-compatible types (e.g., between `gemini-*`, between `claude-*`)
 - The system automatically checks if the target Provider Type supports the requested model
 
-#### 5. TLS Sidecar (Bypass 403/Cloudflare)
+#### 4. TLS Sidecar (Bypass 403/Cloudflare)
 
 For services like Grok that strictly validate TLS fingerprints (JA3/JA4), this project integrates a Sidecar proxy based on Go uTLS, which effectively solves 403 Forbidden errors by simulating browser TLS features.
 

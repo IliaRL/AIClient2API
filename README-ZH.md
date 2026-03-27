@@ -465,36 +465,7 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 - 某些账号因配额或权限限制无法访问特定模型
 - 需要为不同账号分配不同的模型访问权限
 
-#### 3. 提供商优先级配置
-
-支持通过 `provider_pools.json` 中每个节点的 `priority` 字段实现确定的账号排序。
-
-**配置方式**（数字越小，优先级越高）：
-
-```json
-{
-  "claude-kiro-oauth": [
-    {
-      "uuid": "primary-node-uuid",
-      "priority": 1,
-      "checkHealth": true
-    },
-    {
-      "uuid": "backup-node-uuid",
-      "priority": 2,
-      "checkHealth": true
-    }
-  ]
-}
-```
-
-**工作原理**：
-- 池管理器首先按最低 `priority` 值过滤健康/可用的节点
-- 只有处于该最高优先级层级的节点才会参与基于 LRU/评分的负载均衡
-- 如果整个最高优先级层级不可用，系统将自动使用下一个优先级层级
-- 如果省略 `priority` 或其无效，将应用默认值 `100`（向后兼容行为）
-
-#### 4. 跨类型 Fallback 配置
+#### 3. 跨类型 Fallback 配置
 
 当某一 Provider Type（如 `gemini-cli-oauth`）下的所有账号都因 429 配额耗尽或被标记为 unhealthy 时，系统能够自动 fallback 到另一个兼容的 Provider Type（如 `gemini-antigravity`），而不是直接返回错误。
 
@@ -528,7 +499,7 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 - Fallback 只会在协议兼容的类型之间进行（如 `gemini-*` 之间、`claude-*` 之间）
 - 系统会自动检查目标 Provider Type 是否支持当前请求的模型
 
-#### 5. TLS Sidecar (Bypass 403/Cloudflare)
+#### 4. TLS Sidecar (Bypass 403/Cloudflare)
 
 针对 Grok 等对 TLS 指纹（JA3/JA4）校验严格的服务，本项目集成了基于 Go uTLS 的 Sidecar 代理，通过模拟浏览器 TLS 特征有效解决 403 Forbidden 报错。
 

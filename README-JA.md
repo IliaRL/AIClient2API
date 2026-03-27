@@ -466,36 +466,7 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 - 一部のアカウントは割り当てまたは権限の制限により特定のモデルにアクセスできない
 - 異なるアカウントに異なるモデルアクセス権限を割り当てる必要がある
 
-#### 3. プロバイダー優先度設定
-
-`provider_pools.json` 内のノードごとの `priority` フィールドを通じて、確定的なアカウント順序をサポートします。
-
-**設定方法**（数値が小さいほど優先度が高くなります）：
-
-```json
-{
-  "claude-kiro-oauth": [
-    {
-      "uuid": "primary-node-uuid",
-      "priority": 1,
-      "checkHealth": true
-    },
-    {
-      "uuid": "backup-node-uuid",
-      "priority": 2,
-      "checkHealth": true
-    }
-  ]
-}
-```
-
-**動作原理**：
-- プールマネージャーはまず、最も低い `priority` 値によって健全/利用可能なノードをフィルタリングします
-- その最高優先度ティアのノードのみが LRU/スコアベースの負荷分散に参加します
-- 最高優先度ティア全体が利用不可になった場合、次の優先度ティアが自動的に使用されます
-- `priority` が省略されているか無効な場合、デフォルトの `100` が適用されます（後方互換性のある動作）
-
-#### 4. クロスタイプフォールバック設定
+#### 3. クロスタイプフォールバック設定
 
 あるProvider Type（例：`gemini-cli-oauth`）のすべてのアカウントが429割り当て制限により枯渇したり、unhealthyとマークされた場合、システムは直接エラーを返すのではなく、互換性のある別のProvider Type（例：`gemini-antigravity`）に自動的にフォールバックできます。
 
@@ -529,7 +500,7 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 - フォールバックはプロトコル互換タイプ間でのみ発生します（例：`gemini-*` 間、`claude-*` 間）
 - システムは自動的にターゲットProvider Typeがリクエストされたモデルをサポートしているか確認します
 
-#### 5. TLS Sidecar (Bypass 403/Cloudflare)
+#### 4. TLS Sidecar (Bypass 403/Cloudflare)
 
 Grok などの TLS 指紋（JA3/JA4）を厳密に検証するサービスに対して、本プロジェクトは Go uTLS ベースの Sidecar プロキシを統合しています。これにより、ブラウザの TLS 特徴をシミュレートし、403 Forbidden エラーを効果的に解決します。
 
