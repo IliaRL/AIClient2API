@@ -28,7 +28,14 @@ import {
     generateOutputTextDone,
     generateContentPartDone,
     generateOutputItemDone,
-    generateResponseCompleted
+    generateResponseCompleted,
+    generateOutputTextDelta,
+    streamStateManager,
+    startToolCall,
+    finishToolCall,
+    generateFunctionCallArgsDelta,
+    generateFunctionCallArgsDone,
+    generateFunctionCallOutputItemDone
 } from '../../providers/openai/openai-responses-core.mjs';
 
 /**
@@ -81,14 +88,14 @@ export class ClaudeConverter extends BaseConverter {
     /**
      * 转换流式响应块
      */
-    convertStreamChunk(chunk, targetProtocol, model) {
+    convertStreamChunk(chunk, targetProtocol, model, requestId) {
         switch (targetProtocol) {
             case MODEL_PROTOCOL_PREFIX.OPENAI:
                 return this.toOpenAIStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.GEMINI:
                 return this.toGeminiStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.OPENAI_RESPONSES:
-                return this.toOpenAIResponsesStreamChunk(chunk, model);
+                return this.toOpenAIResponsesStreamChunk(chunk, model, requestId);
             case MODEL_PROTOCOL_PREFIX.CODEX:
                 return this.toCodexStreamChunk(chunk, model);
             default:
@@ -1694,9 +1701,11 @@ export class ClaudeConverter extends BaseConverter {
             
             // 对于 tool_use 类型，添加工具调用项
             if (contentBlock && contentBlock.type === 'tool_use') {
+                startToolCall(responseId, contentBlock.id, contentBlock.name);
                 events.push({
                     item: {
                         id: contentBlock.id,
+                        call_id: contentBlock.id,
                         type: "function_call",
                         name: contentBlock.name,
                         arguments: "",
@@ -1715,13 +1724,7 @@ export class ClaudeConverter extends BaseConverter {
             
             // 处理文本增量
             if (delta && delta.type === 'text_delta') {
-                events.push({
-                    delta: delta.text || "",
-                    item_id: `msg_${uuidv4().replace(/-/g, '')}`,
-                    output_index: claudeChunk.index || 0,
-                    sequence_number: 3,
-                    type: "response.output_text.delta"
-                });
+                events.push(generateOutputTextDelta(responseId, delta.text || ""));
             }
             // 处理推理内容增量
             else if (delta && delta.type === 'thinking_delta') {
@@ -1735,61 +1738,51 @@ export class ClaudeConverter extends BaseConverter {
             }
             // 处理工具调用参数增量
             else if (delta && delta.type === 'input_json_delta') {
-                events.push({
-                    delta: delta.partial_json || "",
-                    item_id: `call_${uuidv4().replace(/-/g, '')}`,
-                    output_index: claudeChunk.index || 0,
-                    sequence_number: 3,
-                    type: "response.custom_tool_call_input.delta"
-                });
+                const state = streamStateManager.getOrCreateState(responseId);
+                const itemId = state.currentToolCall ? state.currentToolCall.id : 'unknown';
+                events.push(generateFunctionCallArgsDelta(
+                    responseId, itemId, claudeChunk.index || 0, delta.partial_json || ""
+                ));
             }
         }
 
         // content_block_stop 事件
         if (claudeChunk.type === 'content_block_stop') {
-            events.push({
-                item_id: `msg_${uuidv4().replace(/-/g, '')}`,
-                output_index: claudeChunk.index || 0,
-                sequence_number: 4,
-                type: "response.output_item.done"
-            });
+            const state = streamStateManager.getOrCreateState(responseId);
+            if (state.currentToolCall) {
+                const itemId = state.currentToolCall.id;
+                const outputIdx = claudeChunk.index || 0;
+                events.push(generateFunctionCallArgsDone(responseId, itemId, outputIdx));
+                const finished = finishToolCall(responseId);
+                if (finished) {
+                    events.push(generateFunctionCallOutputItemDone(responseId, finished, outputIdx));
+                }
+            }
         }
 
-        // message_delta 事件 - 流结束
+        // message_delta 事件 - 保存 usage 供 message_stop 使用
         if (claudeChunk.type === 'message_delta') {
-            // events.push(
-            //     generateOutputTextDone(responseId),
-            //     generateContentPartDone(responseId),
-            //     generateOutputItemDone(responseId),
-            //     generateResponseCompleted(responseId)
-            // );
-            
-            // 如果有 usage 信息，更新最后一个事件
-            if (claudeChunk.usage && events.length > 0) {
-                const lastEvent = events[events.length - 1];
-                if (lastEvent.response) {
-                    lastEvent.response.usage = {
-                        input_tokens: claudeChunk.usage.input_tokens || 0,
-                        input_tokens_details: {
-                            cached_tokens: claudeChunk.usage.cache_read_input_tokens || 0
-                        },
-                        output_tokens: claudeChunk.usage.output_tokens || 0,
-                        output_tokens_details: {
-                            reasoning_tokens: 0
-                        },
-                        total_tokens: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0)
-                    };
-                }
+            if (claudeChunk.usage) {
+                const state = streamStateManager.getOrCreateState(responseId);
+                state.savedUsage = {
+                    input_tokens: claudeChunk.usage.input_tokens || 0,
+                    input_tokens_details: { cached_tokens: claudeChunk.usage.cache_read_input_tokens || 0 },
+                    output_tokens: claudeChunk.usage.output_tokens || 0,
+                    output_tokens_details: { reasoning_tokens: 0 },
+                    total_tokens: (claudeChunk.usage.input_tokens || 0) + (claudeChunk.usage.output_tokens || 0)
+                };
             }
         }
 
         // message_stop 事件
         if (claudeChunk.type === 'message_stop') {
+            const state = streamStateManager.getOrCreateState(responseId);
+            const savedUsage = state.savedUsage || null;
             events.push(
                 generateOutputTextDone(responseId),
                 generateContentPartDone(responseId),
                 generateOutputItemDone(responseId),
-                generateResponseCompleted(responseId)
+                generateResponseCompleted(responseId, savedUsage)
             );
         }
 
