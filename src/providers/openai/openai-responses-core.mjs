@@ -16,7 +16,9 @@ class StreamState {
         sequenceNumber: 0,
         model: null,
         status: 'in_progress',
-        startTime: Math.floor(Date.now() / 1000)
+        startTime: Math.floor(Date.now() / 1000),
+        toolCalls: [],
+        currentToolCall: null
       });
     }
     return this.states.get(requestId);
@@ -73,7 +75,7 @@ function generateResponseCreated(requestId, model) {
       incomplete_details: null,
       instructions: '',
       max_output_tokens: null,
-      model: state.model || 'gpt-4.1-2025-04-14',
+      model: state.model || 'claude-sonnet-4-6',
       output: [],
       parallel_tool_calls: true,
       previous_response_id: null,
@@ -110,7 +112,7 @@ function generateResponseInProgress(requestId) {
       incomplete_details: null,
       instructions: '',
       max_output_tokens: null,
-      model: state.model || 'gpt-4.1-2025-04-14',
+      model: state.model || 'claude-sonnet-4-6',
       output: [],
       parallel_tool_calls: true,
       previous_response_id: null,
@@ -269,25 +271,32 @@ function generateResponseCompleted(requestId, usage) {
       max_output_tokens: null,
       max_tool_calls: null,
       metadata: {},
-      model: state.model || 'gpt-4.1-2025-04-14',
+      model: state.model || 'claude-sonnet-4-6',
       object: 'response',
-      output: [
-        {
-          id: state.msgId,
-          summary: [],
-          type: 'message',
-          role: 'assistant',
-          status: 'completed',
-          content: [
-            {
-              type: 'output_text',
-              text: state.fullText,
-              annotations: [],
-              logprobs: []
-            }
-          ]
+      output: (() => {
+        const items = [];
+        if (state.fullText) {
+          items.push({
+            id: state.msgId, summary: [], type: 'message', role: 'assistant', status: 'completed',
+            content: [{ type: 'output_text', text: state.fullText, annotations: [], logprobs: [] }]
+          });
         }
-      ],
+        if (state.toolCalls && state.toolCalls.length > 0) {
+          for (const tc of state.toolCalls) {
+            items.push({
+              id: tc.id, call_id: tc.call_id || tc.id, type: 'function_call',
+              name: tc.name, arguments: tc.arguments || '{}', status: 'completed'
+            });
+          }
+        }
+        if (items.length === 0) {
+          items.push({
+            id: state.msgId, summary: [], type: 'message', role: 'assistant', status: 'completed',
+            content: [{ type: 'output_text', text: '', annotations: [], logprobs: [] }]
+          });
+        }
+        return items;
+      })(),
       parallel_tool_calls: true,
       previous_response_id: null,
       prompt_cache_key: null,
@@ -322,8 +331,50 @@ function generateResponseCompleted(requestId, usage) {
   };
 }
 
+
+function startToolCall(requestId, toolCallId, name) {
+  const state = streamStateManager.getOrCreateState(requestId);
+  state.currentToolCall = { id: toolCallId, call_id: toolCallId, name: name, arguments: '' };
+}
+
+function appendToolCallArgs(requestId, delta) {
+  const state = streamStateManager.getOrCreateState(requestId);
+  if (state.currentToolCall) state.currentToolCall.arguments += delta;
+}
+
+function finishToolCall(requestId) {
+  const state = streamStateManager.getOrCreateState(requestId);
+  if (state.currentToolCall) {
+    state.toolCalls.push({...state.currentToolCall});
+    const finished = state.currentToolCall;
+    state.currentToolCall = null;
+    return finished;
+  }
+  return null;
+}
+
+function generateFunctionCallArgsDelta(requestId, itemId, outputIndex, delta) {
+  appendToolCallArgs(requestId, delta);
+  return { type: 'response.function_call_arguments.delta', item_id: itemId, output_index: outputIndex, delta: delta };
+}
+
+function generateFunctionCallArgsDone(requestId, itemId, outputIndex) {
+  const state = streamStateManager.getOrCreateState(requestId);
+  const args = state.currentToolCall ? state.currentToolCall.arguments : '{}';
+  return { type: 'response.function_call_arguments.done', item_id: itemId, output_index: outputIndex, arguments: args };
+}
+
+function generateFunctionCallOutputItemDone(requestId, toolCall, outputIndex) {
+  return {
+    type: 'response.output_item.done', output_index: outputIndex,
+    item: { id: toolCall.id, call_id: toolCall.call_id || toolCall.id, type: 'function_call',
+      name: toolCall.name, arguments: toolCall.arguments || '{}', status: 'completed' }
+  };
+}
+
 // 导出流式状态管理器以供外部使用
 export { streamStateManager, generateResponseCreated, generateResponseInProgress,
   generateOutputItemAdded, generateContentPartAdded, generateOutputTextDelta,
   generateOutputTextDone, generateContentPartDone, generateOutputItemDone,
-  generateResponseCompleted };
+  generateResponseCompleted, startToolCall, appendToolCallArgs, finishToolCall,
+  generateFunctionCallArgsDelta, generateFunctionCallArgsDone, generateFunctionCallOutputItemDone };

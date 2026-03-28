@@ -44,7 +44,7 @@ const KIRO_CONSTANTS = {
     AUTH_METHOD_SOCIAL: 'social',
     CHAT_TRIGGER_TYPE_MANUAL: 'MANUAL',
     ORIGIN_AI_EDITOR: 'AI_EDITOR',
-    TOTAL_CONTEXT_TOKENS: 1000000, // Kiro now supports 1M context window
+    TOTAL_CONTEXT_TOKENS: 200000, // Claude Sonnet 4.5 actual context is 200K
 };
 
 // 从 provider-models.js 获取支持的模型列表
@@ -1597,6 +1597,7 @@ async saveCredentialsToFile(filePath, newData) {
                 return this.callApi(method, model, body, isRetry, retryCount + 1);
             }
 
+            if (error.response && error.response.data) { logger.error('[Kiro] 400 Response body:', typeof error.response.data === 'string' ? error.response.data.substring(0, 500) : JSON.stringify(error.response.data).substring(0, 500)); }
             logger.error(`[Kiro] API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
         }
