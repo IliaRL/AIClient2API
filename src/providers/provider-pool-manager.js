@@ -1744,6 +1744,65 @@ export class ProviderPoolManager {
     }
 
     /**
+     * Performs scheduled health checks on all providers.
+     * This method is designed to be called periodically to proactively check provider health.
+     * It respects provider-level isDisabled and checkHealth flags.
+     */
+    async performScheduledHealthChecks() {
+        const scheduledConfig = globalThis.CONFIG?.SCHEDULED_HEALTH_CHECK;
+        
+        // Check if scheduled health checks are disabled
+        if (scheduledConfig?.disabled) {
+            this._log('debug', '[ScheduledHealthCheck] Scheduled health checks are disabled via configuration');
+            return;
+        }
+        
+        this._log('info', '[ScheduledHealthCheck] Starting scheduled health checks on all providers...');
+        
+        for (const providerType in this.providerStatus) {
+            for (const provider of this.providerStatus[providerType]) {
+                // Skip manually disabled providers
+                if (provider.config.isDisabled === true) {
+                    this._log('debug', `[ScheduledHealthCheck] Skipping ${provider.config.uuid} (${providerType}): manually disabled`);
+                    continue;
+                }
+                
+                // Skip providers with checkHealth disabled
+                if (provider.config.checkHealth === false) {
+                    this._log('debug', `[ScheduledHealthCheck] Skipping ${provider.config.uuid} (${providerType}): checkHealth is false`);
+                    continue;
+                }
+                
+                try {
+                    // Perform health check with forceCheck=false (respects checkHealth flag)
+                    const result = await this._checkProviderHealth(providerType, provider.config, false);
+                    
+                    // result === null means checkHealth was false (already handled above) or not implemented
+                    if (result === null) {
+                        this._log('debug', `[ScheduledHealthCheck] Health check for ${provider.config.uuid} (${providerType}) skipped: not implemented`);
+                        continue;
+                    }
+                    
+                    if (!result.success) {
+                        // Provider is unhealthy
+                        this._log('warn', `[ScheduledHealthCheck] Health check failed for ${provider.config.uuid} (${providerType}): ${result.errorMessage || 'Provider is not responding correctly.'}`);
+                        this.markProviderUnhealthyImmediately(providerType, provider.config, result.errorMessage);
+                    } else {
+                        // Provider is healthy
+                        this._log('debug', `[ScheduledHealthCheck] Health check passed for ${provider.config.uuid} (${providerType})`);
+                        this.markProviderHealthy(providerType, provider.config, true, result.modelName);
+                    }
+                } catch (error) {
+                    this._log('error', `[ScheduledHealthCheck] Health check exception for ${provider.config.uuid} (${providerType}): ${error.message}`);
+                    this.markProviderUnhealthyImmediately(providerType, provider.config, error.message);
+                }
+            }
+        }
+        
+        this._log('info', '[ScheduledHealthCheck] Completed');
+    }
+
+    /**
      * 构建健康检查请求（返回多种格式用于重试）
      * @private
      * @returns {Array} 请求格式数组，按优先级排序

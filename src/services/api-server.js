@@ -361,6 +361,23 @@ async function startServer() {
             poolManager.performHealthChecks(true);
         }
 
+        // 定时健康检查
+        const scheduledConfig = CONFIG.SCHEDULED_HEALTH_CHECK;
+        if (scheduledConfig?.enabled) {
+            const interval = scheduledConfig.interval || CONFIG.CRON_NEAR_MINUTES * 60 * 1000;
+            
+            // 设置定时任务
+            setInterval(async () => {
+                try {
+                    await poolManager.performScheduledHealthChecks();
+                } catch (error) {
+                    logger.error('[ScheduledHealthCheck] Error:', error);
+                }
+            }, interval);
+            
+            logger.info(`[ScheduledHealthCheck] Scheduled every ${interval}ms`);
+        }
+
         // 如果是子进程，通知主进程已就绪
         if (IS_WORKER_PROCESS) {
             sendToMaster({ type: 'ready', pid: process.pid });
