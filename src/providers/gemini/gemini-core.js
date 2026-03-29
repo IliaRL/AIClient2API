@@ -102,6 +102,35 @@ function extract_model_from_anti_model(model) {
     return model; // 如果不是anti-前缀或不在原模型列表中，则返回原模型名
 }
 
+function modelSupportsThinking(modelName) {
+    if (!modelName) return false;
+    const name = String(modelName).toLowerCase();
+    return name.startsWith('gemini-3') ||
+           name.startsWith('gemini-2.5-') ||
+           name.includes('-thinking');
+}
+
+function normalizeGeminiThinkingRequest(modelName, requestBody) {
+    if (!modelSupportsThinking(modelName)) return requestBody;
+
+    const thinkingConfig = requestBody?.generationConfig?.thinkingConfig;
+    if (!thinkingConfig) return requestBody;
+
+    const thinkingLevel = thinkingConfig.thinkingLevel;
+    const budget = thinkingConfig.thinkingBudget;
+    const thinkingRequested =
+        thinkingLevel !== undefined ||
+        (budget !== undefined && budget !== 0);
+
+    // Gemini 只有在 includeThoughts=true 时才会稳定返回 thought parts。
+    // 上游在 gemini-3 thinkingLevel 场景下可能没有显式传这个字段，这里兜底补齐。
+    if (thinkingRequested && thinkingConfig.includeThoughts === undefined) {
+        thinkingConfig.includeThoughts = true;
+    }
+
+    return requestBody;
+}
+
 function toGeminiApiResponse(codeAssistResponse) {
     if (!codeAssistResponse) return null;
     const compliantResponse = { candidates: codeAssistResponse.candidates };
@@ -740,7 +769,10 @@ export class GeminiApiService {
             baseModel = GEMINI_MODELS[0];
         }
 
-        const processedRequestBody = ensureRolesInContents({ ...requestBody });
+        const processedRequestBody = normalizeGeminiThinkingRequest(
+            baseModel,
+            ensureRolesInContents({ ...requestBody })
+        );
         const apiRequest = { model: baseModel, project: this.projectId, request: processedRequestBody };
         
         const response = await this.callApi(API_ACTIONS.GENERATE_CONTENT, apiRequest, false, 0, baseModel);
@@ -775,7 +807,10 @@ export class GeminiApiService {
             // 从防截断模型名中提取实际模型名
             const actualModel = extract_model_from_anti_model(model);
             // 使用防截断流处理
-            const processedRequestBody = ensureRolesInContents({ ...requestBody });
+            const processedRequestBody = normalizeGeminiThinkingRequest(
+                actualModel,
+                ensureRolesInContents({ ...requestBody })
+            );
             yield* apply_anti_truncation_to_stream(this, actualModel, processedRequestBody);
             return;
         }
@@ -786,7 +821,10 @@ export class GeminiApiService {
             baseModel = GEMINI_MODELS[0];
         }
 
-        const processedRequestBody = ensureRolesInContents({ ...requestBody });
+        const processedRequestBody = normalizeGeminiThinkingRequest(
+            baseModel,
+            ensureRolesInContents({ ...requestBody })
+        );
         const apiRequest = { model: baseModel, project: this.projectId, request: processedRequestBody };
         
         const stream = this.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest, false, 0, baseModel);

@@ -183,7 +183,18 @@ function normalizeAntigravityThinking(modelName, payload, isClaudeModel) {
     const thinkingConfig = payload?.request?.generationConfig?.thinkingConfig;
     if (!thinkingConfig) return payload;
     
+    const thinkingLevel = thinkingConfig.thinkingLevel;
     const budget = thinkingConfig.thinkingBudget;
+    const thinkingRequested =
+        thinkingLevel !== undefined ||
+        (budget !== undefined && budget !== 0);
+
+    // Antigravity 只有在 includeThoughts=true 时才会回传 thought parts。
+    // 上游对 gemini-3 thinkingLevel 的请求不一定会显式带上这个字段，这里兜底补齐。
+    if (thinkingRequested && thinkingConfig.includeThoughts === undefined) {
+        thinkingConfig.includeThoughts = true;
+    }
+
     if (budget === undefined) return payload;
     
     let normalizedBudget = normalizeThinkingBudget(modelName, budget);
