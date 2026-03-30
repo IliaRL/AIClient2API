@@ -116,7 +116,18 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.LOG_MAX_FILES !== undefined) currentConfig.LOG_MAX_FILES = newConfig.LOG_MAX_FILES;
 
         // Scheduled Health Check settings
-        if (newConfig.SCHEDULED_HEALTH_CHECK !== undefined) currentConfig.SCHEDULED_HEALTH_CHECK = newConfig.SCHEDULED_HEALTH_CHECK;
+        if (newConfig.SCHEDULED_HEALTH_CHECK !== undefined) {
+            const incoming = newConfig.SCHEDULED_HEALTH_CHECK;
+            currentConfig.SCHEDULED_HEALTH_CHECK = {
+                enabled: incoming?.enabled === true,
+                startupRun: incoming?.startupRun !== false,
+                interval: (() => {
+                    const val = Number(incoming?.interval);
+                    return isNaN(val) ? 600000 : Math.max(60000, Math.min(3600000, val));
+                })(),
+                providerTypes: Array.isArray(incoming?.providerTypes) ? incoming.providerTypes : []
+            };
+        }
 
         // Handle system prompt update
         if (newConfig.systemPrompt !== undefined) {

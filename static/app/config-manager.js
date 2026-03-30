@@ -398,10 +398,14 @@ async function saveConfiguration() {
             .map(tag => tag.getAttribute('data-value'))
         : [];
     
+    // 验证并规范化 interval 值
+    const rawInterval = parseInt(document.getElementById('scheduledHealthCheckInterval')?.value);
+    const validatedInterval = isNaN(rawInterval) ? 600000 : Math.max(60000, Math.min(3600000, rawInterval));
+    
     config.SCHEDULED_HEALTH_CHECK = {
         enabled: document.getElementById('scheduledHealthCheckEnabled')?.checked !== false,
         startupRun: document.getElementById('scheduledHealthCheckStartupRun')?.checked !== false,
-        interval: parseInt(document.getElementById('scheduledHealthCheckInterval')?.value || 600000),
+        interval: validatedInterval,
         providerTypes: scheduledHealthCheckProviderTypes
     };
 
