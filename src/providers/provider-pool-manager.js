@@ -1752,7 +1752,7 @@ export class ProviderPoolManager {
         const scheduledConfig = globalThis.CONFIG?.SCHEDULED_HEALTH_CHECK;
         
         // Check if scheduled health checks are disabled
-        if (scheduledConfig?.disabled) {
+        if (!scheduledConfig?.enabled) {
             this._log('debug', '[ScheduledHealthCheck] Scheduled health checks are disabled via configuration');
             return;
         }
