@@ -251,6 +251,18 @@ async function loadConfiguration() {
             if (scheduledHealthCheckIntervalEl) scheduledHealthCheckIntervalEl.value = 600000;
         }
         
+        // 定时健康检查间隔快捷按钮
+        const intervalQuickBtns = document.querySelectorAll('#scheduledHealthCheckInterval + .quick-select-btns button');
+        intervalQuickBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const value = parseInt(btn.getAttribute('data-value'));
+                if (scheduledHealthCheckIntervalEl) {
+                    scheduledHealthCheckIntervalEl.value = value;
+                }
+            });
+        });
+        
     } catch (error) {
         console.error('Failed to load configuration:', error);
     }

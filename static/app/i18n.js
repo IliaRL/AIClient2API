@@ -347,7 +347,7 @@ const translations = {
         'config.healthCheck.enabled': '启用定时检查',
         'config.healthCheck.startupRun': '启动时运行',
         'config.healthCheck.interval': '检查间隔',
-        'config.healthCheck.intervalNote': '设置定时健康检查的执行间隔',
+        'config.healthCheck.intervalNote': '单位毫秒，最小60000ms(1分钟)，最大3600000ms(1小时)，可手动输入或点击快捷按钮',
         'config.log.title': '日志设置',
         'config.log.enabled': '启用日志',
         'config.log.outputMode': '日志输出模式',

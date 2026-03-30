@@ -7,6 +7,65 @@
     border: 1px solid var(--border-color);
 }
 
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.optional-tag, .form-group label .optional-mark {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    font-weight: 400;
+    margin-left: 0.5rem;
+    background: var(--bg-tertiary);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+}
+
+.form-control::placeholder {
+    color: var(--text-tertiary);
+}
+
+textarea.form-control {
+    resize: vertical;
+    font-family: inherit;
+}
+
+/* 带快捷选择的输入框 */
+.input-with-quick-select {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.input-with-quick-select .form-control {
+    width: 100%;
+}
+
+.quick-select-btns {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.quick-select-btns .btn {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+}
+
 .config-form {
     max-width: 800px;
     margin: 0 auto;
