@@ -1755,7 +1755,7 @@ export class ProviderPoolManager {
     /**
      * Performs scheduled health checks on all providers.
      * This method is designed to be called periodically to proactively check provider health.
-     * It respects provider-level isDisabled and checkHealth flags.
+     * It respects provider-level isDisabled flag.
      */
     async performScheduledHealthChecks() {
         const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
@@ -1817,7 +1817,7 @@ export class ProviderPoolManager {
             const displayName = customName || uuid.substring(0, 8);
             
             try {
-                // Perform health check (forceCheck=true to bypass per-instance checkHealth flag)
+                // Perform health check (health check is based on providerTypes configuration, not per-provider checkHealth flag)
                 const result = await this._checkProviderHealth(providerType, provider.config);
                 const checkDuration = Date.now() - checkStartTime;
                 

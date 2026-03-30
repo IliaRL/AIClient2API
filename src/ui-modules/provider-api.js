@@ -698,7 +698,7 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
 
         logger.info(`[UI API] Starting health check for ${unhealthyProviders.length} unhealthy providers in ${providerType} (total: ${providers.length})`);
 
-        // 执行健康检测（强制检查，忽略 checkHealth 配置）
+        // 执行健康检测（检查所有未禁用的 unhealthy providers）
         const results = [];
         for (const providerStatus of unhealthyProviders) {
             const providerConfig = providerStatus.config;
