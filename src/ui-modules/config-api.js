@@ -115,6 +115,9 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.LOG_MAX_FILE_SIZE !== undefined) currentConfig.LOG_MAX_FILE_SIZE = newConfig.LOG_MAX_FILE_SIZE;
         if (newConfig.LOG_MAX_FILES !== undefined) currentConfig.LOG_MAX_FILES = newConfig.LOG_MAX_FILES;
 
+        // Scheduled Health Check settings
+        if (newConfig.SCHEDULED_HEALTH_CHECK !== undefined) currentConfig.SCHEDULED_HEALTH_CHECK = newConfig.SCHEDULED_HEALTH_CHECK;
+
         // Handle system prompt update
         if (newConfig.systemPrompt !== undefined) {
             const promptPath = currentConfig.SYSTEM_PROMPT_FILE_PATH || 'configs/input_system_prompt.txt';
@@ -175,7 +178,8 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 TLS_SIDECAR_ENABLED: currentConfig.TLS_SIDECAR_ENABLED,
                 TLS_SIDECAR_ENABLED_PROVIDERS: currentConfig.TLS_SIDECAR_ENABLED_PROVIDERS,
                 TLS_SIDECAR_PORT: currentConfig.TLS_SIDECAR_PORT,
-                TLS_SIDECAR_PROXY_URL: currentConfig.TLS_SIDECAR_PROXY_URL
+                TLS_SIDECAR_PROXY_URL: currentConfig.TLS_SIDECAR_PROXY_URL,
+                SCHEDULED_HEALTH_CHECK: currentConfig.SCHEDULED_HEALTH_CHECK
             };
 
             writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
