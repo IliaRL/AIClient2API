@@ -1759,7 +1759,17 @@ export class ProviderPoolManager {
         
         this._log('info', '[ScheduledHealthCheck] Starting scheduled health checks on all providers...');
         
+        // Get selected provider types, if empty/undefined then check all
+        const selectedProviderTypes = scheduledConfig?.providerTypes;
+        const checkAllTypes = !selectedProviderTypes || selectedProviderTypes.length === 0;
+        
         for (const providerType in this.providerStatus) {
+            // Filter by selected provider types if specified
+            if (!checkAllTypes && !selectedProviderTypes.includes(providerType)) {
+                this._log('debug', `[ScheduledHealthCheck] Skipping provider type ${providerType}: not in selected types`);
+                continue;
+            }
+            
             for (const provider of this.providerStatus[providerType]) {
                 // Skip manually disabled providers
                 if (provider.config.isDisabled === true) {

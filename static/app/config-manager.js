@@ -251,6 +251,21 @@ async function loadConfiguration() {
             if (scheduledHealthCheckIntervalEl) scheduledHealthCheckIntervalEl.value = 600000;
         }
         
+        // 加载定时健康检查的供应商选择
+        const scheduledHealthCheckProvidersEl = document.getElementById('scheduledHealthCheckProviders');
+        if (scheduledHealthCheckProvidersEl) {
+            const enabledProviders = data.SCHEDULED_HEALTH_CHECK?.providerTypes || [];
+            const tags = scheduledHealthCheckProvidersEl.querySelectorAll('.provider-tag');
+            tags.forEach(tag => {
+                const value = tag.getAttribute('data-value');
+                if (enabledProviders.includes(value)) {
+                    tag.classList.add('selected');
+                } else {
+                    tag.classList.remove('selected');
+                }
+            });
+        }
+        
         // 定时健康检查间隔快捷按钮（防止重复绑定）
         const intervalQuickBtns = document.querySelectorAll('#scheduledHealthCheckInterval + .quick-select-btns button');
         intervalQuickBtns.forEach(btn => {
@@ -377,10 +392,17 @@ async function saveConfiguration() {
     }
     
     // 定时健康检查配置
+    const scheduledHealthCheckProvidersEl = document.getElementById('scheduledHealthCheckProviders');
+    const scheduledHealthCheckProviderTypes = scheduledHealthCheckProvidersEl
+        ? Array.from(scheduledHealthCheckProvidersEl.querySelectorAll('.provider-tag.selected'))
+            .map(tag => tag.getAttribute('data-value'))
+        : [];
+    
     config.SCHEDULED_HEALTH_CHECK = {
         enabled: document.getElementById('scheduledHealthCheckEnabled')?.checked !== false,
         startupRun: document.getElementById('scheduledHealthCheckStartupRun')?.checked !== false,
-        interval: parseInt(document.getElementById('scheduledHealthCheckInterval')?.value || 600000)
+        interval: parseInt(document.getElementById('scheduledHealthCheckInterval')?.value || 600000),
+        providerTypes: scheduledHealthCheckProviderTypes
     };
 
     try {
