@@ -251,9 +251,11 @@ async function loadConfiguration() {
             if (scheduledHealthCheckIntervalEl) scheduledHealthCheckIntervalEl.value = 600000;
         }
         
-        // 定时健康检查间隔快捷按钮
+        // 定时健康检查间隔快捷按钮（防止重复绑定）
         const intervalQuickBtns = document.querySelectorAll('#scheduledHealthCheckInterval + .quick-select-btns button');
         intervalQuickBtns.forEach(btn => {
+            if (btn.dataset.listenerAttached) return; // 防止重复绑定
+            btn.dataset.listenerAttached = 'true';
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 const value = parseInt(btn.getAttribute('data-value'));

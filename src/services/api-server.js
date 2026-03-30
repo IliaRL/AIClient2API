@@ -366,6 +366,18 @@ async function startServer() {
         if (scheduledConfig?.enabled) {
             const interval = scheduledConfig.interval || CONFIG.CRON_NEAR_MINUTES * 60 * 1000;
             
+            // 启动时运行健康检查
+            if (scheduledConfig.startupRun !== false) {
+                logger.info('[ScheduledHealthCheck] Running scheduled health check on startup...');
+                setTimeout(async () => {
+                    try {
+                        await poolManager.performScheduledHealthChecks();
+                    } catch (error) {
+                        logger.error('[ScheduledHealthCheck] Startup run error:', error);
+                    }
+                }, 100); // 延迟100ms确保服务已完全就绪
+            }
+            
             // 设置定时任务
             setInterval(async () => {
                 try {
