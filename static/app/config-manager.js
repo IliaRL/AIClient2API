@@ -236,6 +236,21 @@ async function loadConfiguration() {
             });
         }
         
+        // 定时健康检查配置
+        const scheduledHealthCheckEnabledEl = document.getElementById('scheduledHealthCheckEnabled');
+        const scheduledHealthCheckStartupRunEl = document.getElementById('scheduledHealthCheckStartupRun');
+        const scheduledHealthCheckIntervalEl = document.getElementById('scheduledHealthCheckInterval');
+        
+        if (data.SCHEDULED_HEALTH_CHECK) {
+            if (scheduledHealthCheckEnabledEl) scheduledHealthCheckEnabledEl.checked = data.SCHEDULED_HEALTH_CHECK.enabled !== false;
+            if (scheduledHealthCheckStartupRunEl) scheduledHealthCheckStartupRunEl.checked = data.SCHEDULED_HEALTH_CHECK.startupRun !== false;
+            if (scheduledHealthCheckIntervalEl) scheduledHealthCheckIntervalEl.value = data.SCHEDULED_HEALTH_CHECK.interval || 600000;
+        } else {
+            if (scheduledHealthCheckEnabledEl) scheduledHealthCheckEnabledEl.checked = true;
+            if (scheduledHealthCheckStartupRunEl) scheduledHealthCheckStartupRunEl.checked = true;
+            if (scheduledHealthCheckIntervalEl) scheduledHealthCheckIntervalEl.value = 600000;
+        }
+        
     } catch (error) {
         console.error('Failed to load configuration:', error);
     }
@@ -346,6 +361,13 @@ async function saveConfiguration() {
     } else {
         config.TLS_SIDECAR_ENABLED_PROVIDERS = [];
     }
+    
+    // 定时健康检查配置
+    config.SCHEDULED_HEALTH_CHECK = {
+        enabled: document.getElementById('scheduledHealthCheckEnabled')?.checked !== false,
+        startupRun: document.getElementById('scheduledHealthCheckStartupRun')?.checked !== false,
+        interval: parseInt(document.getElementById('scheduledHealthCheckInterval')?.value || 600000)
+    };
 
     try {
         await window.apiClient.post('/config', config);

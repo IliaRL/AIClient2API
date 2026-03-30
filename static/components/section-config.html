@@ -228,6 +228,35 @@
                 </div>
             </div>
 
+            <!-- 定时健康检查 -->
+            <div class="config-group-section">
+                <h3 data-i18n="config.healthCheck.title"><i class="fas fa-heartbeat"></i> 定时健康检查</h3>
+                <div class="config-row">
+                    <div class="form-group">
+                        <label data-i18n="config.healthCheck.enabled">启用定时检查</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="scheduledHealthCheckEnabled">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="config.healthCheck.startupRun">启动时运行</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="scheduledHealthCheckStartupRun">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="scheduledHealthCheckInterval" data-i18n="config.healthCheck.interval">检查间隔</label>
+                    <select id="scheduledHealthCheckInterval" class="form-control">
+                        <option value="300000">5 分钟</option>
+                        <option value="600000" selected>10 分钟</option>
+                        <option value="1800000">30 分钟</option>
+                    </select>
+                    <small class="form-text" data-i18n="config.healthCheck.intervalNote">设置定时健康检查的执行间隔</small>
+                </div>
+            </div>
 
             <!-- 日志管理 -->
             <div class="config-group-section">
