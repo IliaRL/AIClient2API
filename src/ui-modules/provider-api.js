@@ -710,8 +710,7 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
             }
 
             try {
-                // 传递 forceCheck = true 强制执行健康检查，忽略 checkHealth 配置
-                const healthResult = await providerPoolManager._checkProviderHealth(providerType, providerConfig, true);
+                const healthResult = await providerPoolManager._checkProviderHealth(providerType, providerConfig);
                 
                 if (healthResult === null) {
                     results.push({

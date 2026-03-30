@@ -32,6 +32,12 @@ function updateConfigProviderConfigs(configs) {
     if (tlsSidecarProvidersEl) {
         renderProviderTags(tlsSidecarProvidersEl, configs, false);
     }
+
+    // 渲染定时健康检查的提供商选择
+    const scheduledHealthCheckProvidersEl = document.getElementById('scheduledHealthCheckProviders');
+    if (scheduledHealthCheckProvidersEl) {
+        renderProviderTags(scheduledHealthCheckProvidersEl, configs, false);
+    }
     
     // 重新加载当前配置以恢复选中状态
     loadConfiguration();

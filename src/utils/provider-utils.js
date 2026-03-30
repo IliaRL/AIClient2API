@@ -41,6 +41,7 @@ export const PROVIDER_MAPPINGS = [
         providerType: 'openai-qwen-oauth',
         credPathKey: 'QWEN_OAUTH_CREDS_FILE_PATH',
         defaultCheckModel: 'qwen3-coder-plus',
+        defaultCheckHealth: true,
         displayName: 'Qwen OAuth',
         needsProjectId: false,
         urlKeys: ['QWEN_BASE_URL', 'QWEN_OAUTH_BASE_URL']
@@ -324,13 +325,13 @@ export async function isValidOAuthCredentials(filePath) {
  * @returns {Object} 新的提供商配置对象
  */
 export function createProviderConfig(options) {
-    const { credPathKey, credPath, defaultCheckModel, needsProjectId, urlKeys } = options;
+    const { credPathKey, credPath, defaultCheckModel, defaultCheckHealth, needsProjectId, urlKeys } = options;
     
     const newProvider = {
         [credPathKey]: credPath,
         uuid: generateUUID(),
         checkModelName: defaultCheckModel,
-        checkHealth: false,
+        checkHealth: defaultCheckHealth ?? false,
         isHealthy: true,
         isDisabled: false,
         lastUsed: null,

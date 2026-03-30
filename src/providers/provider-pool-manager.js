@@ -1674,6 +1674,10 @@ export class ProviderPoolManager {
      * This method would typically be called periodically (e.g., via cron job).
      */
     async performHealthChecks(isInit = false) {
+        const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
+        const selectedProviderTypes = scheduledConfig?.providerTypes || [];
+        const checkAllTypes = selectedProviderTypes.length === 0;
+        
         this._log('info', 'Performing health checks on all providers...');
         const now = new Date();
         
@@ -1681,6 +1685,11 @@ export class ProviderPoolManager {
         this._checkAndRecoverScheduledProviders();
         
         for (const providerType in this.providerStatus) {
+            // Filter by selected provider types if specified (same logic as scheduled health check)
+            if (!checkAllTypes && !selectedProviderTypes.includes(providerType)) {
+                continue;
+            }
+            
             for (const providerStatus of this.providerStatus[providerType]) {
                 const providerConfig = providerStatus.config;
 
@@ -1749,7 +1758,8 @@ export class ProviderPoolManager {
      * It respects provider-level isDisabled and checkHealth flags.
      */
     async performScheduledHealthChecks() {
-        const scheduledConfig = globalThis.CONFIG?.SCHEDULED_HEALTH_CHECK;
+        const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
+        const checkStartTime = Date.now();
         
         // Check if scheduled health checks are disabled
         if (!scheduledConfig?.enabled) {
@@ -1757,11 +1767,20 @@ export class ProviderPoolManager {
             return;
         }
         
-        this._log('info', '[ScheduledHealthCheck] Starting scheduled health checks on all providers...');
-        
         // Get selected provider types, if empty/undefined then check all
-        const selectedProviderTypes = scheduledConfig?.providerTypes;
-        const checkAllTypes = !selectedProviderTypes || selectedProviderTypes.length === 0;
+        let selectedProviderTypes = scheduledConfig?.providerTypes;
+        
+        // Validate providerTypes is an array to prevent TypeError
+        if (!Array.isArray(selectedProviderTypes)) {
+            this._log('warn', '[ScheduledHealthCheck] providerTypes is not an array, treating as check all');
+            selectedProviderTypes = [];
+        }
+        
+        const checkAllTypes = selectedProviderTypes.length === 0;
+        
+        // Count providers to be checked
+        let totalProviders = 0;
+        let providersToCheck = [];
         
         for (const providerType in this.providerStatus) {
             // Filter by selected provider types if specified
@@ -1777,39 +1796,58 @@ export class ProviderPoolManager {
                     continue;
                 }
                 
-                // Skip providers with checkHealth disabled
-                if (provider.config.checkHealth === false) {
-                    this._log('debug', `[ScheduledHealthCheck] Skipping ${provider.config.uuid} (${providerType}): checkHealth is false`);
-                    continue;
-                }
-                
-                try {
-                    // Perform health check with forceCheck=false (respects checkHealth flag)
-                    const result = await this._checkProviderHealth(providerType, provider.config, false);
-                    
-                    // result === null means checkHealth was false (already handled above) or not implemented
-                    if (result === null) {
-                        this._log('debug', `[ScheduledHealthCheck] Health check for ${provider.config.uuid} (${providerType}) skipped: not implemented`);
-                        continue;
-                    }
-                    
-                    if (!result.success) {
-                        // Provider is unhealthy
-                        this._log('warn', `[ScheduledHealthCheck] Health check failed for ${provider.config.uuid} (${providerType}): ${result.errorMessage || 'Provider is not responding correctly.'}`);
-                        this.markProviderUnhealthyImmediately(providerType, provider.config, result.errorMessage);
-                    } else {
-                        // Provider is healthy
-                        this._log('debug', `[ScheduledHealthCheck] Health check passed for ${provider.config.uuid} (${providerType})`);
-                        this.markProviderHealthy(providerType, provider.config, true, result.modelName);
-                    }
-                } catch (error) {
-                    this._log('error', `[ScheduledHealthCheck] Health check exception for ${provider.config.uuid} (${providerType}): ${error.message}`);
-                    this.markProviderUnhealthyImmediately(providerType, provider.config, error.message);
-                }
+                totalProviders++;
+                providersToCheck.push({ providerType, provider, uuid: provider.config.uuid, customName: provider.config.customName });
             }
         }
         
-        this._log('info', '[ScheduledHealthCheck] Completed');
+        this._log('info', `[ScheduledHealthCheck] Starting scheduled health checks: ${totalProviders} provider(s) to check (interval: ${scheduledConfig.interval}ms, types: ${checkAllTypes ? 'all' : selectedProviderTypes.join(', ')})`);
+        
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (const { providerType, provider, uuid, customName } of providersToCheck) {
+            // Skip if provider became disabled during iteration
+            if (provider.config.isDisabled === true) {
+                continue;
+            }
+            
+            const checkStartTime = Date.now();
+            const checkModelName = provider.config.checkModelName || ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType] || 'unknown';
+            const displayName = customName || uuid.substring(0, 8);
+            
+            try {
+                // Perform health check (forceCheck=true to bypass per-instance checkHealth flag)
+                const result = await this._checkProviderHealth(providerType, provider.config);
+                const checkDuration = Date.now() - checkStartTime;
+                
+                // result === null means check not implemented for this provider type
+                if (result === null) {
+                    this._log('info', `[ScheduledHealthCheck] ${displayName} (${providerType}): check skipped - not implemented (${checkDuration}ms)`);
+                    continue;
+                }
+                
+                if (!result.success) {
+                    // Provider is unhealthy
+                    failCount++;
+                    this._log('warn', `[ScheduledHealthCheck] ${displayName} (${providerType}) FAILED: ${result.errorMessage || 'Provider is not responding correctly.'} (${checkDuration}ms)`);
+                    this.markProviderUnhealthyImmediately(providerType, provider.config, result.errorMessage);
+                } else {
+                    // Provider is healthy
+                    successCount++;
+                    this._log('info', `[ScheduledHealthCheck] ${displayName} (${providerType}) PASSED: model=${result.modelName || checkModelName} (${checkDuration}ms)`);
+                    this.markProviderHealthy(providerType, provider.config, false, result.modelName);
+                }
+            } catch (error) {
+                const checkDuration = Date.now() - checkStartTime;
+                failCount++;
+                this._log('error', `[ScheduledHealthCheck] ${displayName} (${providerType}) EXCEPTION: ${error.message} (${checkDuration}ms)`);
+                this.markProviderUnhealthyImmediately(providerType, provider.config, error.message);
+            }
+        }
+        
+        const totalDuration = Date.now() - checkStartTime;
+        this._log('info', `[ScheduledHealthCheck] Completed: ${successCount} passed, ${failCount} failed, ${totalDuration}ms total`);
     }
 
     /**
@@ -1864,15 +1902,9 @@ export class ProviderPoolManager {
      * Performs an actual health check for a specific provider.
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to check.
-     * @param {boolean} forceCheck - If true, ignore checkHealth config and force the check.
      * @returns {Promise<{success: boolean, modelName: string, errorMessage: string}|null>} - Health check result object or null if check not implemented.
      */
-    async _checkProviderHealth(providerType, providerConfig, forceCheck = false) {
-        // 如果未启用健康检查且不是强制检查，返回 null（提前返回，避免不必要的计算）
-        if (!providerConfig.checkHealth && !forceCheck) {
-            return null;
-        }
-
+    async _checkProviderHealth(providerType, providerConfig) {
         // 确定健康检查使用的模型名称
         const modelName = providerConfig.checkModelName ||
                         ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType];
@@ -1907,8 +1939,6 @@ export class ProviderPoolManager {
             const timeoutId = setTimeout(() => abortController.abort(), healthCheckTimeout);
 
             try {
-                this._log('debug', `Health check attempt ${i + 1}/${healthCheckRequests.length} for ${modelName}: ${JSON.stringify(healthCheckRequest)}`);
-
                 // 尝试将 signal 注入请求体，供支持的适配器使用
                 const requestWithSignal = {
                     ...healthCheckRequest,
@@ -1918,16 +1948,17 @@ export class ProviderPoolManager {
                 await serviceAdapter.generateContent(modelName, requestWithSignal);
                 
                 clearTimeout(timeoutId);
+                // 将健康检查计入使用量（resetUsageCount=false 只会递增，不会重置）
+                this.markProviderHealthy(providerType, providerConfig, false, modelName);
                 return { success: true, modelName, errorMessage: null };
             } catch (error) {
                 clearTimeout(timeoutId);
                 lastError = error;
-                this._log('debug', `Health check attempt ${i + 1} failed for ${providerType}: ${error.message}`);
             }
         }
 
         // 所有尝试都失败
-        this._log('error', `Health check failed for ${providerType} after ${healthCheckRequests.length} attempts: ${lastError?.message}`);
+        this._log('warn', `[HealthCheck] ${providerType} failed after ${healthCheckRequests.length} attempts: ${lastError?.message}`);
         return { success: false, modelName, errorMessage: lastError?.message || 'All health check attempts failed' };
     }
 

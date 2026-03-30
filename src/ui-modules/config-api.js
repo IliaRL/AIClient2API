@@ -117,16 +117,22 @@ export async function handleUpdateConfig(req, res, currentConfig) {
 
         // Scheduled Health Check settings
         if (newConfig.SCHEDULED_HEALTH_CHECK !== undefined) {
-            const incoming = newConfig.SCHEDULED_HEALTH_CHECK;
-            currentConfig.SCHEDULED_HEALTH_CHECK = {
-                enabled: incoming?.enabled === true,
-                startupRun: incoming?.startupRun !== false,
-                interval: (() => {
-                    const val = Number(incoming?.interval);
-                    return isNaN(val) ? 600000 : Math.max(60000, Math.min(3600000, val));
-                })(),
-                providerTypes: Array.isArray(incoming?.providerTypes) ? incoming.providerTypes : []
-            };
+             const incoming = newConfig.SCHEDULED_HEALTH_CHECK;
+             const newInterval = (() => {
+                 const val = Number(incoming?.interval);
+                 return isNaN(val) ? 600000 : Math.max(60000, val);
+             })();
+             currentConfig.SCHEDULED_HEALTH_CHECK = {
+                 enabled: incoming?.enabled === true,
+                 startupRun: incoming?.startupRun !== false,
+                 interval: newInterval,
+                 providerTypes: Array.isArray(incoming?.providerTypes) ? incoming.providerTypes : []
+             };
+             
+             // 如果定时器已存在且 enabled，重新加载 timer（interval 变化时）
+             if (globalThis.reloadHealthCheckTimer && currentConfig.SCHEDULED_HEALTH_CHECK.enabled) {
+                 globalThis.reloadHealthCheckTimer(newInterval);
+             }
         }
 
         // Handle system prompt update

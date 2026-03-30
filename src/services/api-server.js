@@ -364,30 +364,71 @@ async function startServer() {
         // 定时健康检查
         const scheduledConfig = CONFIG.SCHEDULED_HEALTH_CHECK;
         if (scheduledConfig?.enabled) {
-            const interval = scheduledConfig.interval || CONFIG.CRON_NEAR_MINUTES * 60 * 1000;
+            // Validate interval is within acceptable range (minimum 60000ms, no maximum)
+            const DEFAULT_INTERVAL = CONFIG.CRON_NEAR_MINUTES * 60 * 1000;
+            let interval = scheduledConfig.interval;
+            if (typeof interval !== 'number' || interval < 60000) {
+                logger.warn(`[ScheduledHealthCheck] Invalid interval ${interval}, using default ${DEFAULT_INTERVAL}`);
+                interval = DEFAULT_INTERVAL;
+            }
             
             // 启动时运行健康检查
             if (scheduledConfig.startupRun !== false) {
                 logger.info('[ScheduledHealthCheck] Running scheduled health check on startup...');
-                setTimeout(async () => {
+                // 使用 setImmediate 确保在事件循环的下一阶段执行,此时服务器已完全就绪
+                setImmediate(async () => {
                     try {
                         await poolManager.performScheduledHealthChecks();
                     } catch (error) {
                         logger.error('[ScheduledHealthCheck] Startup run error:', error);
                     }
-                }, 100); // 延迟100ms确保服务已完全就绪
+                });
+            }
+            
+            let isHealthCheckRunning = false;
+            let healthCheckTimerId = null;
+            
+            // 定时健康检查函数
+            const runHealthCheckTimer = (interval) => {
+                // 清除旧的 timer
+                if (healthCheckTimerId) {
+                    clearInterval(healthCheckTimerId);
+                }
+                // 设置定时任务
+                healthCheckTimerId = setInterval(async () => {
+                    if (isHealthCheckRunning) {
+                        logger.debug('[ScheduledHealthCheck] Skipping - previous run still in progress');
+                        return;
+                    }
+                    isHealthCheckRunning = true;
+                    try {
+                        await poolManager.performScheduledHealthChecks();
+                    } catch (error) {
+                        logger.error('[ScheduledHealthCheck] Error:', error);
+                    } finally {
+                        isHealthCheckRunning = false;
+                    }
+                }, interval);
+                logger.info(`[ScheduledHealthCheck] Scheduled every ${interval}ms`);
+            };
+            
+            // 启动时运行健康检查
+            if (scheduledConfig.startupRun !== false) {
+                logger.info('[ScheduledHealthCheck] Running scheduled health check on startup...');
+                setImmediate(async () => {
+                    try {
+                        await poolManager.performScheduledHealthChecks();
+                    } catch (error) {
+                        logger.error('[ScheduledHealthCheck] Startup run error:', error);
+                    }
+                });
             }
             
             // 设置定时任务
-            setInterval(async () => {
-                try {
-                    await poolManager.performScheduledHealthChecks();
-                } catch (error) {
-                    logger.error('[ScheduledHealthCheck] Error:', error);
-                }
-            }, interval);
+            runHealthCheckTimer(interval);
             
-            logger.info(`[ScheduledHealthCheck] Scheduled every ${interval}ms`);
+            // 导出重载函数供外部调用
+            globalThis.reloadHealthCheckTimer = runHealthCheckTimer;
         }
 
         // 如果是子进程，通知主进程已就绪
