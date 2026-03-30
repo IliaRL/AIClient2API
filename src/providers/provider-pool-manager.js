@@ -1675,18 +1675,22 @@ export class ProviderPoolManager {
      */
     async performHealthChecks(isInit = false) {
         const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
-        const selectedProviderTypes = scheduledConfig?.providerTypes || [];
-        const checkAllTypes = selectedProviderTypes.length === 0;
+        const selectedProviderTypes = scheduledConfig?.providerTypes;
         
-        this._log('info', 'Performing health checks on all providers...');
+        // 如果没有选择任何 provider types，不进行检查
+        if (!Array.isArray(selectedProviderTypes) || selectedProviderTypes.length === 0) {
+            return;
+        }
+        
+        this._log('info', 'Performing health checks on selected providers...');
         const now = new Date();
         
         // 首先检查并恢复已到恢复时间的提供商
         this._checkAndRecoverScheduledProviders();
         
         for (const providerType in this.providerStatus) {
-            // Filter by selected provider types if specified (same logic as scheduled health check)
-            if (!checkAllTypes && !selectedProviderTypes.includes(providerType)) {
+            // Only check selected provider types
+            if (!selectedProviderTypes.includes(providerType)) {
                 continue;
             }
             
@@ -1767,24 +1771,22 @@ export class ProviderPoolManager {
             return;
         }
         
-        // Get selected provider types, if empty/undefined then check all
+        // Get selected provider types
         let selectedProviderTypes = scheduledConfig?.providerTypes;
         
-        // Validate providerTypes is an array to prevent TypeError
-        if (!Array.isArray(selectedProviderTypes)) {
-            this._log('warn', '[ScheduledHealthCheck] providerTypes is not an array, treating as check all');
-            selectedProviderTypes = [];
+        // Validate providerTypes is an array
+        if (!Array.isArray(selectedProviderTypes) || selectedProviderTypes.length === 0) {
+            this._log('info', '[ScheduledHealthCheck] No provider types selected, skipping health check');
+            return;
         }
-        
-        const checkAllTypes = selectedProviderTypes.length === 0;
         
         // Count providers to be checked
         let totalProviders = 0;
         let providersToCheck = [];
         
         for (const providerType in this.providerStatus) {
-            // Filter by selected provider types if specified
-            if (!checkAllTypes && !selectedProviderTypes.includes(providerType)) {
+            // Only check selected provider types
+            if (!selectedProviderTypes.includes(providerType)) {
                 this._log('debug', `[ScheduledHealthCheck] Skipping provider type ${providerType}: not in selected types`);
                 continue;
             }
@@ -1801,7 +1803,7 @@ export class ProviderPoolManager {
             }
         }
         
-        this._log('info', `[ScheduledHealthCheck] Starting scheduled health checks: ${totalProviders} provider(s) to check (interval: ${scheduledConfig.interval}ms, types: ${checkAllTypes ? 'all' : selectedProviderTypes.join(', ')})`);
+        this._log('info', `[ScheduledHealthCheck] Starting scheduled health checks: ${totalProviders} provider(s) to check (interval: ${scheduledConfig.interval}ms, types: ${selectedProviderTypes.join(', ')})`);
         
         let successCount = 0;
         let failCount = 0;
