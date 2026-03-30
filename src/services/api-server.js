@@ -412,18 +412,6 @@ async function startServer() {
                 logger.info(`[ScheduledHealthCheck] Scheduled every ${interval}ms`);
             };
             
-            // 启动时运行健康检查
-            if (scheduledConfig.startupRun !== false) {
-                logger.info('[ScheduledHealthCheck] Running scheduled health check on startup...');
-                setImmediate(async () => {
-                    try {
-                        await poolManager.performScheduledHealthChecks();
-                    } catch (error) {
-                        logger.error('[ScheduledHealthCheck] Startup run error:', error);
-                    }
-                });
-            }
-            
             // 设置定时任务
             runHealthCheckTimer(interval);
             
