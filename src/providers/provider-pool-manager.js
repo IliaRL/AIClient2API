@@ -1672,12 +1672,17 @@ export class ProviderPoolManager {
     /**
      * Performs health checks on selected providers.
      * Respects SCHEDULED_HEALTH_CHECK.providerTypes configuration.
+     * 
+     * 设计决策：如果没有选择任何 provider types，则不进行检查任何 provider。
+     * 这是有意为之的设计 - 如果用户没有明确选择，则不需要自动健康检查。
+     * 区别于原来的逻辑（检查所有 provider），现在的行为更符合用户预期。
      */
     async performHealthChecks() {
         const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
         const selectedProviderTypes = scheduledConfig?.providerTypes;
         
         // 如果没有选择任何 provider types，不进行检查
+        // 设计决策：如果用户没有选择任何 provider，明确不执行健康检查是合理的
         if (!Array.isArray(selectedProviderTypes) || selectedProviderTypes.length === 0) {
             return;
         }
@@ -1902,9 +1907,15 @@ export class ProviderPoolManager {
 
     /**
      * Performs an actual health check for a specific provider.
+     * 
+     * 设计决策：不检查 providerConfig.checkHealth 标志。
+     * 健康检查是否执行由上层调用方（performScheduledHealthChecks / performHealthChecks）
+     * 通过 providerTypes 数组来决定，不在每个 provider 级别控制。
+     * 这样简化了逻辑，避免 per-provider 的 checkHealth flag 变得无用。
+     * 
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to check.
-     * @returns {Promise<{success: boolean, modelName: string, errorMessage: string}|null>} - Health check result object or null if check not implemented.
+     * @returns {Promise<{success: boolean, modelName: string, errorMessage: string}>} - Health check result object.
      */
     async _checkProviderHealth(providerType, providerConfig) {
         // 确定健康检查使用的模型名称

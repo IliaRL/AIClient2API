@@ -362,9 +362,11 @@ async function startServer() {
         }
 
         // 定时健康检查
-        const scheduledConfig = CONFIG.SCHEDULED_HEALTH_CHECK;
+         const scheduledConfig = CONFIG.SCHEDULED_HEALTH_CHECK;
         if (scheduledConfig?.enabled) {
-            // Validate interval is within acceptable range (minimum 60000ms, no maximum)
+            // 设计决策：只验证最小值 60000ms，不设最大值。
+            // 前端有 max=3600000 (1小时) 的 UI 限制，但后端允许更大值以支持特殊需求。
+            // 如果用户需要超长的间隔，可以通过 API 直接设置。
             const DEFAULT_INTERVAL = CONFIG.CRON_NEAR_MINUTES * 60 * 1000;
             let interval = scheduledConfig.interval;
             if (typeof interval !== 'number' || interval < 60000) {
