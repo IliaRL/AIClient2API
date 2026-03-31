@@ -349,7 +349,7 @@ const translations = {
         'config.healthCheck.interval': '检查间隔',
         'config.healthCheck.intervalNote': '单位毫秒，最小60000ms(1分钟)，最大3600000ms(1小时)，可手动输入或点击快捷按钮',
         'config.healthCheck.providerTypes': '定时检查的供应商',
-        'config.healthCheck.providerTypesNote': '选择需要进行定时健康检查的供应商类型，留空则检查所有供应商',
+        'config.healthCheck.providerTypesNote': '选择需要进行定时健康检查的供应商类型，留空则不进行任何检查',
         'config.log.title': '日志设置',
         'config.log.enabled': '启用日志',
         'config.log.outputMode': '日志输出模式',

@@ -355,11 +355,11 @@ async function startServer() {
             setInterval(heartbeatAndRefreshToken, CONFIG.CRON_NEAR_MINUTES * 60 * 1000);
         }
         // 服务器完全启动后,执行初始健康检查
-        const poolManager = getProviderPoolManager();
-        if (poolManager) {
-            logger.info('[Initialization] Performing initial health checks for provider pools...');
-            poolManager.performHealthChecks(true);
-        }
+         const poolManager = getProviderPoolManager();
+         if (poolManager) {
+             logger.info('[Initialization] Performing initial health checks for provider pools...');
+             poolManager.performHealthChecks();
+         }
 
         // 定时健康检查
          const scheduledConfig = CONFIG.SCHEDULED_HEALTH_CHECK;

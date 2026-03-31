@@ -709,17 +709,8 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
                 continue;
             }
 
-            try {
+             try {
                 const healthResult = await providerPoolManager._checkProviderHealth(providerType, providerConfig);
-                
-                if (healthResult === null) {
-                    results.push({
-                        uuid: providerConfig.uuid,
-                        success: null,
-                        message: 'Health check not supported for this provider type'
-                    });
-                    continue;
-                }
                 
                 if (healthResult.success) {
                     providerPoolManager.markProviderHealthy(providerType, providerConfig, false, healthResult.modelName);

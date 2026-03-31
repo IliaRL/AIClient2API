@@ -1828,12 +1828,6 @@ export class ProviderPoolManager {
                 const result = await this._checkProviderHealth(providerType, provider.config);
                 const checkDuration = Date.now() - checkStartTime;
                 
-                // result === null means check not implemented for this provider type
-                if (result === null) {
-                    this._log('info', `[ScheduledHealthCheck] ${displayName} (${providerType}): check skipped - not implemented (${checkDuration}ms)`);
-                    continue;
-                }
-                
                 if (!result.success) {
                     // Provider is unhealthy
                     failCount++;
