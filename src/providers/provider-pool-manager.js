@@ -1670,10 +1670,10 @@ export class ProviderPoolManager {
     }
 
     /**
-     * Performs health checks on all providers in the pool.
-     * This method would typically be called periodically (e.g., via cron job).
+     * Performs health checks on selected providers.
+     * Respects SCHEDULED_HEALTH_CHECK.providerTypes configuration.
      */
-    async performHealthChecks(isInit = false) {
+    async performHealthChecks() {
         const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
         const selectedProviderTypes = scheduledConfig?.providerTypes;
         
