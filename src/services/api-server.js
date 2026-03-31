@@ -394,6 +394,10 @@ async function startServer() {
                 if (healthCheckTimerId) {
                     clearInterval(healthCheckTimerId);
                 }
+                // 重置运行状态，允许新的 timer 立即触发
+                // 否则如果 reload 时正在运行，新 timer 的第一次触发会被跳过
+                isHealthCheckRunning = false;
+                
                 // 设置定时任务
                 healthCheckTimerId = setInterval(async () => {
                     if (isHealthCheckRunning) {

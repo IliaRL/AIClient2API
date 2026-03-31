@@ -1950,8 +1950,8 @@ export class ProviderPoolManager {
                 await serviceAdapter.generateContent(modelName, requestWithSignal);
                 
                 clearTimeout(timeoutId);
-                // 将健康检查计入使用量（resetUsageCount=false 只会递增，不会重置）
-                this.markProviderHealthy(providerType, providerConfig, false, modelName);
+                // 注意：使用量计数由调用方处理（performScheduledHealthChecks/performHealthChecks）
+                // 这里只返回成功结果，让调用方统一处理状态更新和计数
                 return { success: true, modelName, errorMessage: null };
             } catch (error) {
                 clearTimeout(timeoutId);
