@@ -6,6 +6,8 @@
 
 **A powerful proxy that can unify the requests of various client-only large model APIs (Gemini CLI, Antigravity, Qwen Code, Kiro ...), simulate requests, and encapsulate them into a local OpenAI-compatible interface.**
 
+<a href="https://trendshift.io/repositories/15832" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15832" alt="justlovemaki%2FAIClient-2-API | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+</div>
 </div>
 
 <div align="center">
@@ -33,6 +35,16 @@
     </td>
     <td width="75%" align="left" valign="middle">
       PackyCode is a reliable and efficient API relay service provider, offering relay services for Claude Code, Codex, Gemini, and more. PackyCode provides special discounts for our software users: <a href="https://www.packyapi.com/register?aff=AIClient2API">register using this link</a> and enter the <strong>AIClient2API</strong> promo code during recharge to get <strong>10% off</strong>.
+    </td>
+  </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
+      <a href="https://www.aicodemirror.com/register?invitecode=5BUE62">
+        <img src="static/aicodemirror.jpg" alt="AICodeMirror Sponsor" width="180">
+      </a>
+    </td>
+    <td width="75%" align="left" valign="middle">
+      Thanks to AICodeMirror for sponsoring this project! AICodeMirror provides official high-stability relay services for Claude Code / Codex / Gemini CLI, with enterprise-grade concurrency, fast invoicing, and 24/7 dedicated technical support. Claude Code / Codex / Gemini official channels at 38% / 2% / 9% of original price, with extra discounts on top-ups! AICodeMirror offers special benefits for AIClient-2-API users: <a href="https://www.aicodemirror.com/register?invitecode=5BUE62">register via this link</a> to enjoy <strong>20% off</strong> your first top-up, and enterprise customers can get up to 25% off!
     </td>
   </tr>
   <tr>
