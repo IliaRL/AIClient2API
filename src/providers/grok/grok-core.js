@@ -439,7 +439,20 @@ export class GrokApiService {
     async generateContent(model, requestBody) {
         logger.info(`[Grok] Starting generateContent (unified processing)`);
         const stream = this.generateContentStream(model, requestBody);
-        const collected = { message: "", responseId: "", postId: "", llmInfo: {}, rolloutId: "", modelResponse: null, cardAttachment: null, streamingImageGenerationResponse: null, streamingVideoGenerationResponse: null, finalVideoUrl: null, finalThumbnailUrl: null };
+        const collected = { 
+            message: "", 
+            responseId: "", 
+            postId: "", 
+            llmInfo: {}, 
+            rolloutId: "", 
+            modelResponse: null, 
+            cardAttachment: null,
+            cardAttachments: [], // 收集所有的卡片附件
+            streamingImageGenerationResponse: null, 
+            streamingVideoGenerationResponse: null, 
+            finalVideoUrl: null, 
+            finalThumbnailUrl: null 
+        };
         
         for await (const chunk of stream) {
             const resp = chunk.result?.response;
@@ -450,8 +463,41 @@ export class GrokApiService {
             if (resp.rolloutId) collected.rolloutId = resp.rolloutId;
             if (resp._requestBaseUrl) collected._requestBaseUrl = resp._requestBaseUrl;
             if (resp._uuid) collected._uuid = resp._uuid;
-            if (resp.modelResponse) collected.modelResponse = resp.modelResponse;
-            if (resp.cardAttachment) collected.cardAttachment = resp.cardAttachment;
+            
+            if (resp.modelResponse) {
+                if (!collected.modelResponse) {
+                    collected.modelResponse = resp.modelResponse;
+                } else {
+                    // 合并 modelResponse 中的数据
+                    if (resp.modelResponse.message) collected.modelResponse.message = resp.modelResponse.message;
+                    if (Array.isArray(resp.modelResponse.cardAttachmentsJson)) {
+                        if (!collected.modelResponse.cardAttachmentsJson) {
+                            collected.modelResponse.cardAttachmentsJson = resp.modelResponse.cardAttachmentsJson;
+                        } else {
+                            const currentIds = new Set(collected.modelResponse.cardAttachmentsJson.map(raw => {
+                                try { return JSON.parse(raw).id; } catch (e) { return null; }
+                            }).filter(id => id));
+                            
+                            for (const raw of resp.modelResponse.cardAttachmentsJson) {
+                                try {
+                                    const id = JSON.parse(raw).id;
+                                    if (!id || !currentIds.has(id)) {
+                                        collected.modelResponse.cardAttachmentsJson.push(raw);
+                                        if (id) currentIds.add(id);
+                                    }
+                                } catch (e) {
+                                    collected.modelResponse.cardAttachmentsJson.push(raw);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (resp.cardAttachment) {
+                collected.cardAttachment = resp.cardAttachment;
+                collected.cardAttachments.push(resp.cardAttachment);
+            }
             if (resp.streamingImageGenerationResponse) {
                 collected.streamingImageGenerationResponse = resp.streamingImageGenerationResponse;
             }

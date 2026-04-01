@@ -4,7 +4,7 @@
 
 # AIClient-2-API 🚀
 
-**複数のクライアント専用大規模言語モデルAPI（Gemini CLI、Antigravity、Qwen Code、Kiro ...）を模擬リクエストし、ローカルのOpenAI互換インターフェースに統一的にラッピングする強力なプロキシ。**
+**複数のクライアント専用大規模言語モデルAPI（Gemini CLI、Antigravity、Codex, Grok、Kiro ...）を模擬リクエストし、ローカルのOpenAI互換インターフェースに統一的にラッピングする強力なプロキシ。**
 
 <a href="https://trendshift.io/repositories/15832" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15832" alt="justlovemaki%2FAIClient-2-API | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </div>
@@ -62,7 +62,7 @@
 
 ## 🚀 概要
 
-`AIClient2API` はクライアント制限を突破するAPIプロキシサービスで、Gemini、Antigravity、Qwen Code、Kiroなど、元々クライアント内でのみ使用可能な無料大規模モデルを、あらゆるアプリケーションから呼び出せる標準OpenAI互換インターフェースに変換します。Node.jsをベースに構築され、OpenAI、Claude、Geminiの3大プロトコル間のインテリジェント変換をサポートし、Cherry-Studio、NextChat、Clineなどのツールで、Claude Opus 4.5、Gemini 3.0 Pro、Qwen3 Coder Plusなどの高度なモデルを大規模に無料で使用できるようにします。プロジェクトはストラテジーパターンとアダプターパターンに基づくモジュラーアーキテクチャを採用し、アカウントプール管理、インテリジェントポーリング、自動フェイルオーバー、ヘルスチェック機構を内蔵し、99.9%のサービス可用性を保証します。
+`AIClient2API` はクライアント制限を突破するAPIプロキシサービスで、Gemini、Antigravity、Codex, Grok、Kiroなど、元々クライアント内でのみ使用可能な無料大規模モデルを、あらゆるアプリケーションから呼び出せる標準OpenAI互換インターフェースに変換します。Node.jsをベースに構築され、OpenAI、Claude、Geminiの3大プロトコル間のインテリジェント変換をサポートし、Cherry-Studio、NextChat、Clineなどのツールで、Claude Opus 4.5、Gemini 3.0 Pro、Qwen3 Coder Plusなどの高度なモデルを大規模に無料で使用できるようにします。プロジェクトはストラテジーパターンとアダプターパターンに基づくモジュラーアーキテクチャを採用し、アカウントプール管理、インテリジェントポーリング、自動フェイルオーバー、ヘルスチェック機構を内蔵し、99.9%のサービス可用性を保証します。
 
 > [!NOTE]
 > **🎉 重要なマイルストーン**
@@ -100,7 +100,7 @@
 ## 💡 コアアドバンテージ
 
 ### 🎯 統一アクセス、ワンストップ管理
-*   **マルチモデル統一インターフェース**：標準OpenAI互換プロトコルを通じて、一度の設定でGemini、Claude、Grok、Qwen Code、Kimi K2、MiniMax M2などの主流大規模モデルにアクセス
+*   **マルチモデル統一インターフェース**：標準OpenAI互換プロトコルを通じて、一度の設定でGemini、Claude、Grok、Codex、 K2、MiniMax M2などの主流大規模モデルにアクセス
 *   **柔軟な切り替えメカニズム**：Pathルーティング、起動パラメータ、環境変数の3つの方法で動的にモデルを切り替え、異なるシナリオのニーズに対応
 *   **ゼロコスト移行**：OpenAI API仕様と完全互換、Cherry-Studio、NextChat、Clineなどのツールを変更なしで使用可能
 *   **マルチプロトコルインテリジェント変換**：OpenAI、Claude、Geminiの3大プロトコル間のインテリジェント変換をサポートし、クロスプロトコルモデル呼び出しを実現
