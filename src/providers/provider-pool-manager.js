@@ -115,7 +115,7 @@ export class ProviderPoolManager {
                         const fileContent = fs.readFileSync(configPath, 'utf-8');
                         const credData = JSON.parse(fileContent);
                         const expiryTime = credData.expiry_date || credData.expiry || credData.expires_at;
-                        const nearExpiryMs = (currentConfig?.CRON_NEAR_MINUTES || 10) * 60 * 1000;
+                        const nearExpiryMs = (this.globalConfig?.CRON_NEAR_MINUTES || 10) * 60 * 1000;
                         if (!expiryTime) {
                             // 凭据文件缺少 expiry 字段，无法判断是否快过期，作为安全措施强制刷新
                             this._log('warn', `Node ${providerStatus.uuid} (${providerType}) has no expiry field. Forcing refresh as safety measure...`);
