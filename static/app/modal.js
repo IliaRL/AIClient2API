@@ -667,8 +667,13 @@ function renderProviderConfig(provider) {
  * @param {Object} provider - 提供商对象
  * @returns {Array} 字段键数组
  */
+/**
+ * 获取字段显示顺序
+ * @param {Object} provider - 提供商对象
+ * @returns {Array} 字段名数组
+ */
 function getFieldOrder(provider) {
-    const orderedFields = ['customName', 'checkModelName', 'checkHealth'];
+    const orderedFields = ['customName', 'checkModelName', 'checkHealth', 'concurrencyLimit', 'queueLimit'];
     
     // 需要排除的内部状态字段
     const excludedFields = [
@@ -677,23 +682,10 @@ function getFieldOrder(provider) {
         'notSupportedModels', 'refreshCount', 'needsRefresh', '_lastSelectionSeq'
     ];
     
-    // 从 getProviderTypeFields 获取字段顺序映射
-    const fieldOrderMap = {
-        'openai-custom': ['OPENAI_API_KEY', 'OPENAI_BASE_URL'],
-        'openaiResponses-custom': ['OPENAI_API_KEY', 'OPENAI_BASE_URL'],
-        'claude-custom': ['CLAUDE_API_KEY', 'CLAUDE_BASE_URL'],
-        'gemini-cli-oauth': ['PROJECT_ID', 'GEMINI_OAUTH_CREDS_FILE_PATH', 'GEMINI_BASE_URL'],
-        'claude-kiro-oauth': ['KIRO_OAUTH_CREDS_FILE_PATH', 'KIRO_BASE_URL', 'KIRO_REFRESH_URL', 'KIRO_REFRESH_IDC_URL'],
-        'openai-qwen-oauth': ['QWEN_OAUTH_CREDS_FILE_PATH', 'QWEN_BASE_URL', 'QWEN_OAUTH_BASE_URL'],
-        'gemini-antigravity': ['PROJECT_ID', 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH', 'ANTIGRAVITY_BASE_URL_DAILY', 'ANTIGRAVITY_BASE_URL_AUTOPUSH'],
-        'openai-iflow': ['IFLOW_OAUTH_CREDS_FILE_PATH', 'IFLOW_BASE_URL'],
-        'openai-codex-oauth': ['CODEX_OAUTH_CREDS_FILE_PATH', 'CODEX_EMAIL', 'CODEX_BASE_URL'],
-        'grok-custom': ['GROK_COOKIE_TOKEN', 'GROK_CF_CLEARANCE', 'GROK_USER_AGENT', 'GROK_BASE_URL'],
-        'forward-api': ['FORWARD_API_KEY', 'FORWARD_BASE_URL', 'FORWARD_HEADER_NAME', 'FORWARD_HEADER_VALUE_PREFIX']
-    };
-    
-    // 尝试从全局或当前模态框上下文中推断提供商类型
+    // 尝试从当前模态框上下文中获取提供商类型
     let providerType = currentProviderType;
+    
+    // 如果没有上下文类型，尝试从对象字段推断（回退逻辑）
     if (!providerType) {
         if (provider.OPENAI_API_KEY && provider.OPENAI_BASE_URL) {
             providerType = 'openai-custom';
@@ -718,8 +710,9 @@ function getFieldOrder(provider) {
         }
     }
 
-    // 获取该类型应该具有的所有字段（预定义顺序）
-    const predefinedOrder = providerType ? (fieldOrderMap[providerType] || []) : [];
+    // 直接从 utils.js 获取该类型的预定义字段列表（支持前缀匹配）
+    const predefinedFields = providerType ? getProviderTypeFields(providerType) : [];
+    const predefinedOrder = predefinedFields.map(f => f.id);
     
     // 获取当前对象中存在且不在预定义列表中的其他字段
     const otherFields = Object.keys(provider).filter(key =>
@@ -734,12 +727,8 @@ function getFieldOrder(provider) {
     
     // 只有在字段确实存在于 provider 中，或者它是该提供商类型的预定义字段时才显示
     return allExpectedFields.filter(key =>
-        provider.hasOwnProperty(key) || predefinedOrder.includes(key)
+        Object.prototype.hasOwnProperty.call(provider, key) || predefinedOrder.includes(key)
     );
-    
-    // 如果无法识别提供商类型，按字母顺序排序
-    otherFields.sort();
-    return [...orderedFields, ...otherFields].filter(key => provider.hasOwnProperty(key));
 }
 
 /**

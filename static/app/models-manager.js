@@ -199,10 +199,23 @@ function getProviderDisplayName(providerType) {
         'openaiResponses-custom': 'OpenAI Responses Custom',
         'openai-qwen-oauth': 'Qwen (OAuth)',
         'openai-iflow': 'iFlow',
-        'openai-codex-oauth': 'OpenAI Codex (OAuth)'
+        'openai-codex-oauth': 'OpenAI Codex (OAuth)',
+        'grok-custom': 'Grok Reverse'
     };
 
-    return displayNames[providerType] || providerType;
+    if (displayNames[providerType]) {
+        return displayNames[providerType];
+    }
+
+    // 尝试前缀匹配
+    for (const baseType in displayNames) {
+        if (providerType.startsWith(baseType + '-')) {
+            const suffix = providerType.substring(baseType.length + 1);
+            return `${displayNames[baseType]} (${suffix})`;
+        }
+    }
+
+    return providerType;
 }
 
 /**
@@ -220,13 +233,22 @@ function getProviderIcon(providerType) {
         }
     }
 
-    if (providerType.includes('gemini')) {
-        return 'fas fa-gem';
-    } else if (providerType.includes('claude')) {
-        return 'fas fa-robot';
-    } else if (providerType.includes('openai') || providerType.includes('qwen') || providerType.includes('iflow')) {
-        return 'fas fa-brain';
+    const iconMap = {
+        'gemini': 'fas fa-gem',
+        'claude': 'fas fa-robot',
+        'openai': 'fas fa-brain',
+        'qwen': 'fas fa-brain',
+        'iflow': 'fas fa-brain',
+        'forward': 'fas fa-share-square',
+        'grok': 'fas fa-search'
+    };
+
+    for (const key in iconMap) {
+        if (providerType.includes(key)) {
+            return iconMap[key];
+        }
     }
+    
     return 'fas fa-server';
 }
 

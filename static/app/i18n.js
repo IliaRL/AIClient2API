@@ -452,6 +452,12 @@ const translations = {
         
         // Providers
         'providers.title': '提供商池管理',
+        'providers.addGroup': '新的分组',
+        'providers.addGroup.title': '添加新分组',
+        'providers.addGroup.success': '分组创建成功，请添加账号',
+        'providers.addGroup.error': '创建失败',
+        'providers.addGroup.suffix': '分组名称 (后缀)',
+        'providers.addGroup.suffixPlaceholder': '例如: qwen, glm, minimax',
         'providers.note': '如使用客户端默认授权配置需使用空节点',
         'providers.activeConnections': '活动连接',
         'providers.activeProviders': '活跃提供商',
@@ -1304,6 +1310,13 @@ const translations = {
         
         // Providers
         'providers.title': 'Provider Pool Management',
+        'providers.addGroup': 'Add Group',
+        'providers.addGroup.title': 'Add New Configuration Group',
+        'providers.addGroup.baseType': 'Base Type',
+        'providers.addGroup.suffix': 'Suffix Name',
+        'providers.addGroup.suffixPlaceholder': 'e.g., qwen, glm, minimax',
+        'providers.addGroup.success': 'Configuration group created, please add accounts',
+        'providers.addGroup.error': 'Creation failed',
         'providers.note': 'If using default client authorization config, use an empty node',
         'providers.activeConnections': 'Active Connections',
         'providers.activeProviders': 'Active Providers',

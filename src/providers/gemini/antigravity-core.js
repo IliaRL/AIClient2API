@@ -697,7 +697,7 @@ export class AntigravityApiService {
         });
 
         // 检查是否需要使用代理
-        const proxyConfig = getGoogleAuthProxyConfig(config, 'gemini-antigravity');
+        const proxyConfig = getGoogleAuthProxyConfig(config, config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY);
 
         // 配置 OAuth2Client 使用自定义的 HTTP agent
         const oauth2Options = {
@@ -729,11 +729,11 @@ export class AntigravityApiService {
         this.baseURLs = this.getBaseURLFallbackOrder(config);
 
         // 保存代理配置供后续使用
-        this.proxyConfig = getProxyConfigForProvider(config, 'gemini-antigravity');
+        this.proxyConfig = getProxyConfigForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY);
     }
 
     _applySidecar(requestOptions) {
-        return configureTLSSidecar(requestOptions, this.config, MODEL_PROVIDER.ANTIGRAVITY);
+        return configureTLSSidecar(requestOptions, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY);
     }
 
     /**
@@ -821,7 +821,7 @@ export class AntigravityApiService {
                     // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
                     const poolManager = getProviderPoolManager();
                     if (poolManager && this.uuid) {
-                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.ANTIGRAVITY, this.uuid);
+                        poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY, this.uuid);
                     }
                 } else {
                     logger.info(`[Antigravity Auth] No access token or refresh token. Starting new authentication flow...`);
@@ -832,7 +832,7 @@ export class AntigravityApiService {
                     // 认证成功，重置状态
                     const poolManager = getProviderPoolManager();
                     if (poolManager && this.uuid) {
-                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.ANTIGRAVITY, this.uuid);
+                        poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY, this.uuid);
                     }
                 }
             } catch (error) {
@@ -1109,7 +1109,7 @@ export class AntigravityApiService {
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
                     logger.info(`[Antigravity] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized`);
-                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.ANTIGRAVITY, {
+                    poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY, {
                         uuid: this.uuid
                     });
                     error.credentialMarkedUnhealthy = true;
@@ -1212,7 +1212,7 @@ export class AntigravityApiService {
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
                     logger.info(`[Antigravity] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized in stream`);
-                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.ANTIGRAVITY, {
+                    poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY, {
                         uuid: this.uuid
                     });
                     error.credentialMarkedUnhealthy = true;
@@ -1315,7 +1315,7 @@ export class AntigravityApiService {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
                 logger.info(`[Antigravity] Token is near expiry, marking credential ${this.uuid} for refresh`);
-                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.ANTIGRAVITY, {
+                poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY, {
                     uuid: this.uuid
                 });
             }
@@ -1393,7 +1393,7 @@ export class AntigravityApiService {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
                 logger.info(`[Antigravity] Token is near expiry, marking credential ${this.uuid} for refresh`);
-                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.ANTIGRAVITY, {
+                poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY, {
                     uuid: this.uuid
                 });
             }
@@ -1442,13 +1442,6 @@ export class AntigravityApiService {
     async getUsageLimits() {
         if (!this.isInitialized) await this.initialize();
         
-        // 注意：V2 架构下不再在 getUsageLimits 中同步刷新 token
-        // 如果 token 过期，PoolManager 后台会自动处理
-        // if (this.isExpiryDateNear()) {
-        //     logger.info('[Antigravity] Token is near expiry, refreshing before getUsageLimits request...');
-        //     await this.initializeAuth(true);
-        // }
-
         try {
             const modelsWithQuotas = await this.getModelsWithQuotas();
             return modelsWithQuotas;
@@ -1487,15 +1480,12 @@ export class AntigravityApiService {
 
                     this._applySidecar(requestOptions);
                     const res = await this.authClient.request(requestOptions);
-                    // logger.info(`[Antigravity] fetchAvailableModels success: ${JSON.stringify(res.data)}`);
                     if (res.data) {
-
                         if (res.data.models) {
                             const modelsData = res.data.models;
                             
                             // 遍历模型数据，提取配额信息
                             for (const [modelId, modelData] of Object.entries(modelsData)) {
-                                // 参考 fetchAvailableModels 的逻辑修复 modelName2Alias 不存在的问题
                                 if (!modelId || (!ANTIGRAVITY_MODELS.includes(modelId) && !modelId.startsWith('claude-'))) {
                                     continue;
                                 }

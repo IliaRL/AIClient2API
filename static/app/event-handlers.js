@@ -219,6 +219,18 @@ function initEventListeners() {
         performUpdateBtn.addEventListener('click', performUpdate);
     }
 
+    // 添加提供商组按钮
+    const addProviderGroupBtn = document.getElementById('add-provider-group-btn');
+    if (addProviderGroupBtn) {
+        addProviderGroupBtn.addEventListener('click', () => {
+            if (window.showAddProviderGroupModal) {
+                window.showAddProviderGroupModal();
+            } else {
+                console.error('showAddProviderGroupModal function not found');
+            }
+        });
+    }
+
     // 日志容器滚动
     if (elements.logsContainer) {
         elements.logsContainer.addEventListener('scroll', () => {

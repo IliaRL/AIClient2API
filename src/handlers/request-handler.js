@@ -6,7 +6,7 @@ import { handleAPIRequests } from '../services/api-manager.js';
 import { getApiService, getProviderStatus } from '../services/service-manager.js';
 import { getProviderPoolManager } from '../services/service-manager.js';
 import { MODEL_PROVIDER } from '../utils/common.js';
-import { getRegisteredProviders } from '../providers/adapter.js';
+import { getRegisteredProviders, isRegisteredProvider } from '../providers/adapter.js';
 import { countTokensAnthropic } from '../utils/token-utils.js';
 import { PROMPT_LOG_FILENAME } from '../core/config-manager.js';
 import { getPluginManager } from '../core/plugin-manager.js';
@@ -152,8 +152,7 @@ export function createRequestHandler(config, providerPoolManager) {
                 // Allow overriding MODEL_PROVIDER via request header
                 const modelProviderHeader = req.headers['model-provider'];
                 if (modelProviderHeader) {
-                    const registeredProviders = getRegisteredProviders();
-                    if (registeredProviders.includes(modelProviderHeader)) {
+                    if (isRegisteredProvider(modelProviderHeader)) {
                         currentConfig.MODEL_PROVIDER = modelProviderHeader;
                         logger.info(`[Config] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
                     } else {
@@ -169,8 +168,7 @@ export function createRequestHandler(config, providerPoolManager) {
                 
                 if (pathSegments.length > 0) {
                     const firstSegment = pathSegments[0];
-                    const registeredProviders = getRegisteredProviders();
-                    const isValidProvider = registeredProviders.includes(firstSegment);
+                    const isValidProvider = isRegisteredProvider(firstSegment);
                     const isAutoMode = firstSegment === MODEL_PROVIDER.AUTO;
 
                     if (firstSegment && (isValidProvider || isAutoMode)) {

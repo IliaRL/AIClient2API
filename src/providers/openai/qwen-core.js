@@ -230,7 +230,7 @@ export class QwenApiService {
         }
         
         // 配置自定义代理
-        configureAxiosProxy(axiosConfig, this.config, 'openai-qwen-oauth');
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API);
         
         this.currentAxiosInstance = axios.create(axiosConfig);
 
@@ -239,7 +239,7 @@ export class QwenApiService {
     }
 
     _applySidecar(axiosConfig) {
-        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.QWEN_API, this.baseUrl);
+        return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API, this.baseUrl);
     }
 
     /**
@@ -278,7 +278,7 @@ export class QwenApiService {
             if (forceRefresh || (credentials && credentials.access_token)) {
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.QWEN_API, this.uuid);
+                    poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API, this.uuid);
                 }
             }
         } catch (error) {
@@ -331,7 +331,7 @@ export class QwenApiService {
                 // 认证成功，重置状态
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.QWEN_API, this.uuid);
+                    poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API, this.uuid);
                 }
             }
         }
@@ -575,7 +575,7 @@ export class QwenApiService {
             }
             
             // 配置自定义代理
-            configureAxiosProxy(axiosConfig, this.config, 'openai-qwen-oauth');
+            configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API);
             
             this.currentAxiosInstance = axios.create(axiosConfig);
 
@@ -629,7 +629,7 @@ export class QwenApiService {
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
                     logger.info(`[Qwen] Marking credential ${this.uuid} as needs refresh. Reason: Auth Error ${status}`);
-                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.QWEN_API, {
+                    poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API, {
                         uuid: this.uuid
                     });
                     error.credentialMarkedUnhealthy = true;
@@ -677,7 +677,7 @@ export class QwenApiService {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
                 logger.info(`[Qwen] Token is near expiry, marking credential ${this.uuid} for refresh`);
-                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.QWEN_API, {
+                poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API, {
                     uuid: this.uuid
                 });
             }

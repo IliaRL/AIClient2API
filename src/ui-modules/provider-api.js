@@ -9,38 +9,53 @@ import { getRegisteredProviders } from '../providers/adapter.js';
 // 文件级互斥锁：防止并发读写导致数据丢失
 // 安全净化：移除用户输入字段中的危险内容（script、事件处理器、javascript:协议等），
 // 存储原始文本。HTML 转义统一由前端 escHtml() 负责，避免双编码问题。
-function sanitizeProviderData(provider) {
+// 安全净化：移除用户输入字段中的危险内容，并可选地过滤敏感 API 密钥
+function sanitizeProviderData(provider, maskSensitive = false) {
     if (!provider || typeof provider !== 'object') return provider;
     const sanitized = { ...provider };
+    
+    // 1. 过滤敏感字段（API Keys, Tokens 等）
+    if (maskSensitive) {
+        const sensitiveKeys = [
+            'OPENAI_API_KEY', 'CLAUDE_API_KEY', 'FORWARD_API_KEY', 
+            'GROK_COOKIE_TOKEN', 'GROK_CF_CLEARANCE',
+            'refreshToken', 'accessToken', 'clientSecret'
+        ];
+        
+        sensitiveKeys.forEach(key => {
+            if (sanitized[key]) {
+                // 对密钥进行脱敏显示（只保留前 4 位和后 4 位）
+                const val = sanitized[key];
+                if (typeof val === 'string' && val.length > 10) {
+                    sanitized[key] = val.substring(0, 4) + '****' + val.substring(val.length - 4);
+                } else {
+                    sanitized[key] = '********';
+                }
+            }
+        });
+    }
+
+    // 2. 净化 customName 中的 HTML/脚本
     if (typeof sanitized.customName === 'string') {
         let name = sanitized.customName;
-
-        // 拒绝包含危险协议
         if (/(?:data|javascript|vbscript)\s*:/i.test(name)) {
             sanitized.customName = '';
             return sanitized;
         }
-
-        // 移除所有 HTML 标签（更安全的方式）
         name = name.replace(/<[^>]*>/g, '');
-
-        // 移除 HTML 事件处理器属性（onclick/onerror 等）
         name = name.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '');
-
-        // 移除潜在的 HTML 实体编码攻击
         name = name.replace(/&[#\w]+;/g, '');
-
         sanitized.customName = name.trim();
     }
     return sanitized;
 }
 
-function sanitizeProviderPools(pools) {
+function sanitizeProviderPools(pools, maskSensitive = false) {
     if (!pools || typeof pools !== 'object') return pools;
     const sanitized = {};
     for (const [type, providers] of Object.entries(pools)) {
         sanitized[type] = Array.isArray(providers)
-            ? providers.map(sanitizeProviderData)
+            ? providers.map(p => sanitizeProviderData(p, maskSensitive))
             : providers;
     }
     return sanitized;
@@ -70,34 +85,53 @@ function withFileLock(fn) {
     return next;
 }
 /**
- * 获取提供商池摘要
+ * 获取所有提供商的状态（包括支持的类型和号池组）
  */
 export async function handleGetProviders(req, res, currentConfig, providerPoolManager) {
-    let providerPools = {};
-    const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
-    try {
-        if (providerPoolManager && providerPoolManager.providerPools) {
-            providerPools = providerPoolManager.providerPools;
-        } else if (filePath && existsSync(filePath)) {
-            const poolsData = JSON.parse(readFileSync(filePath, 'utf-8'));
-            providerPools = poolsData;
-        }
-    } catch (error) {
-        logger.warn('[UI API] Failed to load provider pools:', error.message);
+    if (!providerPoolManager) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'Provider pool manager not initialized' } }));
+        return true;
     }
 
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(sanitizeProviderPools(providerPools)));
-    return true;
-}
+    // 1. 获取支持的基础提供商类型
+    const registeredProviders = getRegisteredProviders();
+    let poolTypes = [];
 
-/**
- * 获取支持的提供商类型（已注册适配器的）
- */
-export async function handleGetSupportedProviders(req, res) {
-    const supportedProviders = getRegisteredProviders();
+    // 2. 从管理器获取当前所有池的状态
+    const providerStatus = {};
+    for (const [type, providers] of Object.entries(providerPoolManager.providerStatus)) {
+        providerStatus[type] = providers.map(p => ({
+            ...p.config,
+            activeRequests: p.state?.activeCount || 0,
+            waitingRequests: p.state?.waitingCount || 0
+        }));
+    }
+    
+    // 3. 补全号池配置文件中的所有组
+    const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
+    try {
+        if (existsSync(filePath)) {
+            const poolsData = JSON.parse(readFileSync(filePath, 'utf-8'));
+            poolTypes = Object.keys(poolsData);
+            poolTypes.forEach(type => {
+                if (!providerStatus[type]) {
+                    providerStatus[type] = [];
+                }
+            });
+        }
+    } catch (error) {
+        logger.warn('[UI API] Failed to supplement provider status:', error.message);
+    }
+
+    // 合并生成支持的类型列表
+    const supportedProviders = [...new Set([...registeredProviders, ...poolTypes])];
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(supportedProviders));
+    res.end(JSON.stringify({
+        providers: sanitizeProviderPools(providerStatus, true), // 列表显示进行打码
+        supportedProviders: supportedProviders
+    }));
     return true;
 }
 
@@ -122,7 +156,7 @@ export async function handleGetProviderType(req, res, currentConfig, providerPoo
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
         providerType,
-        providers: providers.map(sanitizeProviderData),
+        providers: providers.map(p => sanitizeProviderData(p, false)), // 详情页（用于编辑）不打码
         totalCount: providers.length,
         healthyCount: providers.filter(p => p.isHealthy).length
     }));
@@ -130,10 +164,62 @@ export async function handleGetProviderType(req, res, currentConfig, providerPoo
 }
 
 /**
- * 获取所有提供商的可用模型
+ * 获取支持的提供商类型（已注册适配器的，以及号池中已存在的自定义类型）
  */
-export async function handleGetProviderModels(req, res) {
-    const allModels = getAllProviderModels();
+export async function handleGetSupportedProviders(req, res, currentConfig, providerPoolManager) {
+    const registeredProviders = getRegisteredProviders();
+    let poolTypes = [];
+
+    const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
+    try {
+        if (providerPoolManager && providerPoolManager.providerPools) {
+            poolTypes = Object.keys(providerPoolManager.providerPools);
+        } else if (filePath && existsSync(filePath)) {
+            const poolsData = JSON.parse(readFileSync(filePath, 'utf-8'));
+            poolTypes = Object.keys(poolsData);
+        }
+    } catch (error) {
+        logger.warn('[UI API] Failed to load provider pools for supported types:', error.message);
+    }
+
+    // 合并注册的提供商和号池中的类型
+    const supportedProviders = [...new Set([...registeredProviders, ...poolTypes])];
+    
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(supportedProviders));
+    return true;
+}
+
+/**
+ * 获取所有提供商的可用模型（支持动态配置组）
+ */
+export async function handleGetProviderModels(req, res, currentConfig, providerPoolManager) {
+    const registeredProviders = getRegisteredProviders();
+    let poolTypes = [];
+
+    // 获取所有存在的类型（基础 + 动态）
+    const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
+    try {
+        if (providerPoolManager && providerPoolManager.providerPools) {
+            poolTypes = Object.keys(providerPoolManager.providerPools);
+        } else if (existsSync(filePath)) {
+            const poolsData = JSON.parse(readFileSync(filePath, 'utf-8'));
+            poolTypes = Object.keys(poolsData);
+        }
+    } catch (error) {
+        logger.warn('[UI API] Failed to load provider pools for models:', error.message);
+    }
+
+    const allTypes = [...new Set([...registeredProviders, ...poolTypes])];
+    const allModels = {};
+
+    allTypes.forEach(type => {
+        const models = getProviderModels(type);
+        if (models && models.length > 0) {
+            allModels[type] = models;
+        }
+    });
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(allModels));
     return true;

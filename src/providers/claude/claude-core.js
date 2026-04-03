@@ -63,13 +63,13 @@ export class ClaudeApiService {
         }
         
         // 配置自定义代理
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.CLAUDE_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CLAUDE_CUSTOM);
         
         return axios.create(axiosConfig);
     }
 
     _applySidecar(axiosConfig) {
-        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.CLAUDE_CUSTOM, this.baseUrl);
+        return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CLAUDE_CUSTOM, this.baseUrl);
     }
 
     /**

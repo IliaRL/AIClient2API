@@ -116,7 +116,18 @@ export const PROVIDER_MODELS = {
  * @returns {Array<string>} 模型列表
  */
 export function getProviderModels(providerType) {
-    return PROVIDER_MODELS[providerType] || [];
+    if (PROVIDER_MODELS[providerType]) {
+        return PROVIDER_MODELS[providerType];
+    }
+    
+    // 尝试前缀匹配 (例如 openai-custom-1 -> openai-custom)
+    for (const key of Object.keys(PROVIDER_MODELS)) {
+        if (providerType.startsWith(key + '-')) {
+            return PROVIDER_MODELS[key];
+        }
+    }
+    
+    return [];
 }
 
 /**

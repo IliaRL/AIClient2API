@@ -961,7 +961,7 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }
     
     // 为 forward provider 添加原始请求路径作为 endpoint
-    if (requestPath && toProvider === MODEL_PROVIDER.FORWARD_API) {
+    if (requestPath && getProtocolPrefix(toProvider) === MODEL_PROTOCOL_PREFIX.FORWARD) {
         logger.info(`[Forward API] Request path: ${requestPath}`);
         processedRequestBody.endpoint = requestPath;
     }
