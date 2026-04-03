@@ -287,24 +287,6 @@ export class GeminiApiService {
             maxFreeSockets: 5,
             timeout: 120000,
         });
-
-        // 检查是否需要使用代理
-        const proxyConfig = getGoogleAuthProxyConfig(config, config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI);
-        
-        // 配置 OAuth2Client 使用自定义的 HTTP agent
-        const oauth2Options = {
-            clientId: OAUTH_CLIENT_ID,
-            clientSecret: OAUTH_CLIENT_SECRET,
-        };
-        
-        if (proxyConfig) {
-            oauth2Options.transporterOptions = proxyConfig;
-            logger.info('[Gemini] Using proxy for OAuth2Client');
-        } else {
-            oauth2Options.transporterOptions = {
-                agent: this.httpsAgent,
-            };
-        }
         
         this.authClient = new OAuth2Client(oauth2Options);
         this.availableModels = [];
@@ -322,6 +304,29 @@ export class GeminiApiService {
         
         // 保存代理配置供后续使用
         this.proxyConfig = getProxyConfigForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI);
+        
+        // 检查是否需要使用代理
+        const proxyConfig = getGoogleAuthProxyConfig(config, config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI);
+        
+        // 配置 OAuth2Client 使用自定义的 HTTP agent
+        const oauth2Options = {
+            clientId: OAUTH_CLIENT_ID,
+            clientSecret: OAUTH_CLIENT_SECRET,
+        };
+        
+        if (proxyConfig) {
+            oauth2Options.transporterOptions = proxyConfig;
+            logger.info('[Gemini] Using proxy for OAuth2Client');
+        } else {
+            // 根据 base URL 判断使用 http 还是 https agent
+            const useHttp = this.codeAssistEndpoint && this.codeAssistEndpoint.startsWith('http://');
+            oauth2Options.transporterOptions = {
+                agent: useHttp ? this.httpAgent : this.httpsAgent,
+            };
+            if (useHttp) {
+                logger.info('[Gemini] Using HTTP agent for OAuth2Client');
+            }
+        }
     }
 
     async initialize() {

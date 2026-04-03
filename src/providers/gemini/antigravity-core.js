@@ -40,6 +40,7 @@ const ANTIGRAVITY_SYSTEM_PROMPT = `You are Antigravity, a powerful agentic AI co
 // Thinking 配置相关常量
 const DEFAULT_THINKING_MIN = 1024;
 const DEFAULT_THINKING_MAX = 100000;
+const FALLBACK_THINKING_SIGNATURE = "skip_thought_signature_validator_fallback";
 
 // 获取 Antigravity 模型列表
 const ANTIGRAVITY_MODELS = getProviderModels(MODEL_PROVIDER.ANTIGRAVITY);
@@ -199,16 +200,16 @@ function normalizeAntigravityThinking(modelName, payload, isClaudeModel) {
     
     let normalizedBudget = normalizeThinkingBudget(modelName, budget);
     
-    // 对于 Claude 模型，确保 thinking budget < max_tokens
+    // 确保 thinking budget < max_tokens (对所有模型生效，不仅是 Claude)
+    const maxTokens = payload?.request?.generationConfig?.maxOutputTokens || payload?.request?.generationConfig?.max_output_tokens;
+    if (maxTokens && maxTokens > 0 && normalizedBudget >= maxTokens) {
+        normalizedBudget = Math.max(0, maxTokens - 1);
+    }
+    
+    // 如果是 Claude 模型，检查最小 budget
     if (isClaudeModel) {
-        const maxTokens = payload?.request?.generationConfig?.maxOutputTokens;
-        if (maxTokens && maxTokens > 0 && normalizedBudget >= maxTokens) {
-            normalizedBudget = maxTokens - 1;
-        }
-        
-        // 检查最小 budget
         const minBudget = DEFAULT_THINKING_MIN;
-        if (normalizedBudget >= 0 && normalizedBudget < minBudget) {
+        if (normalizedBudget >= 0 && normalizedBudget < minBudget && normalizedBudget !== -1) {
             // Budget 低于最小值，移除 thinking 配置
             delete payload.request.generationConfig.thinkingConfig;
             return payload;
@@ -599,7 +600,7 @@ function toGeminiApiResponse(antigravityResponse) {
 }
 
 /**
- * 确保请求体中的内容部分都有角色属性
+ * 确保请求体中的内容部分都有角色属性，并修复历史记录中的思考签名
  * @param {Object} requestBody - 请求体
  * @returns {Object} 处理后的请求体
  */
@@ -674,6 +675,24 @@ function ensureRolesInContents(requestBody, modelName) {
             if (!content.role) {
                 content.role = 'user';
             }
+            
+            // [FIX] 修复历史记录中的思考块，确保有签名 (messages.1.content.0.thinking.signature 报错修复)
+            if (content.parts && Array.isArray(content.parts)) {
+                content.parts.forEach(part => {
+                    if (part && part.thought === true) {
+                        if (!part.thoughtSignature && !part.thought_signature) {
+                            part.thoughtSignature = FALLBACK_THINKING_SIGNATURE;
+                        }
+                        
+                        // [FIX] 额外增加一个 'thinking' 对象以适配某些 Antigravity 内部验证逻辑
+                        if (!part.thinking) {
+                            part.thinking = {
+                                signature: part.thoughtSignature || part.thought_signature || FALLBACK_THINKING_SIGNATURE
+                            };
+                        }
+                    }
+                });
+            }
         });
     }
 
@@ -696,25 +715,6 @@ export class AntigravityApiService {
             timeout: 120000,
         });
 
-        // 检查是否需要使用代理
-        const proxyConfig = getGoogleAuthProxyConfig(config, config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY);
-
-        // 配置 OAuth2Client 使用自定义的 HTTP agent
-        const oauth2Options = {
-            clientId: OAUTH_CLIENT_ID,
-            clientSecret: OAUTH_CLIENT_SECRET,
-        };
-
-        if (proxyConfig) {
-            oauth2Options.transporterOptions = proxyConfig;
-            logger.info('[Antigravity] Using proxy for OAuth2Client');
-        } else {
-            oauth2Options.transporterOptions = {
-                agent: this.httpsAgent,
-            };
-        }
-
-        this.authClient = new OAuth2Client(oauth2Options);
         this.availableModels = [];
         this.isInitialized = false;
 
@@ -730,6 +730,32 @@ export class AntigravityApiService {
 
         // 保存代理配置供后续使用
         this.proxyConfig = getProxyConfigForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY);
+
+        // 检查是否需要使用代理
+        const proxyConfig = getGoogleAuthProxyConfig(config, config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY);
+
+        // 配置 OAuth2Client 使用自定义的 HTTP agent
+        const oauth2Options = {
+            clientId: OAUTH_CLIENT_ID,
+            clientSecret: OAUTH_CLIENT_SECRET,
+        };
+
+        if (proxyConfig) {
+            oauth2Options.transporterOptions = proxyConfig;
+            logger.info('[Antigravity] Using proxy for OAuth2Client');
+        } else {
+            // 根据 base URL 判断使用 http 还是 https agent
+            const firstBaseURL = this.baseURLs && this.baseURLs.length > 0 ? this.baseURLs[0] : '';
+            const useHttp = firstBaseURL.startsWith('http://');
+            oauth2Options.transporterOptions = {
+                agent: useHttp ? this.httpAgent : this.httpsAgent,
+            };
+            if (useHttp) {
+                logger.info('[Antigravity] Using HTTP agent for OAuth2Client');
+            }
+        }
+
+        this.authClient = new OAuth2Client(oauth2Options);
     }
 
     _applySidecar(requestOptions) {

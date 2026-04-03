@@ -49,6 +49,16 @@
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
+      <a href="https://www.lingtrue.com/register?aff=MP34">
+        <img src="static/lingtrueapi.png" alt="LingtrueAPI Sponsor" width="180">
+      </a>
+    </td>
+    <td width="75%" align="left" valign="middle">
+      LingtrueAPIによる本プロジェクトへのスポンサーに感謝します！LingtrueAPIは世界的な大規模言語モデルAPI中継プラットフォームであり、Claude opus 4.6、GPT 5.4、Gemini 3.1 proなど各種モデルのAPI呼び出しサービスを提供しています。低コスト、高安定性で世界中のAI機能に接続し、生産性を最大化することを目指しています。LingtrueAPIは本ソフトウェアユーザー向けに特別優遇を提供しています。<a href="https://www.lingtrue.com/register?aff=MP34">このリンクから登録</a>し、初回チャージ時に「<strong>LingtrueAPI</strong>」のクーポンコードを入力すると、<strong>10%オフ</strong>で利用できます。
+    </td>
+  </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
       <img src="static/wechat.png" alt="Sponsor Contact" width="150">
     </td>
     <td width="75%" align="left" valign="middle">

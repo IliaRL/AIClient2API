@@ -49,6 +49,16 @@
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
+      <a href="https://www.lingtrue.com/register?aff=MP34">
+        <img src="static/lingtrueapi.png" alt="LingtrueAPI Sponsor" width="180">
+      </a>
+    </td>
+    <td width="75%" align="left" valign="middle">
+      Thanks to LingtrueAPI for its sponsorship of this project! LingtrueAPI is a global large-model API intermediary service platform that offers API calling services for various models such as Claude opus 4.6, GPT 5.4, and Gemini 3.1 pro. It is committed to enabling users to connect to global AI capabilities at low cost and with high stability, maximizing production efficiency. LingtrueAPI provides special discounts for users of this software: <a href="https://www.lingtrue.com/register?aff=MP34">register using this link</a> and enter the <strong>LingtrueAPI</strong> promo code when making the first recharge to enjoy a <strong>10% discount</strong>.
+    </td>
+  </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
       <img src="static/wechat.png" alt="Sponsor Contact" width="150">
     </td>
     <td width="75%" align="left" valign="middle">
