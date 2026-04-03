@@ -32,6 +32,12 @@ function updateConfigProviderConfigs(configs) {
     if (tlsSidecarProvidersEl) {
         renderProviderTags(tlsSidecarProvidersEl, configs, false);
     }
+
+    // 渲染定时健康检查的提供商选择
+    const scheduledHealthCheckProvidersEl = document.getElementById('scheduledHealthCheckProviders');
+    if (scheduledHealthCheckProvidersEl) {
+        renderProviderTags(scheduledHealthCheckProvidersEl, configs, false);
+    }
     
     // 重新加载当前配置以恢复选中状态
     loadConfiguration();
@@ -47,10 +53,11 @@ function renderProviderTags(container, configs, isRequired) {
     // 过滤掉不可见的提供商
     const visibleConfigs = configs.filter(c => c.visible !== false);
     
+    const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     container.innerHTML = visibleConfigs.map(c => `
-        <button type="button" class="provider-tag" data-value="${c.id}">
-            <i class="fas ${c.icon || 'fa-server'}"></i>
-            <span>${c.name}</span>
+        <button type="button" class="provider-tag" data-value="${escHtml(c.id)}">
+            <i class="fas ${escHtml(c.icon || 'fa-server')}"></i>
+            <span>${escHtml(c.name)}</span>
         </button>
     `).join('');
     
@@ -151,7 +158,7 @@ async function loadConfiguration() {
         if (cronNearMinutesEl) cronNearMinutesEl.value = data.CRON_NEAR_MINUTES || 1;
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
         if (loginExpiryEl) loginExpiryEl.value = data.LOGIN_EXPIRY || 3600;
-        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH;
+        if (providerPoolsFilePathEl) providerPoolsFilePathEl.value = data.PROVIDER_POOLS_FILE_PATH || '';
         if (maxErrorCountEl) maxErrorCountEl.value = data.MAX_ERROR_COUNT || 10;
         if (warmupTargetEl) warmupTargetEl.value = data.WARMUP_TARGET || 0;
         if (refreshConcurrencyPerProviderEl) refreshConcurrencyPerProviderEl.value = data.REFRESH_CONCURRENCY_PER_PROVIDER || 1;
@@ -235,6 +242,50 @@ async function loadConfiguration() {
                 }
             });
         }
+        
+        // 定时健康检查配置
+        const scheduledHealthCheckEnabledEl = document.getElementById('scheduledHealthCheckEnabled');
+        const scheduledHealthCheckStartupRunEl = document.getElementById('scheduledHealthCheckStartupRun');
+        const scheduledHealthCheckIntervalEl = document.getElementById('scheduledHealthCheckInterval');
+        
+        if (data.SCHEDULED_HEALTH_CHECK) {
+            if (scheduledHealthCheckEnabledEl) scheduledHealthCheckEnabledEl.checked = data.SCHEDULED_HEALTH_CHECK.enabled === true;
+            if (scheduledHealthCheckStartupRunEl) scheduledHealthCheckStartupRunEl.checked = data.SCHEDULED_HEALTH_CHECK.startupRun !== false;
+            if (scheduledHealthCheckIntervalEl) scheduledHealthCheckIntervalEl.value = data.SCHEDULED_HEALTH_CHECK.interval || 600000;
+        } else {
+            if (scheduledHealthCheckEnabledEl) scheduledHealthCheckEnabledEl.checked = true;
+            if (scheduledHealthCheckStartupRunEl) scheduledHealthCheckStartupRunEl.checked = true;
+            if (scheduledHealthCheckIntervalEl) scheduledHealthCheckIntervalEl.value = 600000;
+        }
+        
+        // 加载定时健康检查的供应商选择
+        const scheduledHealthCheckProvidersEl = document.getElementById('scheduledHealthCheckProviders');
+        if (scheduledHealthCheckProvidersEl) {
+            const enabledProviders = data.SCHEDULED_HEALTH_CHECK?.providerTypes || [];
+            const tags = scheduledHealthCheckProvidersEl.querySelectorAll('.provider-tag');
+            tags.forEach(tag => {
+                const value = tag.getAttribute('data-value');
+                if (enabledProviders.includes(value)) {
+                    tag.classList.add('selected');
+                } else {
+                    tag.classList.remove('selected');
+                }
+            });
+        }
+        
+        // 定时健康检查间隔快捷按钮（防止重复绑定）
+        const intervalQuickBtns = document.querySelectorAll('#scheduledHealthCheckInterval + .quick-select-btns button');
+        intervalQuickBtns.forEach(btn => {
+            if (btn.dataset.listenerAttached) return; // 防止重复绑定
+            btn.dataset.listenerAttached = 'true';
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const value = parseInt(btn.getAttribute('data-value'));
+                if (scheduledHealthCheckIntervalEl) {
+                    scheduledHealthCheckIntervalEl.value = value;
+                }
+            });
+        });
         
     } catch (error) {
         console.error('Failed to load configuration:', error);
@@ -346,6 +397,24 @@ async function saveConfiguration() {
     } else {
         config.TLS_SIDECAR_ENABLED_PROVIDERS = [];
     }
+    
+    // 定时健康检查配置
+    const scheduledHealthCheckProvidersEl = document.getElementById('scheduledHealthCheckProviders');
+    const scheduledHealthCheckProviderTypes = scheduledHealthCheckProvidersEl
+        ? Array.from(scheduledHealthCheckProvidersEl.querySelectorAll('.provider-tag.selected'))
+            .map(tag => tag.getAttribute('data-value'))
+        : [];
+    
+    // 验证并规范化 interval 值
+    const rawInterval = parseInt(document.getElementById('scheduledHealthCheckInterval')?.value);
+    const validatedInterval = isNaN(rawInterval) ? 600000 : Math.max(60000, Math.min(3600000, rawInterval));
+    
+    config.SCHEDULED_HEALTH_CHECK = {
+        enabled: document.getElementById('scheduledHealthCheckEnabled')?.checked !== false,
+        startupRun: document.getElementById('scheduledHealthCheckStartupRun')?.checked !== false,
+        interval: validatedInterval,
+        providerTypes: scheduledHealthCheckProviderTypes
+    };
 
     try {
         await window.apiClient.post('/config', config);

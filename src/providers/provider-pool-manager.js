@@ -112,7 +112,15 @@ export class ProviderPoolManager {
 
                 if (configPath && fs.existsSync(configPath)) {
                     try {
-                        if (true) {
+                        const fileContent = fs.readFileSync(configPath, 'utf-8');
+                        const credData = JSON.parse(fileContent);
+                        const expiryTime = credData.expiry_date || credData.expiry || credData.expires_at;
+                        const nearExpiryMs = (this.globalConfig?.CRON_NEAR_MINUTES || 10) * 60 * 1000;
+                        if (!expiryTime) {
+                            // 凭据文件缺少 expiry 字段，无法判断是否快过期，作为安全措施强制刷新
+                            this._log('warn', `Node ${providerStatus.uuid} (${providerType}) has no expiry field. Forcing refresh as safety measure...`);
+                            this._enqueueRefresh(providerType, providerStatus);
+                        } else if ((expiryTime - Date.now()) < nearExpiryMs) {
                             this._log('warn', `Node ${providerStatus.uuid} (${providerType}) is near expiration. Enqueuing refresh...`);
                             this._enqueueRefresh(providerType, providerStatus);
                         }
@@ -278,6 +286,8 @@ export class ProviderPoolManager {
         }
 
         const queue = this.refreshQueues[providerType];
+        // 记录此任务是否持有一个全局槽位（情况1追加的任务不持有）
+        let ownsGlobalSlot = false;
 
         const runTask = async () => {
             try {
@@ -286,13 +296,13 @@ export class ProviderPoolManager {
                 this._log('error', `Failed to process refresh for node ${uuid}: ${err.message}`);
             } finally {
                 this.refreshingUuids.delete(uuid);
-                
+
                 // 再次获取当前队列引用
                 const currentQueue = this.refreshQueues[providerType];
                 if (!currentQueue) return;
 
                 currentQueue.activeCount--;
-                
+
                 // 1. 尝试从当前提供商队列中取下一个任务
                 if (currentQueue.waitingTasks.length > 0) {
                     const nextTask = currentQueue.waitingTasks.shift();
@@ -300,14 +310,17 @@ export class ProviderPoolManager {
                     // 使用 Promise.resolve().then 避免过深的递归
                     Promise.resolve().then(nextTask);
                 } else if (currentQueue.activeCount === 0) {
-                    // 2. 如果当前提供商的所有任务都完成了，释放全局槽位
-                    // 只有在确定队列为空且没有新任务时才清理
+                    // 清理空队列：无论是否持有全局槽位，都应删除已无任务的队列对象
                     if (currentQueue.waitingTasks.length === 0 &&
                         this.refreshQueues[providerType] === currentQueue) {
-                        this.activeProviderRefreshes--;
-                        delete this.refreshQueues[providerType]; // 清理空队列
+                        delete this.refreshQueues[providerType];
                     }
-                    
+
+                    // 只有持有全局槽位的任务才能递减计数器
+                    if (ownsGlobalSlot) {
+                        this.activeProviderRefreshes--;
+                    }
+
                     // 3. 尝试启动下一个等待中的提供商队列
                     if (this.globalRefreshWaiters.length > 0) {
                         const nextProviderStart = this.globalRefreshWaiters.shift();
@@ -328,15 +341,17 @@ export class ProviderPoolManager {
 
         // 检查全局并发限制（按提供商分组）
         // 情况1: 该提供商已经在运行，直接加入其队列（不占用新的全局槽位）
-        if (this.refreshQueues[providerType].activeCount > 0) {
+        const isExistingQueue = this.refreshQueues[providerType].activeCount > 0 || this.refreshQueues[providerType].waitingTasks.length > 0;
+        if (isExistingQueue) {
             tryStartProviderQueue();
         }
-        // 情况2: 该提供商未运行，需要检查全局槽位
+        // 情况2: 该提供商未运行，需要检查全局槽位，此路径持有全局槽位
         else if (this.activeProviderRefreshes < this.refreshConcurrency.global) {
+            ownsGlobalSlot = true;
             this.activeProviderRefreshes++;
             tryStartProviderQueue();
         }
-        // 情况3: 全局槽位已满，进入等待队列
+        // 情况3: 全局槽位已满，进入等待队列，由等待回调负责标记持槽
         else {
             this.globalRefreshWaiters.push(() => {
                 // 重新获取最新的队列引用
@@ -346,7 +361,8 @@ export class ProviderPoolManager {
                         waitingTasks: []
                     };
                 }
-                // 重要：从等待队列启动时需要增加全局计数
+                // 从等待队列启动时持有全局槽位
+                ownsGlobalSlot = true;
                 this.activeProviderRefreshes++;
                 tryStartProviderQueue();
             });
@@ -389,7 +405,16 @@ export class ProviderPoolManager {
             // 调用适配器的 refreshToken 方法（内部封装了具体的刷新逻辑）
             if (typeof serviceAdapter.refreshToken === 'function') {
                 const startTime = Date.now();
-                force ? await serviceAdapter.forceRefreshToken() : await serviceAdapter.refreshToken() 
+                if (force) {
+                    if (typeof serviceAdapter.forceRefreshToken === 'function') {
+                        await serviceAdapter.forceRefreshToken();
+                    } else {
+                        this._log('warn', `forceRefreshToken not implemented for ${providerType}, falling back to refreshToken`);
+                        await serviceAdapter.refreshToken();
+                    }
+                } else {
+                    await serviceAdapter.refreshToken();
+                }
                 const duration = Date.now() - startTime;
                 this._log('info', `Token refresh successful for node ${providerStatus.uuid} (Duration: ${duration}ms)`);
                 
@@ -452,7 +477,7 @@ export class ProviderPoolManager {
         const lastSelectionSeq = config._lastSelectionSeq || 0;
         if (minSeqInPool === -1) {
             const pool = this.providerStatus[providerStatus.type] || [];
-            minSeqInPool = Math.min(...pool.map(p => p.config._lastSelectionSeq || 0));
+            minSeqInPool = pool.reduce((min, p) => Math.min(min, p.config._lastSelectionSeq || 0), Infinity);
         }
         const relativeSeq = Math.max(0, lastSelectionSeq - minSeqInPool);
         const cappedRelativeSeq = Math.min(relativeSeq, 100);
@@ -1670,17 +1695,36 @@ export class ProviderPoolManager {
     }
 
     /**
-     * Performs health checks on all providers in the pool.
-     * This method would typically be called periodically (e.g., via cron job).
+     * Performs initial (startup) health checks on selected providers.
+     * Respects SCHEDULED_HEALTH_CHECK.providerTypes configuration.
+     * Called once at server startup.
+     *
+     * 设计决策：如果没有选择任何 provider types，则不进行检查任何 provider。
+     * 这是有意为之的设计 - 如果用户没有明确选择，则不需要自动健康检查。
+     * 区别于原来的逻辑（检查所有 provider），现在的行为更符合用户预期。
      */
-    async performHealthChecks(isInit = false) {
-        this._log('info', 'Performing health checks on all providers...');
+    async performInitialHealthChecks() {
+        const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
+        const selectedProviderTypes = scheduledConfig?.providerTypes;
+        
+        // 如果没有选择任何 provider types，不进行检查
+        // 设计决策：如果用户没有选择任何 provider，明确不执行健康检查是合理的
+        if (!Array.isArray(selectedProviderTypes) || selectedProviderTypes.length === 0) {
+            return;
+        }
+        
+        this._log('info', 'Performing health checks on selected providers...');
         const now = new Date();
         
         // 首先检查并恢复已到恢复时间的提供商
         this._checkAndRecoverScheduledProviders();
         
         for (const providerType in this.providerStatus) {
+            // Only check selected provider types
+            if (!selectedProviderTypes.includes(providerType)) {
+                continue;
+            }
+            
             for (const providerStatus of this.providerStatus[providerType]) {
                 const providerConfig = providerStatus.config;
 
@@ -1744,6 +1788,91 @@ export class ProviderPoolManager {
     }
 
     /**
+     * Performs scheduled health checks on all providers.
+     * This method is designed to be called periodically to proactively check provider health.
+     * It respects provider-level isDisabled flag.
+     */
+    async performHealthChecks() {
+        const scheduledConfig = this.globalConfig?.SCHEDULED_HEALTH_CHECK;
+        const checkStartTime = Date.now();
+        
+        // Check if scheduled health checks are disabled
+        if (!scheduledConfig?.enabled) {
+            this._log('debug', '[ScheduledHealthCheck] Scheduled health checks are disabled via configuration');
+            return;
+        }
+        
+        // Get selected provider types
+        let selectedProviderTypes = scheduledConfig?.providerTypes;
+        
+        // Validate providerTypes is an array
+        if (!Array.isArray(selectedProviderTypes) || selectedProviderTypes.length === 0) {
+            this._log('info', '[ScheduledHealthCheck] No provider types selected, skipping health check');
+            return;
+        }
+        
+        // Count providers to be checked
+        let totalProviders = 0;
+        let providersToCheck = [];
+        
+        for (const providerType in this.providerStatus) {
+            // Only check selected provider types
+            if (!selectedProviderTypes.includes(providerType)) {
+                this._log('debug', `[ScheduledHealthCheck] Skipping provider type ${providerType}: not in selected types`);
+                continue;
+            }
+            
+            for (const provider of this.providerStatus[providerType]) {
+                // Skip manually disabled providers
+                if (provider.config.isDisabled === true) {
+                    this._log('debug', `[ScheduledHealthCheck] Skipping ${provider.config.uuid} (${providerType}): manually disabled`);
+                    continue;
+                }
+                
+                totalProviders++;
+                providersToCheck.push({ providerType, provider, uuid: provider.config.uuid, customName: provider.config.customName });
+            }
+        }
+        
+        this._log('info', `[ScheduledHealthCheck] Starting scheduled health checks: ${totalProviders} provider(s) to check (interval: ${scheduledConfig.interval}ms, types: ${selectedProviderTypes.join(', ')})`);
+        
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (const { providerType, provider, uuid, customName } of providersToCheck) {
+            const providerCheckStart = Date.now();
+            const checkModelName = provider.config.checkModelName || ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType] || 'unknown';
+            const displayName = customName || uuid.substring(0, 8);
+
+            try {
+                // Perform health check (health check is based on providerTypes configuration, not per-provider checkHealth flag)
+                const result = await this._checkProviderHealth(providerType, provider.config);
+                const checkDuration = Date.now() - providerCheckStart;
+                
+                if (!result.success) {
+                    // Provider is unhealthy
+                    failCount++;
+                    this._log('warn', `[ScheduledHealthCheck] ${displayName} (${providerType}) FAILED: ${result.errorMessage || 'Provider is not responding correctly.'} (${checkDuration}ms)`);
+                    this.markProviderUnhealthyImmediately(providerType, provider.config, result.errorMessage);
+                } else {
+                    // Provider is healthy
+                    successCount++;
+                    this._log('info', `[ScheduledHealthCheck] ${displayName} (${providerType}) PASSED: model=${result.modelName || checkModelName} (${checkDuration}ms)`);
+                    this.markProviderHealthy(providerType, provider.config, false, result.modelName);
+                }
+            } catch (error) {
+                const checkDuration = Date.now() - providerCheckStart;
+                failCount++;
+                this._log('error', `[ScheduledHealthCheck] ${displayName} (${providerType}) EXCEPTION: ${error.message} (${checkDuration}ms)`);
+                this.markProviderUnhealthyImmediately(providerType, provider.config, error.message);
+            }
+        }
+        
+        const totalDuration = Date.now() - checkStartTime;
+        this._log('info', `[ScheduledHealthCheck] Completed: ${successCount} passed, ${failCount} failed, ${totalDuration}ms total`);
+    }
+
+    /**
      * 构建健康检查请求（返回多种格式用于重试）
      * @private
      * @returns {Array} 请求格式数组，按优先级排序
@@ -1793,17 +1922,17 @@ export class ProviderPoolManager {
 
     /**
      * Performs an actual health check for a specific provider.
+     * 
+     * 设计决策：不检查 providerConfig.checkHealth 标志。
+     * 健康检查是否执行由上层调用方（performHealthChecks / performInitialHealthChecks）
+     * 通过 providerTypes 数组来决定，不在每个 provider 级别控制。
+     * 这样简化了逻辑，避免 per-provider 的 checkHealth flag 变得无用。
+     * 
      * @param {string} providerType - The type of the provider.
      * @param {object} providerConfig - The configuration of the provider to check.
-     * @param {boolean} forceCheck - If true, ignore checkHealth config and force the check.
-     * @returns {Promise<{success: boolean, modelName: string, errorMessage: string}|null>} - Health check result object or null if check not implemented.
+     * @returns {Promise<{success: boolean, modelName: string, errorMessage: string}>} - Health check result object.
      */
-    async _checkProviderHealth(providerType, providerConfig, forceCheck = false) {
-        // 如果未启用健康检查且不是强制检查，返回 null（提前返回，避免不必要的计算）
-        if (!providerConfig.checkHealth && !forceCheck) {
-            return null;
-        }
-
+    async _checkProviderHealth(providerType, providerConfig) {
         // 确定健康检查使用的模型名称
         const modelName = providerConfig.checkModelName ||
                         ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType];
@@ -1838,8 +1967,6 @@ export class ProviderPoolManager {
             const timeoutId = setTimeout(() => abortController.abort(), healthCheckTimeout);
 
             try {
-                this._log('debug', `Health check attempt ${i + 1}/${healthCheckRequests.length} for ${modelName}: ${JSON.stringify(healthCheckRequest)}`);
-
                 // 尝试将 signal 注入请求体，供支持的适配器使用
                 const requestWithSignal = {
                     ...healthCheckRequest,
@@ -1849,16 +1976,17 @@ export class ProviderPoolManager {
                 await serviceAdapter.generateContent(modelName, requestWithSignal);
                 
                 clearTimeout(timeoutId);
+                // 注意：使用量计数由调用方处理（performHealthChecks/performInitialHealthChecks）
+                // 这里只返回成功结果，让调用方统一处理状态更新和计数
                 return { success: true, modelName, errorMessage: null };
             } catch (error) {
                 clearTimeout(timeoutId);
                 lastError = error;
-                this._log('debug', `Health check attempt ${i + 1} failed for ${providerType}: ${error.message}`);
             }
         }
 
         // 所有尝试都失败
-        this._log('error', `Health check failed for ${providerType} after ${healthCheckRequests.length} attempts: ${lastError?.message}`);
+        this._log('warn', `[HealthCheck] ${providerType} failed after ${healthCheckRequests.length} attempts: ${lastError?.message}`);
         return { success: false, modelName, errorMessage: lastError?.message || 'All health check attempts failed' };
     }
 

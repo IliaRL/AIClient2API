@@ -62,10 +62,7 @@
                             <i class="fas fa-reply"></i>
                             <span>OpenAI Responses</span>
                         </button>
-                        <button type="button" class="provider-tag" data-value="openai-iflow">
-                            <i class="fas fa-stream"></i>
-                            <span data-i18n="dashboard.routing.nodeName.iflow">iFlow OAuth</span>
-                        </button>
+
                         <button type="button" class="provider-tag" data-value="openai-codex-oauth">
                             <i class="fas fa-code"></i>
                             <span data-i18n="dashboard.routing.nodeName.codex">OpenAI Codex OAuth</span>
@@ -118,10 +115,7 @@
                             <i class="fas fa-reply"></i>
                             <span>OpenAI Responses</span>
                         </button>
-                        <button type="button" class="provider-tag" data-value="openai-iflow">
-                            <i class="fas fa-stream"></i>
-                            <span>iFlow OAuth</span>
-                        </button>
+
                         <button type="button" class="provider-tag" data-value="openai-codex-oauth">
                             <i class="fas fa-code"></i>
                             <span>OpenAI Codex OAuth</span>
@@ -228,6 +222,45 @@
                 </div>
             </div>
 
+            <!-- 定时健康检查 -->
+            <div class="config-group-section">
+                <h3 data-i18n="config.healthCheck.title"><i class="fas fa-heartbeat"></i> 定时健康检查</h3>
+                <div class="config-row">
+                    <div class="form-group">
+                        <span class="toggle-label" data-i18n="config.healthCheck.enabled">启用定时检查</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="scheduledHealthCheckEnabled">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <span class="toggle-label" data-i18n="config.healthCheck.startupRun">启动时运行</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="scheduledHealthCheckStartupRun">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="scheduledHealthCheckInterval" data-i18n="config.healthCheck.interval">检查间隔</label>
+                    <div class="input-with-quick-select">
+                        <input type="number" id="scheduledHealthCheckInterval" class="form-control" min="60000" max="3600000" step="60000" value="600000" placeholder="毫秒">
+                        <div class="quick-select-btns">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-value="300000">5分钟</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-value="600000">10分钟</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-value="1800000">30分钟</button>
+                        </div>
+                    </div>
+                    <small class="form-text" data-i18n="config.healthCheck.intervalNote">单位毫秒，最小60000ms(1分钟)，最大3600000ms(1小时)</small>
+                </div>
+                <div class="form-group">
+                    <label data-i18n="config.healthCheck.providerTypes">定时检查的供应商</label>
+                    <div id="scheduledHealthCheckProviders" class="provider-tags">
+                        <!-- 由 config-manager.js updateConfigProviderConfigs 动态渲染，勿在此处硬编码 -->
+                    </div>
+                    <small class="form-text" data-i18n="config.healthCheck.providerTypesNote">选择需要进行定时健康检查的供应商类型</small>
+                </div>
+            </div>
 
             <!-- 日志管理 -->
             <div class="config-group-section">

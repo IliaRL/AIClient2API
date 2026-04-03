@@ -2,11 +2,13 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { CONFIG } from '../core/config-manager.js';
 import { serviceInstances } from '../providers/adapter.js';
 import { initApiService } from '../services/service-manager.js';
 import { getRequestBody } from '../utils/common.js';
 import { broadcastEvent } from '../ui-modules/event-broadcast.js';
+import { HEALTH_CHECK, PASSWORD, NETWORK, RETRY } from '../utils/constants.js';
 
 /**
  * 重载配置文件
@@ -57,11 +59,48 @@ export async function handleGetConfig(req, res, currentConfig) {
         }
     }
 
+    // 白名单过滤：只返回前端需要的字段，避免泄露凭据路径、内部状态等敏感信息
+    const safeConfig = {
+        HOST: currentConfig.HOST,
+        SERVER_PORT: currentConfig.SERVER_PORT,
+        MODEL_PROVIDER: currentConfig.MODEL_PROVIDER,
+        SYSTEM_PROMPT_FILE_PATH: currentConfig.SYSTEM_PROMPT_FILE_PATH,
+        SYSTEM_PROMPT_MODE: currentConfig.SYSTEM_PROMPT_MODE,
+        PROMPT_LOG_BASE_NAME: currentConfig.PROMPT_LOG_BASE_NAME,
+        PROMPT_LOG_MODE: currentConfig.PROMPT_LOG_MODE,
+        REQUEST_MAX_RETRIES: currentConfig.REQUEST_MAX_RETRIES,
+        REQUEST_BASE_DELAY: currentConfig.REQUEST_BASE_DELAY,
+        CREDENTIAL_SWITCH_MAX_RETRIES: currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES,
+        CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
+        CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
+        LOGIN_EXPIRY: currentConfig.LOGIN_EXPIRY,
+        PROVIDER_POOLS_FILE_PATH: currentConfig.PROVIDER_POOLS_FILE_PATH,
+        MAX_ERROR_COUNT: currentConfig.MAX_ERROR_COUNT,
+        WARMUP_TARGET: currentConfig.WARMUP_TARGET,
+        REFRESH_CONCURRENCY_PER_PROVIDER: currentConfig.REFRESH_CONCURRENCY_PER_PROVIDER,
+        providerFallbackChain: currentConfig.providerFallbackChain,
+        modelFallbackMapping: currentConfig.modelFallbackMapping,
+        PROXY_URL: currentConfig.PROXY_URL,
+        PROXY_ENABLED_PROVIDERS: currentConfig.PROXY_ENABLED_PROVIDERS,
+        TLS_SIDECAR_ENABLED: currentConfig.TLS_SIDECAR_ENABLED,
+        TLS_SIDECAR_ENABLED_PROVIDERS: currentConfig.TLS_SIDECAR_ENABLED_PROVIDERS,
+        TLS_SIDECAR_PORT: currentConfig.TLS_SIDECAR_PORT,
+        TLS_SIDECAR_PROXY_URL: currentConfig.TLS_SIDECAR_PROXY_URL,
+        LOG_ENABLED: currentConfig.LOG_ENABLED,
+        LOG_OUTPUT_MODE: currentConfig.LOG_OUTPUT_MODE,
+        LOG_LEVEL: currentConfig.LOG_LEVEL,
+        LOG_DIR: currentConfig.LOG_DIR,
+        LOG_INCLUDE_REQUEST_ID: currentConfig.LOG_INCLUDE_REQUEST_ID,
+        LOG_INCLUDE_TIMESTAMP: currentConfig.LOG_INCLUDE_TIMESTAMP,
+        LOG_MAX_FILE_SIZE: currentConfig.LOG_MAX_FILE_SIZE,
+        LOG_MAX_FILES: currentConfig.LOG_MAX_FILES,
+        SCHEDULED_HEALTH_CHECK: currentConfig.SCHEDULED_HEALTH_CHECK,
+        // 脱敏：只返回是否设置了 API Key，不返回原文
+        REQUIRED_API_KEY: currentConfig.REQUIRED_API_KEY ? '******' : '',
+        systemPrompt,
+    };
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-        ...currentConfig,
-        systemPrompt
-    }));
+    res.end(JSON.stringify(safeConfig));
     return true;
 }
 
@@ -73,16 +112,47 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         const body = await getRequestBody(req);
         const newConfig = body;
 
-        // Update config values in memory
-        if (newConfig.REQUIRED_API_KEY !== undefined) currentConfig.REQUIRED_API_KEY = newConfig.REQUIRED_API_KEY;
-        if (newConfig.HOST !== undefined) currentConfig.HOST = newConfig.HOST;
-        if (newConfig.SERVER_PORT !== undefined) currentConfig.SERVER_PORT = newConfig.SERVER_PORT;
+        // Update config values in memory（含类型校验）
+        if (newConfig.REQUIRED_API_KEY !== undefined) {
+            if (typeof newConfig.REQUIRED_API_KEY === 'string') currentConfig.REQUIRED_API_KEY = newConfig.REQUIRED_API_KEY;
+        }
+        if (newConfig.HOST !== undefined) {
+            if (typeof newConfig.HOST === 'string' && newConfig.HOST.length > 0) currentConfig.HOST = newConfig.HOST;
+        }
+        if (newConfig.SERVER_PORT !== undefined) {
+            const port = Number(newConfig.SERVER_PORT);
+            if (Number.isInteger(port) && port >= NETWORK.MIN_PORT && port <= NETWORK.MAX_PORT) currentConfig.SERVER_PORT = port;
+        }
         if (newConfig.MODEL_PROVIDER !== undefined) currentConfig.MODEL_PROVIDER = newConfig.MODEL_PROVIDER;
-        if (newConfig.SYSTEM_PROMPT_FILE_PATH !== undefined) currentConfig.SYSTEM_PROMPT_FILE_PATH = newConfig.SYSTEM_PROMPT_FILE_PATH;
+        if (newConfig.SYSTEM_PROMPT_FILE_PATH !== undefined) {
+            const p = String(newConfig.SYSTEM_PROMPT_FILE_PATH);
+            // 防止路径遍历：解析后的绝对路径必须在工作目录内
+            const resolved = path.resolve(process.cwd(), p);
+            const cwd = process.cwd();
+
+            // 使用 path.relative 和 path.isAbsolute 进行更严格的校验
+            const relativePath = path.relative(cwd, resolved);
+            const isInsideCwd = !path.isAbsolute(relativePath) && !relativePath.startsWith('..') && relativePath !== '..';
+
+            // Windows 大小写不敏感兼容：仅在 Windows 平台统一转换为小写比较
+            const isWindows = process.platform === 'win32';
+            const normalizedResolved = (isWindows ? resolved.toLowerCase() : resolved).replace(/\\/g, '/');
+            const normalizedCwd = (isWindows ? cwd.toLowerCase() : cwd).replace(/\\/g, '/');
+            const startsWithCwd = normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd;
+
+            if (isInsideCwd && startsWithCwd) {
+                currentConfig.SYSTEM_PROMPT_FILE_PATH = p;
+            } else {
+                logger.warn(`[UI API] Rejected SYSTEM_PROMPT_FILE_PATH traversal attempt: ${p}`);
+            }
+        }
         if (newConfig.SYSTEM_PROMPT_MODE !== undefined) currentConfig.SYSTEM_PROMPT_MODE = newConfig.SYSTEM_PROMPT_MODE;
         if (newConfig.PROMPT_LOG_BASE_NAME !== undefined) currentConfig.PROMPT_LOG_BASE_NAME = newConfig.PROMPT_LOG_BASE_NAME;
         if (newConfig.PROMPT_LOG_MODE !== undefined) currentConfig.PROMPT_LOG_MODE = newConfig.PROMPT_LOG_MODE;
-        if (newConfig.REQUEST_MAX_RETRIES !== undefined) currentConfig.REQUEST_MAX_RETRIES = newConfig.REQUEST_MAX_RETRIES;
+        if (newConfig.REQUEST_MAX_RETRIES !== undefined) {
+            const v = Number(newConfig.REQUEST_MAX_RETRIES);
+            if (Number.isInteger(v) && v >= 0 && v <= RETRY.MAX_RETRIES) currentConfig.REQUEST_MAX_RETRIES = v;
+        }
         if (newConfig.REQUEST_BASE_DELAY !== undefined) currentConfig.REQUEST_BASE_DELAY = newConfig.REQUEST_BASE_DELAY;
         if (newConfig.CREDENTIAL_SWITCH_MAX_RETRIES !== undefined) currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES = newConfig.CREDENTIAL_SWITCH_MAX_RETRIES;
         if (newConfig.CRON_NEAR_MINUTES !== undefined) currentConfig.CRON_NEAR_MINUTES = newConfig.CRON_NEAR_MINUTES;
@@ -109,11 +179,75 @@ export async function handleUpdateConfig(req, res, currentConfig) {
         if (newConfig.LOG_ENABLED !== undefined) currentConfig.LOG_ENABLED = newConfig.LOG_ENABLED;
         if (newConfig.LOG_OUTPUT_MODE !== undefined) currentConfig.LOG_OUTPUT_MODE = newConfig.LOG_OUTPUT_MODE;
         if (newConfig.LOG_LEVEL !== undefined) currentConfig.LOG_LEVEL = newConfig.LOG_LEVEL;
-        if (newConfig.LOG_DIR !== undefined) currentConfig.LOG_DIR = newConfig.LOG_DIR;
+        if (newConfig.LOG_DIR !== undefined) {
+            const p = String(newConfig.LOG_DIR);
+            // 防止路径遍历：解析后的绝对路径必须在工作目录内
+            const resolved = path.resolve(process.cwd(), p);
+            const cwd = process.cwd();
+
+            // 使用 path.relative 和 path.isAbsolute 进行更严格的校验
+            const relativePath = path.relative(cwd, resolved);
+            const isInsideCwd = !path.isAbsolute(relativePath) && !relativePath.startsWith('..') && relativePath !== '..';
+
+            // Windows 大小写不敏感兼容：仅在 Windows 平台统一转换为小写比较
+            const isWindows = process.platform === 'win32';
+            const normalizedResolved = (isWindows ? resolved.toLowerCase() : resolved).replace(/\\/g, '/');
+            const normalizedCwd = (isWindows ? cwd.toLowerCase() : cwd).replace(/\\/g, '/');
+            const startsWithCwd = normalizedResolved.startsWith(normalizedCwd + '/') || normalizedResolved === normalizedCwd;
+
+            if (isInsideCwd && startsWithCwd) {
+                currentConfig.LOG_DIR = p;
+            } else {
+                logger.warn(`[UI API] Rejected LOG_DIR traversal attempt: ${p}`);
+            }
+        }
         if (newConfig.LOG_INCLUDE_REQUEST_ID !== undefined) currentConfig.LOG_INCLUDE_REQUEST_ID = newConfig.LOG_INCLUDE_REQUEST_ID;
         if (newConfig.LOG_INCLUDE_TIMESTAMP !== undefined) currentConfig.LOG_INCLUDE_TIMESTAMP = newConfig.LOG_INCLUDE_TIMESTAMP;
         if (newConfig.LOG_MAX_FILE_SIZE !== undefined) currentConfig.LOG_MAX_FILE_SIZE = newConfig.LOG_MAX_FILE_SIZE;
         if (newConfig.LOG_MAX_FILES !== undefined) currentConfig.LOG_MAX_FILES = newConfig.LOG_MAX_FILES;
+
+        // Scheduled Health Check settings
+        if (newConfig.SCHEDULED_HEALTH_CHECK !== undefined) {
+            const incoming = newConfig.SCHEDULED_HEALTH_CHECK;
+
+            // 检测 enabled 状态变化（在更新配置之前保存旧状态）
+            const prevConfig = currentConfig.SCHEDULED_HEALTH_CHECK || {};
+            const wasEnabled = prevConfig.enabled === true;
+            const nowEnabled = incoming?.enabled === true;
+
+            const newInterval = (() => {
+                const val = Number(incoming?.interval);
+                return isNaN(val) ? HEALTH_CHECK.DEFAULT_INTERVAL_MS : Math.max(HEALTH_CHECK.MIN_INTERVAL_MS, Math.min(HEALTH_CHECK.MAX_INTERVAL_MS, val));
+            })();
+
+            // 先保存旧的 interval 用于比较
+            const oldInterval = globalThis._activeHealthCheckInterval;
+
+            // 更新配置
+            currentConfig.SCHEDULED_HEALTH_CHECK = {
+                enabled: nowEnabled,
+                startupRun: incoming?.startupRun !== false,
+                interval: newInterval,
+                providerTypes: Array.isArray(incoming?.providerTypes) ? incoming.providerTypes : []
+            };
+
+            // 处理 timer 状态变化
+            // 当 enabled 从 true -> false 时，清除 timer
+            if (wasEnabled && !nowEnabled && globalThis.stopHealthCheckTimer) {
+                globalThis.stopHealthCheckTimer();
+                globalThis._activeHealthCheckInterval = undefined;
+            }
+            // 当 enabled 从 false -> true 时，启动 timer
+            else if (!wasEnabled && nowEnabled && globalThis.reloadHealthCheckTimer) {
+                globalThis._activeHealthCheckInterval = newInterval;
+                globalThis.reloadHealthCheckTimer(newInterval);
+            }
+            // 当 enabled=true 且 interval 变化时，重启 timer
+            else if (nowEnabled && newInterval !== oldInterval && globalThis.reloadHealthCheckTimer) {
+                globalThis._activeHealthCheckInterval = newInterval;
+                globalThis.reloadHealthCheckTimer(newInterval);
+            }
+        }
 
         // Handle system prompt update
         if (newConfig.systemPrompt !== undefined) {
@@ -175,7 +309,8 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 TLS_SIDECAR_ENABLED: currentConfig.TLS_SIDECAR_ENABLED,
                 TLS_SIDECAR_ENABLED_PROVIDERS: currentConfig.TLS_SIDECAR_ENABLED_PROVIDERS,
                 TLS_SIDECAR_PORT: currentConfig.TLS_SIDECAR_PORT,
-                TLS_SIDECAR_PROXY_URL: currentConfig.TLS_SIDECAR_PROXY_URL
+                TLS_SIDECAR_PROXY_URL: currentConfig.TLS_SIDECAR_PROXY_URL,
+                SCHEDULED_HEALTH_CHECK: currentConfig.SCHEDULED_HEALTH_CHECK
             };
 
             writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
@@ -266,17 +401,27 @@ export async function handleUpdateAdminPassword(req, res) {
 
         if (!password || password.trim() === '') {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                error: {
-                    message: 'Password cannot be empty'
-                }
-            }));
+            res.end(JSON.stringify({ error: { message: 'Password cannot be empty' } }));
             return true;
         }
 
-        // 写入密码到 pwd 文件
+        if (password.trim().length < PASSWORD.MIN_LENGTH) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: `Password must be at least ${PASSWORD.MIN_LENGTH} characters` } }));
+            return true;
+        }
+
+        // 使用 PBKDF2 哈希存储密码，避免明文写入文件
+        const salt = crypto.randomBytes(16).toString('hex');
+        const hash = await new Promise((resolve, reject) =>
+            crypto.pbkdf2(password.trim(), salt, PASSWORD.PBKDF2_ITERATIONS, PASSWORD.PBKDF2_KEYLEN, PASSWORD.PBKDF2_DIGEST, (err, key) =>
+                err ? reject(err) : resolve(key.toString('hex'))
+            )
+        );
+        const stored = `pbkdf2:${salt}:${hash}`;
+
         const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');
-        await fs.writeFile(pwdFilePath, password.trim(), 'utf-8');
+        await fs.writeFile(pwdFilePath, stored, 'utf-8');
         
         logger.info('[UI API] Admin password updated successfully');
 

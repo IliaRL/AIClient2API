@@ -41,6 +41,7 @@ export const PROVIDER_MAPPINGS = [
         providerType: 'openai-qwen-oauth',
         credPathKey: 'QWEN_OAUTH_CREDS_FILE_PATH',
         defaultCheckModel: 'qwen3-coder-plus',
+        defaultCheckHealth: true,
         displayName: 'Qwen OAuth',
         needsProjectId: false,
         urlKeys: ['QWEN_BASE_URL', 'QWEN_OAUTH_BASE_URL']
@@ -93,9 +94,14 @@ export const PROVIDER_MAPPINGS = [
 
 /**
  * 生成 UUID
+ * 兼容旧版 Node.js（<14.17.0）：如果 crypto.randomUUID 不存在则使用 Math.random 回退方案
  * @returns {string} UUID 字符串
  */
 export function generateUUID() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    // 回退方案：使用 Math.random 生成标准 UUID v4
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         const r = Math.random() * 16 | 0;
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -324,13 +330,13 @@ export async function isValidOAuthCredentials(filePath) {
  * @returns {Object} 新的提供商配置对象
  */
 export function createProviderConfig(options) {
-    const { credPathKey, credPath, defaultCheckModel, needsProjectId, urlKeys } = options;
+    const { credPathKey, credPath, defaultCheckModel, defaultCheckHealth, needsProjectId, urlKeys } = options;
     
     const newProvider = {
         [credPathKey]: credPath,
         uuid: generateUUID(),
         checkModelName: defaultCheckModel,
-        checkHealth: false,
+        checkHealth: defaultCheckHealth ?? false,
         isHealthy: true,
         isDisabled: false,
         lastUsed: null,
