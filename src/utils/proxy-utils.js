@@ -54,7 +54,7 @@ export function parseProxyUrl(proxyUrl) {
 }
 
 /**
- * 检查指定的提供商是否启用了代理（支持前缀匹配）
+ * 检查指定的提供商是否启用了代理
  * @param {Object} config - 配置对象
  * @param {string} providerType - 提供商类型
  * @returns {boolean} 是否启用代理
@@ -69,13 +69,7 @@ export function isProxyEnabledForProvider(config, providerType) {
         return false;
     }
 
-    // 1. 尝试精确匹配
-    if (enabledProviders.includes(providerType)) {
-        return true;
-    }
-
-    // 2. 尝试前缀匹配 (例如 openai-custom-prod 继承 openai-custom 的配置)
-    return enabledProviders.some(p => providerType.startsWith(p + '-'));
+    return enabledProviders.includes(providerType);
 }
 
 /**
@@ -118,7 +112,7 @@ export function configureAxiosProxy(axiosConfig, config, providerType) {
 }
 
 /**
- * 检查指定的提供商是否启用了 TLS Sidecar（支持前缀匹配）
+ * 检查指定的提供商是否启用了 TLS Sidecar
  * @param {Object} config - 配置对象
  * @param {string} providerType - 提供商类型
  * @returns {boolean} 是否启用 TLS Sidecar
@@ -133,13 +127,7 @@ export function isTLSSidecarEnabledForProvider(config, providerType) {
         return false;
     }
 
-    // 1. 尝试精确匹配
-    if (enabledProviders.includes(providerType)) {
-        return true;
-    }
-
-    // 2. 尝试前缀匹配
-    return enabledProviders.some(p => providerType.startsWith(p + '-'));
+    return enabledProviders.includes(providerType);
 }
 
 /**

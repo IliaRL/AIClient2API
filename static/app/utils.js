@@ -7,113 +7,81 @@ import { apiClient } from './auth.js';
  * @param {string[]} supportedProviders - 已注册的提供商类型列表
  * @returns {Object[]} 提供商配置对象数组
  */
-/**
- * 获取所有基础提供商配置（母版）
- * @returns {Object[]} 基础提供商配置数组
- */
-function getBaseProviderConfigs() {
+function getProviderConfigs(supportedProviders = []) {
     return [
         { 
             id: 'forward-api', 
             name: 'NewAPI', 
-            icon: 'fa-share-square'
+            icon: 'fa-share-square',
+            visible: supportedProviders.includes('forward-api') 
         },
         { 
             id: 'gemini-cli-oauth', 
             name: t('dashboard.routing.nodeName.gemini'), 
             icon: 'fa-robot',
-            defaultPath: 'configs/gemini/'
+            defaultPath: 'configs/gemini/',
+            visible: supportedProviders.includes('gemini-cli-oauth') 
         },
         { 
             id: 'gemini-antigravity', 
             name: t('dashboard.routing.nodeName.antigravity'), 
             icon: 'fa-rocket',
-            defaultPath: 'configs/antigravity/'
+            defaultPath: 'configs/antigravity/',
+            visible: supportedProviders.includes('gemini-antigravity') 
         },
         { 
             id: 'claude-kiro-oauth', 
             name: t('dashboard.routing.nodeName.kiro'), 
             icon: 'fa-key',
-            defaultPath: 'configs/kiro/'
+            defaultPath: 'configs/kiro/',
+            visible: supportedProviders.includes('claude-kiro-oauth') 
         },
         { 
             id: 'openai-codex-oauth', 
             name: t('dashboard.routing.nodeName.codex'), 
             icon: 'fa-code',
-            defaultPath: 'configs/codex/'
+            defaultPath: 'configs/codex/',
+            visible: supportedProviders.includes('openai-codex-oauth') 
         },
         { 
             id: 'openai-qwen-oauth', 
             name: t('dashboard.routing.nodeName.qwen'), 
             icon: 'fa-cloud',
-            defaultPath: 'configs/qwen/'
+            defaultPath: 'configs/qwen/',
+            visible: supportedProviders.includes('openai-qwen-oauth') 
         },
         { 
             id: 'openai-iflow', 
             name: t('dashboard.routing.nodeName.iflow'), 
             icon: 'fa-stream',
-            defaultPath: 'configs/iflow/'
+            defaultPath: 'configs/iflow/',
+            visible: supportedProviders.includes('openai-iflow') 
         },
         { 
             id: 'grok-custom', 
             name: t('dashboard.routing.nodeName.grok'), 
-            icon: 'fa-user-secret'
+            icon: 'fa-user-secret',
+            visible: supportedProviders.includes('grok-custom') 
         },
         { 
             id: 'openai-custom', 
             name: t('dashboard.routing.nodeName.openai'), 
-            icon: 'fa-microchip'
+            icon: 'fa-microchip',
+            visible: supportedProviders.includes('openai-custom') 
         },
         { 
             id: 'claude-custom', 
             name: t('dashboard.routing.nodeName.claude'), 
-            icon: 'fa-brain'
+            icon: 'fa-brain',
+            visible: supportedProviders.includes('claude-custom') 
         },
         { 
             id: 'openaiResponses-custom', 
             name: 'OpenAI Responses', 
-            icon: 'fa-reply-all'
+            icon: 'fa-reply-all',
+            visible: supportedProviders.includes('openaiResponses-custom') 
         },
     ];
-}
-
-/**
- * 获取所有支持的提供商配置列表
- * @param {string[]} supportedProviders - 已注册的提供商类型列表
- * @returns {Object[]} 提供商配置对象数组
- */
-function getProviderConfigs(supportedProviders = []) {
-    const baseConfigs = getBaseProviderConfigs();
-
-    const result = [];
-    const usedIds = new Set();
-
-    // 1. 处理 supportedProviders 中匹配基础配置的类型
-    baseConfigs.forEach(config => {
-        const isSupported = supportedProviders.includes(config.id);
-        result.push({ ...config, visible: isSupported });
-        usedIds.add(config.id);
-    });
-
-    // 2. 处理带有后缀的自定义类型 (例如 openai-custom-test)
-    supportedProviders.forEach(providerId => {
-        if (usedIds.has(providerId)) return;
-
-        // 查找匹配的前缀
-        const baseConfig = baseConfigs.find(bc => providerId.startsWith(bc.id + '-'));
-        if (baseConfig) {
-            const suffix = providerId.substring(baseConfig.id.length + 1);
-            result.push({
-                ...baseConfig,
-                id: providerId,
-                name: `${baseConfig.name} (${suffix})`,
-                visible: true
-            });
-            usedIds.add(providerId);
-        }
-    });
-
-    return result;
 }
 
 /**
@@ -229,7 +197,6 @@ function getFieldLabel(key) {
  * @returns {Array} 字段配置数组
  */
 function getProviderTypeFields(providerType) {
-    // 基础配置字段定义
     const fieldConfigs = {
         'openai-custom': [
             {
@@ -453,19 +420,7 @@ function getProviderTypeFields(providerType) {
         ]
     };
 
-    // 1. 尝试精确匹配
-    if (fieldConfigs[providerType]) {
-        return fieldConfigs[providerType];
-    }
-
-    // 2. 尝试匹配前缀 (例如 openai-custom-test -> openai-custom)
-    for (const baseType in fieldConfigs) {
-        if (providerType.startsWith(baseType + '-')) {
-            return fieldConfigs[baseType];
-        }
-    }
-
-    return [];
+    return fieldConfigs[providerType] || [];
 }
 
 /**
@@ -506,7 +461,6 @@ export {
     getFieldLabel,
     getProviderTypeFields,
     getProviderConfigs,
-    getBaseProviderConfigs,
     getProviderStats,
     apiRequest
 };

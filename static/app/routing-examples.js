@@ -453,17 +453,8 @@ function renderRoutingExamples(providerConfigs) {
         
         let routeInfo = routes.find(r => r.provider === config.id);
         
-        // 如果没找到，则创建一个默认的，并尝试继承基础类型的徽章
+        // 如果没找到，则创建一个默认的
         if (!routeInfo) {
-            // 尝试查找基础类型的路由信息以获取徽章
-            let baseRouteInfo = null;
-            for (const r of routes) {
-                if (config.id.startsWith(r.provider + '-')) {
-                    baseRouteInfo = r;
-                    break;
-                }
-            }
-
             routeInfo = {
                 provider: config.id,
                 name: config.name,
@@ -471,35 +462,14 @@ function renderRoutingExamples(providerConfigs) {
                     openai: `/${config.id}/v1/chat/completions`,
                     claude: `/${config.id}/v1/messages`
                 },
-                description: baseRouteInfo ? baseRouteInfo.description : t('dashboard.routing.oauth'),
-                badge: baseRouteInfo ? baseRouteInfo.badge : t('dashboard.routing.oauth'),
-                badgeClass: baseRouteInfo ? baseRouteInfo.badgeClass : 'oauth'
+                description: t('dashboard.routing.oauth'),
+                badge: t('dashboard.routing.oauth'),
+                badgeClass: 'oauth'
             };
         }
 
-        // 确定图标：尝试精确匹配，然后尝试前缀匹配
-        let icon = iconMap[config.id];
-        if (!icon) {
-            for (const baseId in iconMap) {
-                if (config.id.startsWith(baseId + '-')) {
-                    icon = iconMap[baseId];
-                    break;
-                }
-            }
-        }
-        icon = icon || 'fa-route';
-
-        // 确定默认模型：尝试精确匹配，然后尝试前缀匹配
-        let defaultModel = modelMap[config.id];
-        if (!defaultModel) {
-            for (const baseId in modelMap) {
-                if (config.id.startsWith(baseId + '-')) {
-                    defaultModel = modelMap[baseId];
-                    break;
-                }
-            }
-        }
-        defaultModel = defaultModel || 'default-model';
+        const icon = iconMap[config.id] || 'fa-route';
+        const defaultModel = modelMap[config.id] || 'default-model';
         const hostname = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 
                          `http://${window.location.host}` : 
                          `${window.location.protocol}//${window.location.host}`;

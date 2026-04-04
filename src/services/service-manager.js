@@ -563,8 +563,7 @@ export async function getProviderStatus(config, options = {}) {
         'gemini-antigravity': 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
         'openai-iflow': 'IFLOW_TOKEN_FILE_PATH',
         'forward-api': 'FORWARD_BASE_URL',
-        'grok-custom': 'GROK_COOKIE_TOKEN',
-        'openai-codex-oauth': 'CODEX_OAUTH_CREDS_FILE_PATH'
+        'grok-custom': 'GROK_COOKIE_TOKEN'
     };
     let providerPoolsSlim = [];
     let unhealthyProvideIdentifyList = [];
@@ -576,18 +575,7 @@ export async function getProviderStatus(config, options = {}) {
     for (const key of Object.keys(providerPools)) {
         if (!Array.isArray(providerPools[key])) continue;
         if (filterProvider && key !== filterProvider) continue;
-        
-        let identifyField = identifyFieldMap[key] || null;
-        if (!identifyField) {
-            // 尝试通过前缀查找 identifyField (例如 openai-custom-1 -> openai-custom)
-            for (const [prefix, field] of Object.entries(identifyFieldMap)) {
-                if (key.startsWith(prefix + '-')) {
-                    identifyField = field;
-                    break;
-                }
-            }
-        }
-        
+        const identifyField = identifyFieldMap[key] || null;
         const slimArr = providerPools[key]
             .filter(item => {
                 if (item.isDisabled) return false;
