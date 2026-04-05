@@ -47,13 +47,13 @@ export class OpenAIResponsesApiService {
         }
         
         // 配置自定义代理 (使用 openai-custom 的代理配置)
-        configureAxiosProxy(axiosConfig, config, MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES);
+        configureAxiosProxy(axiosConfig, config, config.MODEL_PROVIDER || MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES);
 
         this.axiosInstance = axios.create(axiosConfig);
     }
 
     _applySidecar(axiosConfig) {
-        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES, this.baseUrl);
+        return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES, this.baseUrl);
     }
 
     async callApi(endpoint, body, isRetry = false, retryCount = 0) {

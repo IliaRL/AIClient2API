@@ -125,7 +125,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
     // Get supported provider types based on registered adapters
     if (method === 'GET' && pathParam === '/api/providers/supported') {
-        return await providerApi.handleGetSupportedProviders(req, res);
+        return await providerApi.handleGetSupportedProviders(req, res, currentConfig, providerPoolManager);
     }
 
     // Get specific provider type details
@@ -137,7 +137,7 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
 
     // Get available models for all providers or specific provider type
     if (method === 'GET' && pathParam === '/api/provider-models') {
-        return await providerApi.handleGetProviderModels(req, res);
+        return await providerApi.handleGetProviderModels(req, res, currentConfig, providerPoolManager);
     }
 
     // Get available models for a specific provider type

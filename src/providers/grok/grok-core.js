@@ -129,14 +129,14 @@ export class GrokApiService {
 
     async acceptTos() {
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/accept-tos`, headers: this.buildHeaders(), data: {}, httpAgent, httpsAgent, timeout: 15000 };
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
         this._applySidecar(axiosConfig);
         try { await axios(axiosConfig); } catch (e) { logger.debug(`[Grok TOS] ${e.message}`); }
     }
 
     async setBirthDate() {
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/set-birth-date`, headers: this.buildHeaders(), data: { "birthDate": "1990-01-01" }, httpAgent, httpsAgent, timeout: 15000 };
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
         this._applySidecar(axiosConfig);
         try { await axios(axiosConfig); } catch (e) { logger.debug(`[Grok Birth] ${e.message}`); }
     }
@@ -167,13 +167,13 @@ export class GrokApiService {
             timeout: 15000,
             responseType: 'arraybuffer' 
         };
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
         this._applySidecar(axiosConfig);
         try { await axios(axiosConfig); } catch (e) { throw e; }
     }
 
     _applySidecar(axiosConfig) {
-        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
     }
 
     async initialize() {
@@ -190,7 +190,7 @@ export class GrokApiService {
             // await this.getUsageLimits(); return Promise.resolve();
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.GROK_CUSTOM, this.uuid);
+                poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM, this.uuid);
             }
         } catch (error) {
             logger.error('[Grok] Failed to initialize authentication:', error);
@@ -202,7 +202,7 @@ export class GrokApiService {
         const headers = this.buildHeaders();
         const payload = { "requestKind": "DEFAULT", "modelName": "grok-3" };
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/rate-limits`, headers, data: payload, httpAgent, httpsAgent, timeout: 30000 };
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
         this._applySidecar(axiosConfig);
         try {
             const response = await axios(axiosConfig);
@@ -282,7 +282,7 @@ export class GrokApiService {
         if (mediaUrl && mediaUrl.trim()) payload.mediaUrl = mediaUrl;
 
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/media/post/create`, headers, data: payload, httpAgent, httpsAgent, timeout: 30000 };
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
         this._applySidecar(axiosConfig);
         try {
             const response = await axios(axiosConfig);
@@ -302,7 +302,7 @@ export class GrokApiService {
         if (!idMatch) return videoUrl;
         const videoId = idMatch[1];
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/media/video/upscale`, headers: this.buildHeaders(), data: { videoId }, httpAgent, httpsAgent, timeout: 30000 };
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
         this._applySidecar(axiosConfig);
         try {
             const response = await axios(axiosConfig);
@@ -329,7 +329,7 @@ export class GrokApiService {
             httpsAgent,
             timeout: 15000
         };
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
         this._applySidecar(axiosConfig);
         try {
             const response = await axios(axiosConfig);
@@ -455,7 +455,7 @@ export class GrokApiService {
             rolloutId: "", 
             modelResponse: null, 
             cardAttachment: null,
-            cardAttachments: [], // 收集所有的卡片附件
+            cardAttachments: [],
             streamingImageGenerationResponse: null, 
             streamingVideoGenerationResponse: null, 
             finalVideoUrl: null, 
@@ -743,7 +743,7 @@ export class GrokApiService {
         }
         if (!b64) return null;
         const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/upload-file`, headers: this.buildHeaders(), data: { fileName: `file.${mime.split("/")[1] || "bin"}`, fileMimeType: mime, content: b64 }, httpAgent, httpsAgent, timeout: 30000 };
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
         this._applySidecar(axiosConfig);
         try { return (await axios(axiosConfig)).data; } catch (error) { return null; }
     }
@@ -763,7 +763,7 @@ export class GrokApiService {
         if (requestBody._requestBaseUrl) delete requestBody._requestBaseUrl;
 
         if (this.isExpiryDateNear() && getProviderPoolManager() && this.uuid) {
-            getProviderPoolManager().markProviderNeedRefresh(MODEL_PROVIDER.GROK_CUSTOM, { uuid: this.uuid });
+            getProviderPoolManager().markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM, { uuid: this.uuid });
         }
 
         const rawModel = typeof model === 'string' ? model : '';
@@ -841,7 +841,7 @@ export class GrokApiService {
 
         const payload = this.buildPayload(model, requestBody);
         const axiosConfig = { method: 'post', url: this.chatApi, headers: this.buildHeaders(), data: payload, responseType: 'stream', httpAgent, httpsAgent, timeout: 60000, maxRedirects: 0 };
-        configureAxiosProxy(axiosConfig, this.config, MODEL_PROVIDER.GROK_CUSTOM);
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
         this._applySidecar(axiosConfig);
 
         try {

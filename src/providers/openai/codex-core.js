@@ -40,7 +40,7 @@ export class CodexApiService {
     }
 
     _applySidecar(axiosConfig) {
-        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.CODEX_API, this.baseUrl);
+        return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API, this.baseUrl);
     }
 
     /**
@@ -148,7 +148,7 @@ export class CodexApiService {
         const poolManager = getProviderPoolManager();
         if (poolManager && this.uuid) {
             logger.info(`[Codex] Token is near expiry, marking credential ${this.uuid} for background refresh`);
-            poolManager.markProviderNeedRefresh(MODEL_PROVIDER.CODEX_API, {
+            poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API, {
                 uuid: this.uuid
             });
         }
@@ -195,7 +195,7 @@ export class CodexApiService {
             };
 
             // 配置代理
-            const proxyConfig = getProxyConfigForProvider(this.config, 'openai-codex-oauth');
+            const proxyConfig = getProxyConfigForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
             if (proxyConfig) {
                 config.httpAgent = proxyConfig.httpAgent;
                 config.httpsAgent = proxyConfig.httpsAgent;
@@ -272,7 +272,7 @@ export class CodexApiService {
             };
 
             // 配置代理
-            const proxyConfig = getProxyConfigForProvider(this.config, 'openai-codex-oauth');
+            const proxyConfig = getProxyConfigForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
             if (proxyConfig) {
                 config.httpAgent = proxyConfig.httpAgent;
                 config.httpsAgent = proxyConfig.httpsAgent;
@@ -454,7 +454,7 @@ export class CodexApiService {
             // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.CODEX_API, this.uuid);
+                poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API, this.uuid);
             }
             logger.info('[Codex] Token refreshed successfully');
         } catch (error) {
@@ -688,7 +688,7 @@ export class CodexApiService {
             };
 
             // 配置代理
-            const proxyConfig = getProxyConfigForProvider(this.config, 'openai-codex-oauth');
+            const proxyConfig = getProxyConfigForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
             if (proxyConfig) {
                 config.httpAgent = proxyConfig.httpAgent;
                 config.httpsAgent = proxyConfig.httpsAgent;

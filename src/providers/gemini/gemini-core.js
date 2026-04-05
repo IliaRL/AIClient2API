@@ -289,7 +289,7 @@ export class GeminiApiService {
         });
 
         // 检查是否需要使用代理
-        const proxyConfig = getGoogleAuthProxyConfig(config, 'gemini-cli-oauth');
+        const proxyConfig = getGoogleAuthProxyConfig(config, config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI);
         
         // 配置 OAuth2Client 使用自定义的 HTTP agent
         const oauth2Options = {
@@ -312,6 +312,7 @@ export class GeminiApiService {
 
         this.config = config;
         this.host = config.HOST;
+        this.uuid = config.uuid;
         this.oauthCredsBase64 = config.GEMINI_OAUTH_CREDS_BASE64;
         this.oauthCredsFilePath = config.GEMINI_OAUTH_CREDS_FILE_PATH;
         this.projectId = config.PROJECT_ID;
@@ -320,7 +321,7 @@ export class GeminiApiService {
         this.apiVersion = DEFAULT_CODE_ASSIST_API_VERSION;
         
         // 保存代理配置供后续使用
-        this.proxyConfig = getProxyConfigForProvider(config, 'gemini-cli-oauth');
+        this.proxyConfig = getProxyConfigForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI);
     }
 
     async initialize() {
@@ -345,7 +346,7 @@ export class GeminiApiService {
     }
 
     _applySidecar(requestOptions) {
-        return configureTLSSidecar(requestOptions, this.config, MODEL_PROVIDER.GEMINI_CLI);
+        return configureTLSSidecar(requestOptions, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI);
     }
 
     /**
@@ -412,7 +413,7 @@ export class GeminiApiService {
                     // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
                     const poolManager = getProviderPoolManager();
                     if (poolManager && this.uuid) {
-                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.GEMINI_CLI, this.uuid);
+                        poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI, this.uuid);
                     }
                 } else {
                     logger.info(`[Gemini Auth] No access token or refresh token. Starting new authentication flow...`);
@@ -423,7 +424,7 @@ export class GeminiApiService {
                     // 认证成功，重置状态
                     const poolManager = getProviderPoolManager();
                     if (poolManager && this.uuid) {
-                        poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.GEMINI_CLI, this.uuid);
+                        poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI, this.uuid);
                     }
                 }
             } catch (error) {
@@ -598,7 +599,7 @@ export class GeminiApiService {
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
                     logger.info(`[Gemini] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized`);
-                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
+                    poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI, {
                         uuid: this.uuid
                     });
                     error.credentialMarkedUnhealthy = true;
@@ -681,7 +682,7 @@ export class GeminiApiService {
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
                     logger.info(`[Gemini] Marking credential ${this.uuid} as needs refresh. Reason: 401/400 Unauthorized in stream`);
-                    poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
+                    poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI, {
                         uuid: this.uuid
                     });
                     error.credentialMarkedUnhealthy = true;
@@ -757,7 +758,7 @@ export class GeminiApiService {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
                 logger.info(`[Gemini] Token is near expiry, marking credential ${this.uuid} for refresh`);
-                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
+                poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI, {
                     uuid: this.uuid
                 });
             }
@@ -796,7 +797,7 @@ export class GeminiApiService {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
                 logger.info(`[Gemini] Token is near expiry, marking credential ${this.uuid} for refresh`);
-                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.GEMINI_CLI, {
+                poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GEMINI_CLI, {
                     uuid: this.uuid
                 });
             }

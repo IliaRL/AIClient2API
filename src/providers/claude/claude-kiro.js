@@ -494,7 +494,7 @@ export class KiroApiService {
         }
         
         // 配置自定义代理
-        configureAxiosProxy(axiosConfig, this.config, 'claude-kiro-oauth');
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API);
         
         this.axiosInstance = axios.create(axiosConfig);
 
@@ -505,7 +505,7 @@ export class KiroApiService {
     }
 
     _applySidecar(axiosConfig) {
-        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.KIRO_API);
+        return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API);
     }
 
 /**
@@ -744,7 +744,7 @@ async saveCredentialsToFile(filePath, newData) {
                 // 刷新成功，重置 PoolManager 中的刷新状态并标记为健康
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    poolManager.resetProviderRefreshStatus(MODEL_PROVIDER.KIRO_API, this.uuid);
+                    poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API, this.uuid);
                 }
             } else {
                 throw new Error('Invalid refresh response: Missing accessToken');
@@ -1627,7 +1627,7 @@ async saveCredentialsToFile(filePath, newData) {
     _refreshUuid() {
         const poolManager = getProviderPoolManager();
         if (poolManager && this.uuid) {
-            const newUuid = poolManager.refreshProviderUuid(MODEL_PROVIDER.KIRO_API, {
+            const newUuid = poolManager.refreshProviderUuid(this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API, {
                 uuid: this.uuid
             });
             return newUuid;
@@ -1649,7 +1649,7 @@ async saveCredentialsToFile(filePath, newData) {
         if (poolManager && this.uuid) {
             logger.info(`[Kiro] Marking credential ${this.uuid} as needs refresh. Reason: ${reason}`);
             // 使用新的 markProviderNeedRefresh 方法代替 markProviderUnhealthyImmediately
-            poolManager.markProviderNeedRefresh(MODEL_PROVIDER.KIRO_API, {
+            poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API, {
                 uuid: this.uuid
             });
             // Attach marker to error object to prevent duplicate marking in upper layers
@@ -1674,7 +1674,7 @@ async saveCredentialsToFile(filePath, newData) {
         const poolManager = getProviderPoolManager();
         if (poolManager && this.uuid) {
             logger.info(`[Kiro] Marking credential ${this.uuid} as unhealthy. Reason: ${reason}`);
-            poolManager.markProviderUnhealthyImmediately(MODEL_PROVIDER.KIRO_API, {
+            poolManager.markProviderUnhealthyImmediately(this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API, {
                 uuid: this.uuid
             }, reason);
             // Attach marker to error object to prevent duplicate marking in upper layers
@@ -1701,7 +1701,7 @@ async saveCredentialsToFile(filePath, newData) {
         const poolManager = getProviderPoolManager();
         if (poolManager && this.uuid) {
             logger.info(`[Kiro] Marking credential ${this.uuid} as unhealthy with recovery time. Reason: ${reason}, Recovery: ${recoveryTime?.toISOString()}`);
-            poolManager.markProviderUnhealthyWithRecoveryTime(MODEL_PROVIDER.KIRO_API, {
+            poolManager.markProviderUnhealthyWithRecoveryTime(this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API, {
                 uuid: this.uuid
             }, reason, recoveryTime);
             // Attach marker to error object to prevent duplicate marking in upper layers

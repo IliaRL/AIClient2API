@@ -56,13 +56,13 @@ export class ForwardApiService {
             axiosConfig.proxy = false;
         }
         
-        configureAxiosProxy(axiosConfig, config, MODEL_PROVIDER.FORWARD_API);
+        configureAxiosProxy(axiosConfig, config, config.MODEL_PROVIDER || MODEL_PROVIDER.FORWARD_API);
         
         this.axiosInstance = axios.create(axiosConfig);
     }
 
     _applySidecar(axiosConfig) {
-        return configureTLSSidecar(axiosConfig, this.config, MODEL_PROVIDER.FORWARD_API, this.baseUrl);
+        return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.FORWARD_API, this.baseUrl);
     }
 
     async callApi(endpoint, body, isRetry = false, retryCount = 0) {

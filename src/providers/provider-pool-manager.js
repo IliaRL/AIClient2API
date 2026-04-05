@@ -1841,7 +1841,11 @@ export class ProviderPoolManager {
         
         for (const { providerType, provider, uuid, customName } of providersToCheck) {
             const providerCheckStart = Date.now();
-            const checkModelName = provider.config.checkModelName || ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType] || 'unknown';
+            const baseProviderType = this._getBaseProviderType(providerType);
+            const checkModelName = provider.config.checkModelName || 
+                                ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType] || 
+                                ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[baseProviderType] || 
+                                'unknown';
             const displayName = customName || uuid.substring(0, 8);
 
             try {
@@ -1903,7 +1907,7 @@ export class ProviderPoolManager {
         }
         
         // OpenAI Custom Responses 使用特殊格式
-        if (providerType === MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES) {
+        if (this._getBaseProviderType(providerType) === MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES) {
             requests.push({
                 input: [baseMessage],
                 model: modelName
@@ -1921,6 +1925,26 @@ export class ProviderPoolManager {
     }
 
     /**
+     * 根据提供商类型获取基准提供商类型（用于查找配置和模型）
+     * 例如：openai-custom-1 -> openai-custom
+     * @private
+     */
+    _getBaseProviderType(providerType) {
+        if (ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType]) {
+            return providerType;
+        }
+        
+        // 尝试前缀匹配
+        for (const key of Object.keys(ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS)) {
+            if (providerType === key || providerType.startsWith(key + '-')) {
+                return key;
+            }
+        }
+        
+        return providerType;
+    }
+
+    /**
      * Performs an actual health check for a specific provider.
      * 
      * 设计决策：不检查 providerConfig.checkHealth 标志。
@@ -1934,8 +1958,10 @@ export class ProviderPoolManager {
      */
     async _checkProviderHealth(providerType, providerConfig) {
         // 确定健康检查使用的模型名称
+        const baseProviderType = this._getBaseProviderType(providerType);
         const modelName = providerConfig.checkModelName ||
-                        ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType];
+                        ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType] ||
+                        ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[baseProviderType];
 
         if (!modelName) {
             this._log('warn', `Unknown provider type for health check: ${providerType}. Please check DEFAULT_HEALTH_CHECK_MODELS.`);

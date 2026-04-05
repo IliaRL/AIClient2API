@@ -704,6 +704,26 @@ registerAdapter(MODEL_PROVIDER.GROK_CUSTOM, GrokApiServiceAdapter);
 // 用于存储服务适配器单例的映射
 export const serviceInstances = {};
 
+/**
+ * 检查提供商是否已注册（支持前缀匹配）
+ * @param {string} provider - 提供商名称
+ * @returns {boolean} - 是否有效
+ */
+export function isRegisteredProvider(provider) {
+    if (adapterRegistry.has(provider)) {
+        return true;
+    }
+    
+    // 检查前缀 (例如 openai-custom-1 -> openai-custom)
+    for (const key of adapterRegistry.keys()) {
+        if (provider.startsWith(key + '-')) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 // 服务适配器工厂
 export function getServiceAdapter(config) {
     const customNameDisplay = config.customName ? ` (${config.customName})` : '';
@@ -712,7 +732,18 @@ export function getServiceAdapter(config) {
     const providerKey = config.uuid ? provider + config.uuid : provider;
     
     if (!serviceInstances[providerKey]) {
-        const AdapterClass = adapterRegistry.get(provider);
+        let AdapterClass = adapterRegistry.get(provider);
+        
+        // 如果没找到精确匹配，尝试通过前缀查找 (例如 openai-custom-1 -> openai-custom)
+        if (!AdapterClass) {
+            for (const [key, value] of adapterRegistry.entries()) {
+                if (provider === key || provider.startsWith(key + '-')) {
+                    AdapterClass = value;
+                    break;
+                }
+            }
+        }
+        
         if (AdapterClass) {
             serviceInstances[providerKey] = new AdapterClass(config);
         } else {
