@@ -191,6 +191,12 @@ export function getClientIp(req) {
  * @throws {Error} If the request body is not valid JSON.
  */
 export function getRequestBody(req) {
+    // Support cached body from model-router plugin
+    if (req._cachedBodyString) {
+        try {
+            return Promise.resolve(JSON.parse(req._cachedBodyString));
+        } catch (e) {}
+    }
     return new Promise((resolve, reject) => {
         let body = '';
         req.on('data', chunk => {
