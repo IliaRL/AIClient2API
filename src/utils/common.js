@@ -6,7 +6,6 @@ import logger from './logger.js';
 import { convertData, getOpenAIStreamChunkStop } from '../convert/convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 import { getPluginManager } from '../core/plugin-manager.js';
-import { getConfiguredSupportedModels, usesManagedModelList } from '../providers/provider-models.js';
 
 // ==================== 网络错误处理 ====================
 
@@ -75,6 +74,30 @@ export const MODEL_PROVIDER = {
     FORWARD_API: 'forward-api',
     GROK_CUSTOM: 'grok-custom',
     AUTO: 'auto',
+}
+
+const MANAGED_MODEL_LIST_PROVIDER_TYPES = new Set([
+    'openai-custom',
+    'openaiResponses-custom'
+]);
+
+function usesManagedModelList(providerType = '') {
+    return [...MANAGED_MODEL_LIST_PROVIDER_TYPES].some(baseType =>
+        providerType === baseType || providerType.startsWith(baseType + '-')
+    );
+}
+
+function getConfiguredSupportedModels(providerType, providerConfig = {}) {
+    if (!usesManagedModelList(providerType)) {
+        return [];
+    }
+
+    return [...new Set(
+        (Array.isArray(providerConfig?.supportedModels) ? providerConfig.supportedModels : [])
+            .filter(model => typeof model === 'string')
+            .map(model => model.trim())
+            .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b));
 }
 
 /**
