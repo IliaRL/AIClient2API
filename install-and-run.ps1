@@ -2,70 +2,70 @@
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  AI Client 2 API 快速安装启动脚本" -ForegroundColor Cyan
+Write-Host "  AI Client 2 API Quick Setup Script" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 处理参数
+# Handle parameters
 $forcePull = $args -contains "--pull"
 
-# 检查 Git 并拉取
+# Check Git and Pull
 if ($forcePull) {
-    Write-Host "[更新] 正在从远程仓库拉取最新代码..."
+    Write-Host "[UPDATE] Pulling latest code from remote repository..."
     if (Get-Command git -ErrorAction SilentlyContinue) {
         git pull
         if ($LASTEXITCODE -ne 0) {
-            Write-Warning "Git pull 失败，请检查网络或手动处理冲突。"
+            Write-Warning "Git pull failed. Please check your network or handle conflicts manually."
         } else {
-            Write-Host "[成功] 代码已更新。" -ForegroundColor Green
+            Write-Host "[SUCCESS] Code updated." -ForegroundColor Green
         }
     } else {
-        Write-Warning "未检测到 Git，跳过代码拉取。"
+        Write-Warning "Git not detected. Skipping code pull."
     }
 }
 
-# 检查 Node.js
-Write-Host "[检查] 正在检查Node.js是否已安装..."
+# Check Node.js
+Write-Host "[CHECK] Checking if Node.js is installed..."
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "[错误] 未检测到Node.js，请先安装Node.js (https://nodejs.org/)" -ForegroundColor Red
+    Write-Host "[ERROR] Node.js not detected. Please install Node.js (https://nodejs.org/)" -ForegroundColor Red
     Pause
     exit 1
 }
 
 $nodeVersion = node --version
-Write-Host "[成功] Node.js已安装，版本: $nodeVersion" -ForegroundColor Green
+Write-Host "[SUCCESS] Node.js installed, version: $nodeVersion" -ForegroundColor Green
 
-# 检查 package.json
+# Check package.json
 if (-not (Test-Path "package.json")) {
-    Write-Host "[错误] 未找到package.json文件，请确保在项目根目录下运行此脚本" -ForegroundColor Red
+    Write-Host "[ERROR] package.json not found. Please ensure you are running this script from the project root." -ForegroundColor Red
     Pause
     exit 1
 }
 
-# 确定包管理器
+# Determine package manager
 $pkgManager = if (Get-Command pnpm -ErrorAction SilentlyContinue) { "pnpm" } else { "npm" }
-Write-Host "[安装] 正在使用 $pkgManager 安装/更新依赖..." -ForegroundColor Cyan
+Write-Host "[INSTALL] Installing/updating dependencies using $pkgManager..." -ForegroundColor Cyan
 
 & $pkgManager install
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "[错误] 依赖安装失败，请检查网络连接。" -ForegroundColor Red
+    Write-Host "[ERROR] Dependency installation failed. Please check your network connection." -ForegroundColor Red
     Pause
     exit 1
 }
 
-# 检查主文件
+# Check master file
 if (-not (Test-Path "src\core\master.js")) {
-    Write-Host "[错误] 未找到 src\core\master.js 文件" -ForegroundColor Red
+    Write-Host "[ERROR] src\core\master.js not found." -ForegroundColor Red
     Pause
     exit 1
 }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "  启动 AIClient2API 服务器..." -ForegroundColor Green
+Write-Host "  Starting AIClient2API Server..." -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "服务器将在 http://localhost:3000 启动"
-Write-Host "按 Ctrl+C 停止服务器"
+Write-Host "Server will start at http://localhost:3000"
+Write-Host "Press Ctrl+C to stop the server"
 Write-Host ""
 
 node src\core\master.js
