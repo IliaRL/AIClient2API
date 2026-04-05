@@ -6,6 +6,7 @@ import logger from './logger.js';
 import { convertData, getOpenAIStreamChunkStop } from '../convert/convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 import { getPluginManager } from '../core/plugin-manager.js';
+import { getConfiguredSupportedModels, usesManagedModelList } from '../providers/provider-models.js';
 
 // ==================== 网络错误处理 ====================
 
@@ -822,6 +823,35 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 
         let clientModelList;
 
+        const buildConfiguredModelListResponse = (models, providerType, listEndpointType) => {
+            if (listEndpointType === ENDPOINT_TYPE.OPENAI_MODEL_LIST) {
+                return {
+                    object: 'list',
+                    data: models.map(model => ({
+                        id: model,
+                        object: 'model',
+                        created: Math.floor(Date.now() / 1000),
+                        owned_by: providerType
+                    }))
+                };
+            }
+
+            if (listEndpointType === ENDPOINT_TYPE.GEMINI_MODEL_LIST) {
+                return {
+                    models: models.map(model => ({
+                        name: `models/${model}`,
+                        baseModelId: model,
+                        version: 'v1',
+                        displayName: model,
+                        description: `Model ${model} provided by ${providerType}`,
+                        supportedGenerationMethods: ['generateContent', 'countTokens']
+                    }))
+                };
+            }
+
+            return { data: [] };
+        };
+
         // --- 核心逻辑: auto 路由模式下的模型聚合 ---
         if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.AUTO && providerPoolManager) {
             logger.info(`[ModelList] Aggregating models for 'auto' mode...`);
@@ -829,6 +859,12 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         } else {
             // --- 单提供商逻辑 ---
             const toProvider = CONFIG.MODEL_PROVIDER;
+            const configuredSupportedModels = getConfiguredSupportedModels(toProvider, CONFIG);
+
+            if (usesManagedModelList(toProvider) && configuredSupportedModels.length > 0) {
+                logger.info(`[ModelList] Returning configured supported models for ${toProvider}: ${configuredSupportedModels.join(', ')}`);
+                clientModelList = buildConfiguredModelListResponse(configuredSupportedModels, toProvider, endpointType);
+            } else {
 
             // service 可能未在上层预先注入（例如仅改了路径 provider 前缀），这里兜底获取
             let resolvedService = service;
@@ -851,6 +887,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
                 clientModelList = convertData(nativeModelList, 'modelList', toProvider, fromProvider);
             } else {
                 logger.info(`[ModelList Convert] Model list format matches. No conversion needed.`);
+            }
             }
         }
 
