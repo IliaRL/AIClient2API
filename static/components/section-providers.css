@@ -198,9 +198,14 @@
     letter-spacing: 0.05em;
 }
 
-.provider-badge.official { background: var(--info-bg); color: var(--info-text); }
-.provider-badge.oauth { background: var(--success-bg); color: var(--success-text); }
-.provider-badge.responses { background: var(--warning-bg); color: var(--warning-text); }
+.badge-warning {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
 
 .routing-card-content {
     padding: 1.5rem;

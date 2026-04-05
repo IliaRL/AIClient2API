@@ -50,36 +50,131 @@ export const qwenOAuth2Events = new EventEmitter();
 
 // --- Helper Functions ---
 
-/**
- * Qwen 默认系统提示词
- */
-const QWEN_DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant. You are Qwen, a large language model trained by Alibaba.";
+// --- Rate Limiting & Quota ---
+const qwenRateLimiter = {
+    requests: new Map(), // authID -> timestamps[]
+};
+const QWEN_RATE_LIMIT_PER_MIN = 60;
+const QWEN_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const QWEN_QUOTA_CODES = new Set(['insufficient_quota', 'quota_exceeded']);
 
 /**
- * 应用 Qwen 默认系统提示词逻辑
+ * 检查 Qwen 速率限制 (60 requests/min)
+ * @param {string} authID 
+ * @returns {Error|null}
+ */
+function checkQwenRateLimit(authID) {
+    if (!authID) return null;
+    const now = Date.now();
+    const windowStart = now - QWEN_RATE_LIMIT_WINDOW_MS;
+    
+    let timestamps = qwenRateLimiter.requests.get(authID) || [];
+    timestamps = timestamps.filter(ts => ts > windowStart);
+    
+    if (timestamps.length >= QWEN_RATE_LIMIT_PER_MIN) {
+        const oldestInWindow = timestamps[0];
+        const retryAfterMs = oldestInWindow + QWEN_RATE_LIMIT_WINDOW_MS - now;
+        const retryAfterSec = Math.max(1, Math.ceil(retryAfterMs / 1000));
+        const error = new Error(`Qwen rate limit exceeded for ${authID.substring(0, 8)}, retry after ${retryAfterSec}s`);
+        error.status = 429;
+        error.data = { error: { code: "rate_limit_exceeded", message: error.message } };
+        error.retryAfter = retryAfterMs;
+        return error;
+    }
+    
+    timestamps.push(now);
+    qwenRateLimiter.requests.set(authID, timestamps);
+    return null;
+}
+
+/**
+ * 检查是否为配额错误
+ */
+function isQwenQuotaError(body) {
+    if (!body || typeof body !== 'object') return false;
+    const error = body.error || {};
+    const code = (error.code || '').toLowerCase();
+    const type = (error.type || '').toLowerCase();
+    const message = (error.message || '').toLowerCase();
+    return QWEN_QUOTA_CODES.has(code) || QWEN_QUOTA_CODES.has(type) ||
+           /insufficient_quota|quota exceeded|free allocated quota exceeded/i.test(message);
+}
+
+/**
+ * 计算到北京时间次日凌晨的毫秒数
+ */
+function timeUntilNextDayBeijing() {
+    const now = new Date();
+    // UTC to Beijing (UTC+8)
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const beijingNow = new Date(utcTime + (3600000 * 8));
+    const tomorrow = new Date(beijingNow);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    return tomorrow.getTime() - beijingNow.getTime();
+}
+
+/**
+ * 确保 Qwen 系统消息在开头且唯一，合并多条系统消息并支持缓存控制
  * @param {Object} requestBody - OpenAI 格式的请求体
  * @returns {Object} 处理后的请求体
  */
-function applyQwenDefaultSystemPrompt(requestBody) {
+function ensureQwenSystemMessage(requestBody) {
     if (!requestBody || !requestBody.messages || !Array.isArray(requestBody.messages)) {
         return requestBody;
     }
 
-    // 检查是否已有系统提示词 (role 为 system 或 developer)
-    const hasSystemPrompt = requestBody.messages.some(msg => 
-        msg.role === 'system' || msg.role === 'developer'
-    );
+    const isInjectedSystemPart = (part) => {
+        if (!part || typeof part !== 'object') return false;
+        if (part.type !== 'text') return false;
+        if (part.cache_control?.type !== 'ephemeral') return false;
+        return part.text === "" || part.text === "You are Qwen Code.";
+    };
 
-    // 如果没有系统提示词，则在消息列表最前面插入默认提示词
-    if (!hasSystemPrompt) {
-        requestBody.messages.unshift({
-            role: 'system',
-            content: QWEN_DEFAULT_SYSTEM_PROMPT
-        });
-        logger.info('[Qwen Auth] 已应用默认系统提示词');
+    let systemParts = [];
+    // 注入默认系统提示词部分 (带缓存控制)
+    systemParts.push({
+        type: "text",
+        text: "You are Qwen Code.",
+        cache_control: { type: "ephemeral" }
+    });
+
+    const appendSystemContent = (content) => {
+        if (content === undefined || content === null) return;
+        
+        if (Array.isArray(content)) {
+            for (const part of content) {
+                if (typeof part === 'string') {
+                    systemParts.push({ type: 'text', text: part });
+                } else if (!isInjectedSystemPart(part)) {
+                    systemParts.push(part);
+                }
+            }
+        } else if (typeof content === 'string') {
+            systemParts.push({ type: 'text', text: content });
+        } else if (typeof content === 'object') {
+            if (!isInjectedSystemPart(content)) {
+                systemParts.push(content);
+            }
+        }
+    };
+
+    const nonSystemMessages = [];
+    for (const msg of requestBody.messages) {
+        if (msg.role === 'system' || msg.role === 'developer') {
+            appendSystemContent(msg.content);
+        } else {
+            nonSystemMessages.push(msg);
+        }
     }
 
-    return requestBody;
+    return {
+        ...requestBody,
+        messages: [
+            { role: 'system', content: systemParts },
+            ...nonSystemMessages
+        ]
+    };
 }
 
 // 封装公共的 await fetch 方法
@@ -564,85 +659,87 @@ export class QwenApiService {
     }
 
     async callApiWithAuthAndRetry(endpoint, body, isStream = false, retryCount = 0) {
+        // 速率限制检查
+        if (this.uuid) {
+            const limitErr = checkQwenRateLimit(this.uuid);
+            if (limitErr) throw limitErr;
+        }
+
         const maxRetries = (this.config && this.config.REQUEST_MAX_RETRIES) || 3;
         const baseDelay = (this.config && this.config.REQUEST_BASE_DELAY) || 1000;
 
-        const version = "0.10.1";
+        const version = "0.13.2";
         const userAgent = `QwenCode/${version} (${process.platform}; ${process.arch})`;
-        logger.info(`[QwenApiService] User-Agent: ${userAgent}`);
 
         try {
             const { token, endpoint: qwenBaseUrl } = await this.getValidToken();
 
-            // 配置 HTTP/HTTPS agent 限制连接池大小，避免资源泄漏
-            const httpAgent = new http.Agent({
-                keepAlive: true,
-                maxSockets: 100,
-                maxFreeSockets: 5,
-                timeout: 120000,
-            });
-            const httpsAgent = new https.Agent({
-                keepAlive: true,
-                maxSockets: 100,
-                maxFreeSockets: 5,
-                timeout: 120000,
-            });
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'User-Agent': userAgent,
+                'X-DashScope-UserAgent': userAgent,
+                'X-Stainless-Runtime-Version': 'v22.17.0',
+                'X-Stainless-Lang': 'js',
+                'X-Stainless-Arch': process.arch === 'x64' ? 'x86_64' : process.arch,
+                'X-Stainless-Package-Version': '5.11.0',
+                'X-DashScope-CacheControl': 'enable',
+                'X-DashScope-AuthType': 'qwen-oauth',
+                'X-Stainless-Runtime': 'node',
+                'Accept': isStream ? 'text/event-stream' : 'application/json',
+            };
 
             const axiosConfig = {
                 baseURL: qwenBaseUrl,
-                httpAgent,
-                httpsAgent,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-DashScope-CacheControl': 'enable',
-                    'X-DashScope-UserAgent': userAgent,
-                    'X-DashScope-AuthType': 'qwen-oauth',
-                },
+                headers,
+                // axios 默认不传 proxy 配置时会遵循环境变量，这里明确控制
+                proxy: this.useSystemProxy ? undefined : false,
             };
             
-            // 禁用系统代理
-            if (!this.useSystemProxy) {
-                axiosConfig.proxy = false;
-            }
-            
-            // 配置自定义代理
+            // 配置自定义代理 (如果 config.json 中有定义)
             configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API);
             
-            this.currentAxiosInstance = axios.create(axiosConfig);
+            const instance = axios.create(axiosConfig);
 
-            // Process message content before sending the request
-            const processedBody = applyQwenDefaultSystemPrompt(body);
+            // 处理消息和模型
+            let processedBody = ensureQwenSystemMessage(body);
 
-            // Check if model in body is in QWEN_MODEL_LIST, if not, use the first model's id
-            if (processedBody.model && !QWEN_MODEL_LIST.some(model => model.id === processedBody.model)) {
-                logger.warn(`[QwenApiService] Model '${processedBody.model}' not found. Using default model: '${QWEN_MODEL_LIST[0].id}'`);
-                processedBody.model = QWEN_MODEL_LIST[0].id;
+            // 检查模型是否存在于列表中
+            if (processedBody.model && !QWEN_MODELS.includes(processedBody.model)) {
+                logger.warn(`[QwenApiService] Model '${processedBody.model}' not found in supported list. Using default: '${QWEN_MODELS[0]}'`);
+                processedBody.model = QWEN_MODELS[0];
             }
 
-            const defaultTools = [
-                {
-                    "type": "function",
-                    "function": {
-                    "name": "ext"
-                    }
-                }
-            ];
+            // Qwen3 兼容性补丁：针对 Qwen3 "Poisoning" 问题优化工具注入
+            // 如果请求本身没有 tools，注入一个虚拟工具防止模型在流式响应中随机吐出 Token
+            const dummyTool = { 
+                type: "function", 
+                function: { 
+                    name: "ext", 
+                    description: "Internal extension tool" 
+                } 
+            };
             
-            // Merge tools if requestBody already has tools defined
-            const mergedTools = processedBody.tools ? [...defaultTools, ...processedBody.tools] : defaultTools;
+            if (processedBody.tools) {
+                processedBody.tools = [dummyTool, ...processedBody.tools];
+            } else {
+                processedBody.tools = [dummyTool];
+            }
             
-            const requestBody = isStream ? { ...processedBody, stream: true, tools: mergedTools } : { ...processedBody, tools: mergedTools };
-            
-            const axiosRequestConfig = {
+            if (isStream) {
+                processedBody.stream = true;
+                processedBody.stream_options = { include_usage: true };
+            }
+
+            const requestConfig = {
                 method: 'post',
                 url: endpoint,
-                data: requestBody,
+                data: processedBody,
                 ...(isStream ? { responseType: 'stream' } : {})
             };
-            this._applySidecar(axiosRequestConfig);
+            this._applySidecar(requestConfig);
             
-            const response = await this.currentAxiosInstance.request(axiosRequestConfig);
+            const response = await instance.request(requestConfig);
             return response.data;
 
         } catch (error) {
@@ -651,40 +748,38 @@ export class QwenApiService {
             const errorCode = error.code;
             const errorMessage = error.message || '';
             
-            // 检查是否为可重试的网络错误
-            const isNetworkError = isRetryableNetworkError(error);
-
-            if (this.isAuthError(error) && retryCount === 0) {
-                logger.warn(`[QwenApiService] Auth error (${status}). Triggering background refresh via PoolManager...`);
+            // 检查配额错误 -> 映射为 429 并设置冷却时间
+            if ((status === 403 || status === 429) && isQwenQuotaError(error.response?.data)) {
+                const cooldown = timeUntilNextDayBeijing();
+                logger.warn(`[QwenApiService] Daily quota exceeded (http ${status} -> 429), cooling down until tomorrow (~${Math.round(cooldown / 3600000)} hours)`);
+                error.status = 429;
+                error.retryAfter = cooldown;
                 
-                // 标记当前凭证为不健康（会自动进入刷新队列）
+                // 标记 unhealthy
                 const poolManager = getProviderPoolManager();
                 if (poolManager && this.uuid) {
-                    logger.info(`[Qwen] Marking credential ${this.uuid} as needs refresh. Reason: Auth Error ${status}`);
-                    poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API, {
-                        uuid: this.uuid
-                    });
+                    poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API, { uuid: this.uuid });
+                }
+                throw error;
+            }
+
+            if (this.isAuthError(error) && retryCount === 0) {
+                logger.warn(`[QwenApiService] Auth error (${status}). Triggering background refresh...`);
+                
+                const poolManager = getProviderPoolManager();
+                if (poolManager && this.uuid) {
+                    poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API, { uuid: this.uuid });
                     error.credentialMarkedUnhealthy = true;
                 }
 
-                // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
                 throw error;
             }
 
-            if ((status === 429 || (status >= 500 && status < 600)) && retryCount < maxRetries) {
+            if ((status === 429 || (status >= 500 && status < 600) || isRetryableNetworkError(error)) && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
-                logger.info(`[QwenApiService] Status ${status}. Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApiWithAuthAndRetry(endpoint, body, isStream, retryCount + 1);
-            }
-
-            // Handle network errors (ECONNRESET, ETIMEDOUT, etc.) with exponential backoff
-            if (isNetworkError && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                const errorIdentifier = errorCode || errorMessage.substring(0, 50);
-                logger.info(`[QwenApiService] Network error (${errorIdentifier}). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                logger.info(`[QwenApiService] Request failed (${status || errorCode}). Retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.callApiWithAuthAndRetry(endpoint, body, isStream, retryCount + 1);
             }
@@ -733,7 +828,7 @@ export class QwenApiService {
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
                 logger.info(`[Qwen] Token is near expiry, marking credential ${this.uuid} for refresh`);
-                poolManager.markProviderNeedRefresh(MODEL_PROVIDER.QWEN_API, {
+                poolManager.markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.QWEN_API, {
                     uuid: this.uuid
                 });
             }

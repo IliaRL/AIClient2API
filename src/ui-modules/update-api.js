@@ -6,6 +6,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { CONFIG } from '../core/config-manager.js';
 import { parseProxyUrl } from '../utils/proxy-utils.js';
+import { getRequestBody } from '../utils/common.js';
 
 const execAsync = promisify(exec);
 const GITHUB_REPO = 'justlovemaki/AIClient-2-API';
@@ -149,16 +150,16 @@ function compareVersions(v1, v2) {
 }
 
 /**
- * 通过 GitHub API 获取最新版本
- * @returns {Promise<string|null>} 最新版本号或 null
+ * 通过 GitHub API 获取最近的版本列表
+ * @param {number} limit - 限制返回的版本数量
+ * @returns {Promise<string[]>} 版本列表
  */
-async function getLatestVersionFromGitHub() {
+async function getVersionsFromGitHub(limit = 10) {
     const candidates = buildGitHubApiCandidates(GITHUB_REPO);
     
     for (const candidate of candidates) {
         try {
-            logger.info(`[Update] Fetching latest version from GitHub API via ${candidate.name}...`);
-            logger.info(`[Update] Request URL: ${candidate.url}`);
+            logger.info(`[Update] Fetching versions from GitHub API via ${candidate.name}...`);
             const response = await fetchWithProxy(candidate.url, {
                 headers: {
                     'Accept': 'application/vnd.github.v3+json',
@@ -189,15 +190,23 @@ async function getLatestVersionFromGitHub() {
             }
             
             versions.sort((a, b) => compareVersions(b, a));
-            logger.info(`[Update] Latest version fetched successfully via ${candidate.name}: ${versions[0]}`);
-            return versions[0];
+            return versions.slice(0, limit);
         } catch (error) {
-            logger.warn(`[Update] Failed to fetch latest version via ${candidate.name}: ${error.message}`);
+            logger.warn(`[Update] Failed to fetch versions via ${candidate.name}: ${error.message}`);
         }
     }
     
     logger.warn('[Update] All GitHub API proxy attempts failed');
-    return null;
+    return [];
+}
+
+/**
+ * 通过 GitHub API 获取最新版本
+ * @returns {Promise<string|null>} 最新版本号或 null
+ */
+async function getLatestVersionFromGitHub() {
+    const versions = await getVersionsFromGitHub(1);
+    return versions.length > 0 ? versions[0] : null;
 }
 
 /**
@@ -231,10 +240,11 @@ export async function checkForUpdates() {
     }
     
     let latestTag = null;
+    let availableVersions = [];
     let updateMethod = 'unknown';
     
     if (isGitRepo) {
-        // Git 仓库模式：使用 git 命令
+        // Git 仓库模式：使用 git命令
         updateMethod = 'git';
         
         // 获取远程 tags
@@ -244,45 +254,33 @@ export async function checkForUpdates() {
         } catch (error) {
             logger.warn('[Update] Failed to fetch tags via git, falling back to GitHub API:', error.message);
             // 如果 git fetch 失败，回退到 GitHub API
-            latestTag = await getLatestVersionFromGitHub();
+            availableVersions = await getVersionsFromGitHub(10);
+            latestTag = availableVersions.length > 0 ? availableVersions[0] : null;
             updateMethod = 'github_api';
         }
         
-        // 如果 git fetch 成功，获取最新的 tag
+        // 如果 git fetch 成功，获取最新的 tag 和可用的 tags
         if (!latestTag && updateMethod === 'git') {
-            const isWindows = process.platform === 'win32';
-            
             try {
-                if (isWindows) {
-                    // Windows: 使用 git for-each-ref，这是跨平台兼容的方式
-                    const { stdout } = await execAsync('git for-each-ref --sort=-v:refname --format="%(refname:short)" refs/tags --count=1');
-                    latestTag = stdout.trim();
-                } else {
-                    // Linux/macOS: 使用 head 命令，更高效
-                    const { stdout } = await execAsync('git tag --sort=-v:refname | head -n 1');
-                    latestTag = stdout.trim();
+                // 获取最近的 10 个 tag
+                const { stdout } = await execAsync('git tag --sort=-v:refname');
+                const tags = stdout.trim().split('\n').filter(t => t);
+                if (tags.length > 0) {
+                    availableVersions = tags.slice(0, 10);
+                    latestTag = availableVersions[0];
                 }
             } catch (error) {
-                // 备用方案：获取所有 tags 并在 JavaScript 中排序
-                try {
-                    const { stdout } = await execAsync('git tag');
-                    const tags = stdout.trim().split('\n').filter(t => t);
-                    if (tags.length > 0) {
-                        // 按版本号排序（降序）
-                        tags.sort((a, b) => compareVersions(b, a));
-                        latestTag = tags[0];
-                    }
-                } catch (e) {
-                    logger.warn('[Update] Failed to get latest tag via git, falling back to GitHub API:', e.message);
-                    latestTag = await getLatestVersionFromGitHub();
-                    updateMethod = 'github_api';
-                }
+                logger.warn('[Update] Failed to get tags via git, falling back to GitHub API:', error.message);
+                availableVersions = await getVersionsFromGitHub(10);
+                latestTag = availableVersions.length > 0 ? availableVersions[0] : null;
+                updateMethod = 'github_api';
             }
         }
     } else {
         // 非 Git 仓库模式（如 Docker 容器）：使用 GitHub API
         updateMethod = 'github_api';
-        latestTag = await getLatestVersionFromGitHub();
+        availableVersions = await getVersionsFromGitHub(10);
+        latestTag = availableVersions.length > 0 ? availableVersions[0] : null;
     }
     
     if (!latestTag) {
@@ -290,6 +288,7 @@ export async function checkForUpdates() {
             hasUpdate: false,
             localVersion,
             latestVersion: null,
+            availableVersions: [],
             updateMethod,
             error: 'Unable to get latest version information'
         };
@@ -305,6 +304,7 @@ export async function checkForUpdates() {
         hasUpdate,
         localVersion,
         latestVersion: latestTag,
+        availableVersions,
         updateMethod,
         error: null
     };
@@ -312,9 +312,10 @@ export async function checkForUpdates() {
 
 /**
  * 执行更新操作
+ * @param {string} targetTag - 目标版本 tag，如果未提供则更新到最新版本
  * @returns {Promise<Object>} 更新结果
  */
-export async function performUpdate() {
+export async function performUpdate(targetTag = null) {
     // 首先检查是否有更新
     const updateInfo = await checkForUpdates();
     
@@ -322,7 +323,12 @@ export async function performUpdate() {
         throw new Error(updateInfo.error);
     }
     
-    if (!updateInfo.hasUpdate) {
+    // 如果未提供 targetTag，使用最新版本
+    const latestTag = updateInfo.latestVersion;
+    const finalTag = targetTag || latestTag;
+    
+    // 如果是更新到最新版本，且当前已是最新版本
+    if (!targetTag && !updateInfo.hasUpdate) {
         return {
             success: true,
             message: 'Already at the latest version',
@@ -332,16 +338,25 @@ export async function performUpdate() {
         };
     }
     
-    const latestTag = updateInfo.latestVersion;
+    // 如果指定了 tag，但与本地版本相同
+    if (targetTag && (targetTag === updateInfo.localVersion || targetTag === `v${updateInfo.localVersion}`)) {
+        return {
+            success: true,
+            message: `Already at version ${targetTag}`,
+            localVersion: updateInfo.localVersion,
+            latestVersion: updateInfo.latestVersion,
+            updated: false
+        };
+    }
     
     // 检查更新方式 - 如果是通过 GitHub API 获取的版本信息，说明不在 Git 仓库中
     if (updateInfo.updateMethod === 'github_api') {
         // Docker/非 Git 环境，通过下载 tarball 更新
-        logger.info('[Update] Running in Docker/non-Git environment, will download and extract tarball');
-        return await performTarballUpdate(updateInfo.localVersion, latestTag);
+        logger.info(`[Update] Running in Docker/non-Git environment, will download and extract tarball for ${finalTag}`);
+        return await performTarballUpdate(updateInfo.localVersion, finalTag);
     }
     
-    logger.info(`[Update] Starting update to ${latestTag}...`);
+    logger.info(`[Update] Starting update to ${finalTag}...`);
     
     // 检查是否有未提交的更改
     try {
@@ -355,19 +370,19 @@ export async function performUpdate() {
         logger.warn('[Update] Failed to check git status:', error.message);
     }
     
-    // 执行 checkout 到最新 tag
+    // 执行 checkout 到目标 tag
     try {
-        logger.info(`[Update] Checking out to ${latestTag}...`);
-        await execAsync(`git checkout ${latestTag}`);
+        logger.info(`[Update] Checking out to ${finalTag}...`);
+        await execAsync(`git checkout ${finalTag}`);
     } catch (error) {
         logger.error('[Update] Failed to checkout:', error.message);
-        throw new Error('Failed to switch to new version: ' + error.message);
+        throw new Error(`Failed to switch to version ${finalTag}: ` + error.message);
     }
     
     // 更新 VERSION 文件（如果 tag 和 VERSION 文件不同步）
     const versionFilePath = path.join(process.cwd(), 'VERSION');
     try {
-        const newVersion = latestTag.replace(/^v/, '');
+        const newVersion = finalTag.replace(/^v/, '');
         writeFileSync(versionFilePath, newVersion, 'utf-8');
         logger.info(`[Update] VERSION file updated to ${newVersion}`);
     } catch (error) {
@@ -379,7 +394,7 @@ export async function performUpdate() {
     try {
         // 确保本地版本号有 v 前缀，以匹配 git tag 格式
         const localVersionTag = updateInfo.localVersion.startsWith('v') ? updateInfo.localVersion : `v${updateInfo.localVersion}`;
-        const { stdout: diffOutput } = await execAsync(`git diff ${localVersionTag}..${latestTag} --name-only`);
+        const { stdout: diffOutput } = await execAsync(`git diff ${localVersionTag}..${finalTag} --name-only`);
         if (diffOutput.includes('package.json') || diffOutput.includes('package-lock.json')) {
             logger.info('[Update] package.json changed, running npm install...');
             await execAsync('npm install');
@@ -389,13 +404,14 @@ export async function performUpdate() {
         logger.warn('[Update] Failed to check package changes:', error.message);
     }
     
-    logger.info(`[Update] Update completed successfully to ${latestTag}`);
+    logger.info(`[Update] Update completed successfully to ${finalTag}`);
     
     return {
         success: true,
-        message: `Successfully updated to version ${latestTag}`,
+        message: `Successfully updated to version ${finalTag}`,
         localVersion: updateInfo.localVersion,
         latestVersion: latestTag,
+        targetVersion: finalTag,
         updated: true,
         updateMethod: 'git',
         needsRestart: needsRestart,
@@ -626,7 +642,10 @@ export async function handleCheckUpdate(req, res) {
  */
 export async function handlePerformUpdate(req, res) {
     try {
-        const updateResult = await performUpdate();
+        const body = await getRequestBody(req);
+        const version = body?.version || null;
+        
+        const updateResult = await performUpdate(version);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(updateResult));
         return true;

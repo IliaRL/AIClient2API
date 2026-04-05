@@ -40,7 +40,6 @@ const ANTIGRAVITY_SYSTEM_PROMPT = `You are Antigravity, a powerful agentic AI co
 // Thinking 配置相关常量
 const DEFAULT_THINKING_MIN = 1024;
 const DEFAULT_THINKING_MAX = 100000;
-const FALLBACK_THINKING_SIGNATURE = "skip_thought_signature_validator_fallback";
 
 // 获取 Antigravity 模型列表
 const ANTIGRAVITY_MODELS = getProviderModels(MODEL_PROVIDER.ANTIGRAVITY);
@@ -676,23 +675,6 @@ function ensureRolesInContents(requestBody, modelName) {
                 content.role = 'user';
             }
             
-            // [FIX] 修复历史记录中的思考块，确保有签名 (messages.1.content.0.thinking.signature 报错修复)
-            if (content.parts && Array.isArray(content.parts)) {
-                content.parts.forEach(part => {
-                    if (part && part.thought === true) {
-                        if (!part.thoughtSignature && !part.thought_signature) {
-                            part.thoughtSignature = FALLBACK_THINKING_SIGNATURE;
-                        }
-                        
-                        // [FIX] 额外增加一个 'thinking' 对象以适配某些 Antigravity 内部验证逻辑
-                        if (!part.thinking) {
-                            part.thinking = {
-                                signature: part.thoughtSignature || part.thought_signature || FALLBACK_THINKING_SIGNATURE
-                            };
-                        }
-                    }
-                });
-            }
         });
     }
 

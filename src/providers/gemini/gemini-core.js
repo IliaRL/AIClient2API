@@ -287,8 +287,7 @@ export class GeminiApiService {
             maxFreeSockets: 5,
             timeout: 120000,
         });
-        
-        this.authClient = new OAuth2Client(oauth2Options);
+
         this.availableModels = [];
         this.isInitialized = false;
 
@@ -327,6 +326,8 @@ export class GeminiApiService {
                 logger.info('[Gemini] Using HTTP agent for OAuth2Client');
             }
         }
+
+        this.authClient = new OAuth2Client(oauth2Options);
     }
 
     async initialize() {

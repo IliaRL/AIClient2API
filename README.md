@@ -59,6 +59,16 @@
   </tr>
   <tr>
     <td width="25%" align="center" valign="middle">
+      <a href="https://poixe.com/i/ebmvga">
+        <img src="static/poixeai.png" alt="Poixe AI Sponsor" width="180">
+      </a>
+    </td>
+    <td width="75%" align="left" valign="middle">
+      Poixe AI provides reliable LLM API services. You can leverage the platform's API endpoints to seamlessly build AI-powered products. Additionally, you can become a vendor by providing AI API resources to the platform and earn revenue. <a href="https://poixe.com/i/ebmvga">Register through the exclusive AIClient-2-API referral link</a> and receive a bonus of <strong>$5 USD</strong> on your first top-up.
+    </td>
+  </tr>
+  <tr>
+    <td width="25%" align="center" valign="middle">
       <img src="static/wechat.png" alt="Sponsor Contact" width="150">
     </td>
     <td width="75%" align="left" valign="middle">
