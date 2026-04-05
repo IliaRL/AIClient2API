@@ -3,8 +3,6 @@ node_modules
 .claude/
 CLAUDE.md
 config.json
-configs/pwd
-configs/provider_pools.json
 provider_pools.json
 plugins.json
 fetch_system_prompt.txt
