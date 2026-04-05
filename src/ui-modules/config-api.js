@@ -114,7 +114,7 @@ export async function handleUpdateConfig(req, res, currentConfig) {
 
         // Update config values in memory（含类型校验）
         if (newConfig.REQUIRED_API_KEY !== undefined) {
-            if (typeof newConfig.REQUIRED_API_KEY === 'string') currentConfig.REQUIRED_API_KEY = newConfig.REQUIRED_API_KEY;
+            if (typeof newConfig.REQUIRED_API_KEY === 'string' && newConfig.REQUIRED_API_KEY !== '******') currentConfig.REQUIRED_API_KEY = newConfig.REQUIRED_API_KEY;
         }
         if (newConfig.HOST !== undefined) {
             if (typeof newConfig.HOST === 'string' && newConfig.HOST.length > 0) currentConfig.HOST = newConfig.HOST;
