@@ -100,6 +100,17 @@ function getConfiguredSupportedModels(providerType, providerConfig = {}) {
     )].sort((a, b) => a.localeCompare(b));
 }
 
+function getConfiguredSupportedModelsFromPool(providerPoolManager, providerType) {
+    if (!providerPoolManager?.providerStatus?.[providerType]) {
+        return [];
+    }
+
+    return [...new Set(
+        providerPoolManager.providerStatus[providerType]
+            .flatMap(providerStatus => getConfiguredSupportedModels(providerType, providerStatus.config))
+    )].sort((a, b) => a.localeCompare(b));
+}
+
 /**
  * Extracts the protocol prefix from a given model provider string.
  * This is used to determine if two providers belong to the same underlying protocol (e.g., gemini, openai, claude).
@@ -882,7 +893,10 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         } else {
             // --- 单提供商逻辑 ---
             const toProvider = CONFIG.MODEL_PROVIDER;
-            const configuredSupportedModels = getConfiguredSupportedModels(toProvider, CONFIG);
+            const pooledSupportedModels = getConfiguredSupportedModelsFromPool(providerPoolManager, toProvider);
+            const configuredSupportedModels = pooledSupportedModels.length > 0
+                ? pooledSupportedModels
+                : getConfiguredSupportedModels(toProvider, CONFIG);
 
             if (usesManagedModelList(toProvider) && configuredSupportedModels.length > 0) {
                 logger.info(`[ModelList] Returning configured supported models for ${toProvider}: ${configuredSupportedModels.join(', ')}`);
