@@ -264,8 +264,6 @@ export class GrokConverter extends BaseConverter {
                 return this.toOpenAIResponsesResponse(data, model);
             case MODEL_PROTOCOL_PREFIX.CODEX:
                 return this.toCodexResponse(data, model);
-            case MODEL_PROTOCOL_PREFIX.CLAUDE:
-                return this.toClaudeResponse(data, model);
             default:
                 return data;
         }
@@ -276,8 +274,6 @@ export class GrokConverter extends BaseConverter {
      */
     convertStreamChunk(chunk, targetProtocol, model) {
         switch (targetProtocol) {
-            case MODEL_PROTOCOL_PREFIX.CLAUDE:
-                return this.toClaudeStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.OPENAI:
                 return this.toOpenAIStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.GEMINI:
@@ -1139,76 +1135,6 @@ export class GrokConverter extends BaseConverter {
                     output_tokens: openaiRes.usage.completion_tokens,
                     total_tokens: openaiRes.usage.total_tokens
                 }
-            }
-        };
-    }
-
-    /**
-     * Grok响应 -> Claude响应 (通过OpenAI中转)
-     */
-    toClaudeResponse(grokResponse, model) {
-        const openaiRes = this.toOpenAIResponse(grokResponse, model);
-        if (!openaiRes) {
-            return {
-                id: `msg_${uuidv4()}`,
-                type: "message",
-                role: "assistant",
-                content: [],
-                model: model,
-                stop_reason: "end_turn",
-                stop_sequence: null,
-                usage: { input_tokens: 0, output_tokens: 0 }
-            };
-        }
-
-        const choice = openaiRes.choices?.[0] || {};
-        const message = choice.message || {};
-        const contentList = [];
-
-        // 工具调用
-        const toolCalls = message.tool_calls || message.function_calls || [];
-        for (const tc of (toolCalls || [])) {
-            if (tc.function) {
-                let argObj;
-                try {
-                    argObj = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments;
-                } catch (e) {
-                    argObj = {};
-                }
-                contentList.push({
-                    type: "tool_use",
-                    id: tc.id || `toolu_${uuidv4().slice(0, 8)}`,
-                    name: tc.function.name || "",
-                    input: argObj
-                });
-            }
-        }
-
-        // 文本内容
-        const text = message.content || "";
-        if (text) {
-            contentList.push({ type: "text", text });
-        }
-
-        // 空内容兜底
-        if (contentList.length === 0) {
-            contentList.push({ type: "text", text: "" });
-        }
-
-        const finishReason = choice.finish_reason || "stop";
-        const stopReason = finishReason === "stop" ? "end_turn" : finishReason === "length" ? "max_tokens" : finishReason === "tool_calls" ? "tool_use" : finishReason;
-
-        return {
-            id: `msg_${uuidv4()}`,
-            type: "message",
-            role: "assistant",
-            content: contentList,
-            model: choice.model || model,
-            stop_reason: stopReason,
-            stop_sequence: null,
-            usage: {
-                input_tokens: openaiRes.usage?.prompt_tokens || 0,
-                output_tokens: openaiRes.usage?.completion_tokens || 0
             }
         };
     }

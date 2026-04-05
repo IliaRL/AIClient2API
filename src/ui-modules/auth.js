@@ -115,55 +115,31 @@ function getExpiryTime() {
 
 /**
  * 读取token存储文件
- * 安全增强：读取失败时抛出异常而非返回空对象，防止数据覆盖
  */
 async function readTokenStore() {
-    if (existsSync(TOKEN_STORE_FILE)) {
-        const content = await fs.readFile(TOKEN_STORE_FILE, 'utf8');
-        return JSON.parse(content);
-    } else {
-        // 如果文件不存在，创建一个默认的token store
+    try {
+        if (existsSync(TOKEN_STORE_FILE)) {
+            const content = await fs.readFile(TOKEN_STORE_FILE, 'utf8');
+            return JSON.parse(content);
+        } else {
+            // 如果文件不存在，创建一个默认的token store
+            await writeTokenStore({ tokens: {} });
+            return { tokens: {} };
+        }
+    } catch (error) {
+        logger.error('[Token Store] Failed to read token store file:', error);
         return { tokens: {} };
     }
 }
 
 /**
  * 写入token存储文件
- * 安全增强：
- * 1. 写前校验：禁止写入空tokens（防数据丢失）
- * 2. 原子写入：先写临时文件再rename，防止断电/崩溃导致文件截断
  */
 async function writeTokenStore(tokenStore) {
-    // 写前校验：如果tokens为空且文件已有数据，拒绝写入（防意外清空）
-    if (!tokenStore || !tokenStore.tokens || Object.keys(tokenStore.tokens).length === 0) {
-        if (existsSync(TOKEN_STORE_FILE)) {
-            try {
-                const existing = await fs.readFile(TOKEN_STORE_FILE, 'utf8');
-                const parsed = JSON.parse(existing);
-                const existingCount = parsed.tokens ? Object.keys(parsed.tokens).length : 0;
-                if (existingCount > 0) {
-                    logger.error('[Token Store] REJECTED write: attempting to overwrite ' + existingCount + ' tokens with empty data. Possible data corruption detected.');
-                    return false;
-                }
-            } catch (e) {
-                logger.error('[Token Store] Failed to check existing token store before write:', e.message);
-                return false;
-            }
-        }
-    }
-
     try {
-        const data = JSON.stringify(tokenStore, null, 2);
-        const tmpPath = TOKEN_STORE_FILE + '.tmp';
-        // 原子写入：先写临时文件，再rename
-        await fs.writeFile(tmpPath, data, 'utf8');
-        await fs.rename(tmpPath, TOKEN_STORE_FILE);
-        return true;
+        await fs.writeFile(TOKEN_STORE_FILE, JSON.stringify(tokenStore, null, 2), 'utf8');
     } catch (error) {
         logger.error('[Token Store] Failed to write token store file:', error);
-        // 清理可能残留的临时文件
-        try { await fs.unlink(TOKEN_STORE_FILE + '.tmp'); } catch {} 
-        return false;
     }
 }
 
@@ -437,29 +413,7 @@ export async function handleLoginRequest(req, res) {
     return true;
 }
 
-// 定时清理过期token（带防护：清理后必须仍有≥1个字段，否则不写入）
-setInterval(async () => {
-    try {
-        const tokenStore = await readTokenStore();
-        const existingCount = tokenStore.tokens ? Object.keys(tokenStore.tokens).length : 0;
-        const now = Date.now();
-        let hasChanges = false;
-
-        for (const token in tokenStore.tokens) {
-            if (now > tokenStore.tokens[token].expiryTime) {
-                delete tokenStore.tokens[token];
-                hasChanges = true;
-            }
-        }
-
-        // 防护：只有非首次运行+有变更时才写入（避免首次启动读不到旧文件时空写）
-        if (hasChanges && existingCount > 0) {
-            await writeTokenStore(tokenStore);
-            logger.info(`[Token Store] Cleaned up expired tokens. Before: ${existingCount}`);
-        }
-    } catch (error) {
-        logger.error('[Token Store] Cleanup interval error:', error.message);
-    }
-}, 5 * 60 * 1000); // 每5分钟清理一次
+// 定时清理过期token
+setInterval(cleanupExpiredTokens, 5 * 60 * 1000); // 每5分钟清理一次
 
 
