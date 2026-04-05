@@ -3108,6 +3108,8 @@ async function checkUpdate(silent = false) {
     const updateBtn = document.getElementById('performUpdateBtn');
     const updateBadge = document.getElementById('updateBadge');
     const latestVersionText = document.getElementById('latestVersionText');
+    const versionSelectWrapper = document.getElementById('versionSelectWrapper');
+    const versionSelect = document.getElementById('versionSelect');
     const checkBtnIcon = checkBtn?.querySelector('i');
     const checkBtnText = checkBtn?.querySelector('span');
 
@@ -3120,16 +3122,46 @@ async function checkUpdate(silent = false) {
 
         const data = await window.apiClient.get('/check-update');
 
+        // 处理版本列表
+        if (versionSelect && data.availableVersions && data.availableVersions.length > 0) {
+            versionSelect.innerHTML = '';
+            data.availableVersions.forEach(version => {
+                const option = document.createElement('option');
+                option.value = version;
+                option.textContent = version;
+                // 如果是最新版本，增加标识
+                if (version === data.latestVersion) {
+                    option.textContent += ` (${t('dashboard.update.latest') || 'Latest'})`;
+                }
+                // 如果是当前版本，增加标识
+                if (version === data.localVersion || version === `v${data.localVersion}`) {
+                    option.textContent += ` (${t('dashboard.update.current') || 'Current'})`;
+                    option.selected = true;
+                }
+                versionSelect.appendChild(option);
+            });
+            
+            if (versionSelectWrapper) versionSelectWrapper.style.display = 'block';
+            if (updateBtn) {
+                updateBtn.style.display = 'inline-flex';
+                // 如果是回退，修改按钮文字
+                updateBtn.querySelector('span').textContent = t('dashboard.update.perform');
+            }
+        }
+
         if (data.hasUpdate) {
-            if (updateBtn) updateBtn.style.display = 'inline-flex';
             if (updateBadge) updateBadge.style.display = 'inline-flex';
             if (latestVersionText) latestVersionText.textContent = data.latestVersion;
             
+            // 如果有新版本且未选择特定版本，默认选中最新
+            if (versionSelect && data.latestVersion) {
+                versionSelect.value = data.latestVersion;
+            }
+
             if (!silent) {
                 showToast(t('common.info'), t('dashboard.update.hasUpdate', { version: data.latestVersion }), 'info');
             }
         } else {
-            if (updateBtn) updateBtn.style.display = 'none';
             if (updateBadge) updateBadge.style.display = 'none';
             if (!silent) {
                 showToast(t('common.info'), t('dashboard.update.upToDate'), 'success');
@@ -3154,10 +3186,10 @@ async function checkUpdate(silent = false) {
  */
 async function performUpdate() {
     const updateBtn = document.getElementById('performUpdateBtn');
-    const latestVersionText = document.getElementById('latestVersionText');
-    const version = latestVersionText?.textContent || '';
+    const versionSelect = document.getElementById('versionSelect');
+    const selectedVersion = versionSelect?.value || '';
 
-    if (!confirm(t('dashboard.update.confirmMsg', { version }))) {
+    if (!confirm(t('dashboard.update.confirmMsg', { version: selectedVersion }))) {
         return;
     }
 
@@ -3173,7 +3205,7 @@ async function performUpdate() {
 
         showToast(t('common.info'), t('dashboard.update.updating'), 'info');
 
-        const data = await window.apiClient.post('/update');
+        const data = await window.apiClient.post('/update', { version: selectedVersion });
 
         if (data.success) {
             if (data.updated) {
@@ -3183,8 +3215,8 @@ async function performUpdate() {
                 // 自动重启服务
                 await restartServiceAfterUpdate();
             } else {
-                // 已是最新版本
-                showToast(t('common.info'), t('dashboard.update.upToDate'), 'info');
+                // 已是目标版本
+                showToast(t('common.info'), data.message || t('dashboard.update.upToDate'), 'info');
             }
         }
     } catch (error) {

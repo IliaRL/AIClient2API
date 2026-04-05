@@ -563,7 +563,8 @@ export async function getProviderStatus(config, options = {}) {
         'customName',
         'isHealthy',
         'lastErrorTime',
-        'lastErrorMessage'
+        'lastErrorMessage',
+        'needsRefresh'
     ];
     // identify 字段映射表
     const identifyFieldMap = {

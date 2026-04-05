@@ -18,7 +18,7 @@ function sanitizeProviderData(provider, maskSensitive = false) {
     if (maskSensitive) {
         for (const key in sanitized) {
             // 排除已知非敏感字段
-            if (key === 'uuid' || key === 'customName' || key === 'isHealthy' || key === 'isDisabled') continue;
+            if (key === 'uuid' || key === 'customName' || key === 'isHealthy' || key === 'isDisabled' || key === 'needsRefresh') continue;
             
             const val = sanitized[key];
             if (typeof val !== 'string' || !val) continue;
@@ -138,8 +138,18 @@ export async function handleGetProviders(req, res, currentConfig, providerPoolMa
             const poolsData = JSON.parse(readFileSync(filePath, 'utf-8'));
             poolTypes = Object.keys(poolsData);
             poolTypes.forEach(type => {
-                if (!providerStatus[type]) {
-                    providerStatus[type] = [];
+                // 如果管理器中没有该组，或者该组是空的，则从文件中补全
+                if (!providerStatus[type] || providerStatus[type].length === 0) {
+                    const fileProviders = poolsData[type] || [];
+                    if (fileProviders.length > 0) {
+                        providerStatus[type] = fileProviders.map(p => ({
+                            ...p,
+                            activeRequests: 0,
+                            waitingRequests: 0
+                        }));
+                    } else if (!providerStatus[type]) {
+                        providerStatus[type] = [];
+                    }
                 }
             });
         }

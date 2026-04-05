@@ -41,6 +41,11 @@
         <div class="system-info-header">
             <h3 data-i18n="dashboard.systemInfo">系统信息</h3>
             <div class="update-controls">
+                <div id="versionSelectWrapper" style="display: none; margin-right: 8px;">
+                    <select id="versionSelect" class="form-control select-sm" style="height: 32px; padding: 0 8px; font-size: 13px; min-width: 120px;">
+                        <!-- Versions will be loaded here -->
+                    </select>
+                </div>
                 <button id="checkUpdateBtn" class="btn btn-outline btn-sm" data-i18n-title="dashboard.update.checkTitle" title="检查更新">
                     <i class="fas fa-sync-alt"></i> <span data-i18n="dashboard.update.check">检查更新</span>
                 </button>

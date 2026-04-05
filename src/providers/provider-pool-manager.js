@@ -72,6 +72,7 @@ export class ProviderPoolManager {
         this.refreshBufferQueues = {}; // 按 providerType 分组的缓冲队列
         this.refreshBufferTimers = {}; // 按 providerType 分组的定时器
         this.bufferDelay = options.globalConfig?.REFRESH_BUFFER_DELAY ?? 5000; // 默认5秒缓冲延迟
+        this.refreshTaskTimeoutMs = options.globalConfig?.REFRESH_TASK_TIMEOUT_MS ?? 60000; // 默认60秒刷新超时
         
         // 用于并发选点时的原子排序辅助（自增序列）
         this._selectionSequence = 0;
@@ -183,6 +184,12 @@ export class ProviderPoolManager {
      */
     _enqueueRefresh(providerType, providerStatus, force = false) {
         const uuid = providerStatus.uuid;
+        
+        // 如果节点被禁用，不进行刷新
+        if (providerStatus.config.isDisabled) {
+            this._log('debug', `Skipping refresh for disabled node ${uuid}`);
+            return;
+        }
         
         // 如果已经在刷新中，直接返回
         if (this.refreshingUuids.has(uuid)) {
@@ -405,16 +412,18 @@ export class ProviderPoolManager {
             // 调用适配器的 refreshToken 方法（内部封装了具体的刷新逻辑）
             if (typeof serviceAdapter.refreshToken === 'function') {
                 const startTime = Date.now();
+                let refreshOperation;
                 if (force) {
                     if (typeof serviceAdapter.forceRefreshToken === 'function') {
-                        await serviceAdapter.forceRefreshToken();
+                        refreshOperation = serviceAdapter.forceRefreshToken();
                     } else {
                         this._log('warn', `forceRefreshToken not implemented for ${providerType}, falling back to refreshToken`);
-                        await serviceAdapter.refreshToken();
+                        refreshOperation = serviceAdapter.refreshToken();
                     }
                 } else {
-                    await serviceAdapter.refreshToken();
+                    refreshOperation = serviceAdapter.refreshToken();
                 }
+                await this._awaitRefreshWithTimeout(refreshOperation, providerType, providerStatus.uuid);
                 const duration = Date.now() - startTime;
                 this._log('info', `Token refresh successful for node ${providerStatus.uuid} (Duration: ${duration}ms)`);
                 
@@ -422,6 +431,8 @@ export class ProviderPoolManager {
                 config.needsRefresh = false;
                 config.refreshCount = 0;
                 config.lastRefreshTime = Date.now(); // 记录最后刷新成功时间
+                
+                this._debouncedSave(providerType);
             } else {
                 throw new Error(`refreshToken method not implemented for ${providerType}`);
             }
@@ -430,6 +441,31 @@ export class ProviderPoolManager {
             this._log('error', `Token refresh failed for node ${providerStatus.uuid}: ${error.message}`);
             this.markProviderUnhealthyImmediately(providerType, config, `Refresh failed: ${error.message}`);
             throw error;
+        }
+    }
+
+    /**
+     * 为刷新任务附加超时保护，避免单个适配器调用无限挂起。
+     * @private
+     */
+    async _awaitRefreshWithTimeout(refreshOperation, providerType, uuid) {
+        if (this.refreshTaskTimeoutMs <= 0) {
+            return await refreshOperation;
+        }
+
+        let timeoutId = null;
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => {
+                reject(new Error(`Refresh timeout after ${this.refreshTaskTimeoutMs}ms for node ${uuid} (${providerType})`));
+            }, this.refreshTaskTimeoutMs);
+        });
+
+        try {
+            return await Promise.race([Promise.resolve(refreshOperation), timeoutPromise]);
+        } finally {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
         }
     }
 
@@ -627,6 +663,7 @@ export class ProviderPoolManager {
      */
     initializeProviderStatus() {
         const oldFullStatus = this.providerStatus || {};
+        const isColdStart = Object.keys(oldFullStatus).length === 0;
         this.providerStatus = {}; // Tracks health and usage for each provider instance
         for (const providerType in this.providerPools) {
             const oldStatus = oldFullStatus[providerType] || [];
@@ -652,8 +689,13 @@ export class ProviderPoolManager {
                     providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
                     
                     // --- V2: 刷新监控字段 ---
-                    providerConfig.needsRefresh = providerConfig.needsRefresh !== undefined ? providerConfig.needsRefresh : false;
-                    providerConfig.refreshCount = providerConfig.refreshCount !== undefined ? providerConfig.refreshCount : 0;
+                    const persistedNeedsRefresh = providerConfig.needsRefresh !== undefined ? providerConfig.needsRefresh : false;
+                    const persistedRefreshCount = providerConfig.refreshCount !== undefined ? providerConfig.refreshCount : 0;
+                    if (isColdStart && (persistedNeedsRefresh || persistedRefreshCount > 0)) {
+                        this._log('info', `Resetting stale refresh state for provider ${providerConfig.uuid} (${providerType}) on startup.`);
+                    }
+                    providerConfig.needsRefresh = isColdStart ? false : persistedNeedsRefresh;
+                    providerConfig.refreshCount = isColdStart ? 0 : persistedRefreshCount;
                     
                     // 优化2: 简化 lastErrorTime 处理逻辑
                     providerConfig.lastErrorTime = providerConfig.lastErrorTime instanceof Date
@@ -680,6 +722,9 @@ export class ProviderPoolManager {
                     logger.error(`[ProviderPoolManager] Error initializing node for ${providerType}: ${nodeError.message}`);
                 }
             });
+            
+            // 确保初始化时的默认值补全也能写盘
+            this._debouncedSave(providerType);
         }
         this._log('info', `Initialized provider statuses: ok (maxErrorCount: ${this.maxErrorCount})`);
     }

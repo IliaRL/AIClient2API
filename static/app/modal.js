@@ -370,6 +370,7 @@ function renderProviderList(providers) {
         const toggleButtonText = isDisabled ? t('modal.provider.enabled') : t('modal.provider.disabled');
         const toggleButtonIcon = isDisabled ? 'fas fa-play' : 'fas fa-ban';
         const toggleButtonClass = isDisabled ? 'btn-success' : 'btn-warning';
+        const needsRefresh = !!provider.needsRefresh;
         
         // 构建错误信息显示
         let errorInfoHtml = '';
@@ -388,7 +389,10 @@ function renderProviderList(providers) {
             <div class="provider-item-detail ${healthClass} ${disabledClass}" data-uuid="${provider.uuid}">
                 <div class="provider-item-header" onclick="window.toggleProviderDetails('${provider.uuid}')">
                     <div class="provider-info">
-                        <div class="provider-name">${provider.customName || provider.uuid}</div>
+                        <div class="provider-name">
+                            ${provider.customName || provider.uuid}
+                            ${needsRefresh ? `<span class="badge badge-warning" style="font-size: 10px; margin-left: 8px; vertical-align: middle;"><i class="fas fa-sync-alt fa-spin"></i> <span data-i18n="providers.status.needsRefresh">${t('providers.status.needsRefresh')}</span></span>` : ''}
+                        </div>
                         <div class="provider-meta">
                             <span class="health-status">
                                 <i class="${healthIcon}"></i>
