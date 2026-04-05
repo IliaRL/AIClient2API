@@ -375,7 +375,7 @@ function renderProviders(providers, supportedProviders = []) {
                     async (suffix) => {
                         const cleanSuffix = suffix.toLowerCase().replace(/[^a-z0-9]/g, '');
                         if (!cleanSuffix) {
-                            showToast(t('common.warning'), '请输入有效的后缀（仅限字母和数字）', 'warning');
+                            showToast(t('common.warning'), t('common.invalidSuffix'), 'warning');
                             return;
                         }
                         
@@ -3337,7 +3337,7 @@ function showAddProviderGroupModal(defaultBaseType = null) {
         const suffix = suffixInput.value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
         
         if (!suffix) {
-            showToast(t('common.warning'), '请输入有效的后缀（仅限字母和数字）', 'warning');
+            showToast(t('common.warning'), t('common.invalidSuffix'), 'warning');
             return;
         }
         

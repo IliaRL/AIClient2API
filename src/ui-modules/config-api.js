@@ -114,7 +114,12 @@ export async function handleUpdateConfig(req, res, currentConfig) {
 
         // Update config values in memory（含类型校验）
         if (newConfig.REQUIRED_API_KEY !== undefined) {
-            if (typeof newConfig.REQUIRED_API_KEY === 'string') currentConfig.REQUIRED_API_KEY = newConfig.REQUIRED_API_KEY;
+            if (typeof newConfig.REQUIRED_API_KEY === 'string') {
+                // 如果是脱敏后的字符串，则忽略更新，保留原值
+                if (newConfig.REQUIRED_API_KEY !== '******') {
+                    currentConfig.REQUIRED_API_KEY = newConfig.REQUIRED_API_KEY;
+                }
+            }
         }
         if (newConfig.HOST !== undefined) {
             if (typeof newConfig.HOST === 'string' && newConfig.HOST.length > 0) currentConfig.HOST = newConfig.HOST;
@@ -401,13 +406,23 @@ export async function handleUpdateAdminPassword(req, res) {
 
         if (!password || password.trim() === '') {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'Password cannot be empty' } }));
+            res.end(JSON.stringify({ 
+                error: { 
+                    message: 'Password cannot be empty',
+                    messageCode: 'common.passwordEmpty'
+                } 
+            }));
             return true;
         }
 
         if (password.trim().length < PASSWORD.MIN_LENGTH) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: `Password must be at least ${PASSWORD.MIN_LENGTH} characters` } }));
+            res.end(JSON.stringify({ 
+                error: { 
+                    message: `Password must be at least ${PASSWORD.MIN_LENGTH} characters`,
+                    messageCode: 'common.passwordTooShort'
+                } 
+            }));
             return true;
         }
 

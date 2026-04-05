@@ -269,14 +269,21 @@ async function scanProviderDirectory(dirPath, linkedPaths, newProviders, options
  */
 export async function initApiService(config, isReady = false) {
 
-    if (config.providerPools && Object.keys(config.providerPools).length > 0) {
-        providerPoolManager = new ProviderPoolManager(config.providerPools, {
+    // Initialize or update ProviderPoolManager
+    if (providerPoolManager) {
+        providerPoolManager.providerPools = config.providerPools || {};
+        providerPoolManager.initializeProviderStatus();
+        logger.info('[Initialization] ProviderPoolManager existing instance updated.');
+    } else {
+        providerPoolManager = new ProviderPoolManager(config.providerPools || {}, {
             globalConfig: config,
-            maxErrorCount: config.MAX_ERROR_COUNT ?? 3,
+            maxErrorCount: config.MAX_ERROR_COUNT ?? 10,
             providerFallbackChain: config.providerFallbackChain || {},
         });
-        logger.info('[Initialization] ProviderPoolManager initialized with configured pools.');
+        logger.info('[Initialization] ProviderPoolManager initialized.');
+    }
 
+    if (config.providerPools && Object.keys(config.providerPools).length > 0) {
         if(isReady){
             // --- V2: 触发系统预热 ---
             // 预热逻辑是异步的，不会阻塞服务器启动
@@ -289,10 +296,8 @@ export async function initApiService(config, isReady = false) {
                 logger.error(`[Initialization] Check and refresh expiring nodes failed: ${err.message}`);
             });
         }
-
-        // 健康检查将在服务器完全启动后执行
     } else {
-        logger.info('[Initialization] No provider pools configured. Using single provider mode.');
+        logger.info('[Initialization] Provider pools are currently empty.');
     }
 
     // Initialize all provider pool nodes at startup
@@ -302,9 +307,17 @@ export async function initApiService(config, isReady = false) {
         let totalFailed = 0;
         
         for (const [providerType, providerConfigs] of Object.entries(config.providerPools)) {
-            // 验证提供商类型是否在 DEFAULT_MODEL_PROVIDERS 中
-            if (config.DEFAULT_MODEL_PROVIDERS && Array.isArray(config.DEFAULT_MODEL_PROVIDERS)) {
-                if (!config.DEFAULT_MODEL_PROVIDERS.includes(providerType)) {
+            // 验证提供商类型是否有效且被包含在 DEFAULT_MODEL_PROVIDERS 中
+            // 如果没设置 DEFAULT_MODEL_PROVIDERS，则允许所有已注册的类型
+            const isDefaultProvider = !config.DEFAULT_MODEL_PROVIDERS || 
+                                     (Array.isArray(config.DEFAULT_MODEL_PROVIDERS) && config.DEFAULT_MODEL_PROVIDERS.includes(providerType));
+            
+            if (!isDefaultProvider) {
+                // 进一步检查是否是注册提供商的变体（带后缀）
+                const isVariantOfDefault = Array.isArray(config.DEFAULT_MODEL_PROVIDERS) && 
+                                          config.DEFAULT_MODEL_PROVIDERS.some(p => providerType.startsWith(p + '-'));
+                
+                if (!isVariantOfDefault) {
                     logger.info(`[Initialization] Skipping provider type '${providerType}' (not in DEFAULT_MODEL_PROVIDERS).`);
                     continue;
                 }

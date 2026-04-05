@@ -626,50 +626,59 @@ export class ProviderPoolManager {
      * Initially, all providers are considered healthy and have zero usage.
      */
     initializeProviderStatus() {
+        const oldFullStatus = this.providerStatus || {};
+        this.providerStatus = {}; // Tracks health and usage for each provider instance
         for (const providerType in this.providerPools) {
-            const oldStatus = this.providerStatus[providerType] || [];
+            const oldStatus = oldFullStatus[providerType] || [];
             this.providerStatus[providerType] = [];
             this.roundRobinIndex[providerType] = 0; // Initialize round-robin index for each type
             // 只有在锁不存在时才初始化，避免在运行中被重置导致并发问题
             if (!this._selectionLocks[providerType]) {
                 this._selectionLocks[providerType] = Promise.resolve();
             }
-            this.providerPools[providerType].forEach((providerConfig) => {
-                // 尝试从旧状态中恢复活跃请求计数和队列，避免重载配置时重置并发限制
-                const existing = oldStatus.find(p => p.uuid === providerConfig.uuid);
+            
+            const pool = this.providerPools[providerType];
+            
+            pool.forEach((providerConfig) => {
+                try {
+                    // 尝试从旧状态中恢复活跃请求计数和队列，避免重载配置时重置并发限制
+                    const existing = oldStatus.find(p => p.uuid === providerConfig.uuid);
 
-                // Ensure initial health and usage stats are present in the config
-                providerConfig.isHealthy = providerConfig.isHealthy !== undefined ? providerConfig.isHealthy : true;
-                providerConfig.isDisabled = providerConfig.isDisabled !== undefined ? providerConfig.isDisabled : false;
-                providerConfig.lastUsed = providerConfig.lastUsed !== undefined ? providerConfig.lastUsed : null;
-                providerConfig.usageCount = providerConfig.usageCount !== undefined ? providerConfig.usageCount : 0;
-                providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
-                
-                // --- V2: 刷新监控字段 ---
-                providerConfig.needsRefresh = providerConfig.needsRefresh !== undefined ? providerConfig.needsRefresh : false;
-                providerConfig.refreshCount = providerConfig.refreshCount !== undefined ? providerConfig.refreshCount : 0;
-                
-                // 优化2: 简化 lastErrorTime 处理逻辑
-                providerConfig.lastErrorTime = providerConfig.lastErrorTime instanceof Date
-                    ? providerConfig.lastErrorTime.toISOString()
-                    : (providerConfig.lastErrorTime || null);
-                
-                // 健康检测相关字段
-                providerConfig.lastHealthCheckTime = providerConfig.lastHealthCheckTime || null;
-                providerConfig.lastHealthCheckModel = providerConfig.lastHealthCheckModel || null;
-                providerConfig.lastErrorMessage = providerConfig.lastErrorMessage || null;
-                providerConfig.customName = providerConfig.customName || null;
+                    // Ensure initial health and usage stats are present in the config
+                    providerConfig.isHealthy = providerConfig.isHealthy !== undefined ? providerConfig.isHealthy : true;
+                    providerConfig.isDisabled = providerConfig.isDisabled !== undefined ? providerConfig.isDisabled : false;
+                    providerConfig.lastUsed = providerConfig.lastUsed !== undefined ? providerConfig.lastUsed : null;
+                    providerConfig.usageCount = providerConfig.usageCount !== undefined ? providerConfig.usageCount : 0;
+                    providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
+                    
+                    // --- V2: 刷新监控字段 ---
+                    providerConfig.needsRefresh = providerConfig.needsRefresh !== undefined ? providerConfig.needsRefresh : false;
+                    providerConfig.refreshCount = providerConfig.refreshCount !== undefined ? providerConfig.refreshCount : 0;
+                    
+                    // 优化2: 简化 lastErrorTime 处理逻辑
+                    providerConfig.lastErrorTime = providerConfig.lastErrorTime instanceof Date
+                        ? providerConfig.lastErrorTime.toISOString()
+                        : (providerConfig.lastErrorTime || null);
+                    
+                    // 健康检测相关字段
+                    providerConfig.lastHealthCheckTime = providerConfig.lastHealthCheckTime || null;
+                    providerConfig.lastHealthCheckModel = providerConfig.lastHealthCheckModel || null;
+                    providerConfig.lastErrorMessage = providerConfig.lastErrorMessage || null;
+                    providerConfig.customName = providerConfig.customName || null;
 
-                this.providerStatus[providerType].push({
-                    config: providerConfig,
-                    uuid: providerConfig.uuid, // Still keep uuid at the top level for easy access
-                    type: providerType, // 保存 providerType 引用
-                    state: existing ? existing.state : {
-                        activeCount: 0,
-                        waitingCount: 0,
-                        queue: []
-                    }
-                });
+                    this.providerStatus[providerType].push({
+                        config: providerConfig,
+                        uuid: providerConfig.uuid, // Still keep uuid at the top level for easy access
+                        type: providerType, // 保存 providerType 引用
+                        state: existing ? existing.state : {
+                            activeCount: 0,
+                            waitingCount: 0,
+                            queue: []
+                        }
+                    });
+                } catch (nodeError) {
+                    logger.error(`[ProviderPoolManager] Error initializing node for ${providerType}: ${nodeError.message}`);
+                }
             });
         }
         this._log('info', `Initialized provider statuses: ok (maxErrorCount: ${this.maxErrorCount})`);

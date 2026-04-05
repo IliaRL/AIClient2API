@@ -27,7 +27,7 @@ function initEventListeners() {
             try {
                 const token = window.authManager.getToken();
                 if (!token) {
-                    showToast(t('common.error'), '请先登录', 'error');
+                    showToast(t('common.error'), t('common.loginRequired'), 'error');
                     return;
                 }
                 
@@ -41,7 +41,7 @@ function initEventListeners() {
                 });
                 
                 if (response.status === 401) {
-                    showToast(t('common.error'), '认证失败，请重新登录', 'error');
+                    showToast(t('common.error'), t('common.unauthorized'), 'error');
                     window.authManager.clearToken();
                     window.location.href = '/login.html';
                     return;
@@ -79,7 +79,7 @@ function initEventListeners() {
             try {
                 const token = window.authManager.getToken();
                 if (!token) {
-                    showToast(t('common.error'), '请先登录', 'error');
+                    showToast(t('common.error'), t('common.loginRequired'), 'error');
                     return;
                 }
                 
@@ -93,43 +93,32 @@ function initEventListeners() {
                 });
                 
                 if (response.status === 401) {
-                    showToast(t('common.error'), '认证失败，请重新登录', 'error');
+                    showToast(t('common.error'), t('common.unauthorized'), 'error');
                     window.authManager.clearToken();
                     window.location.href = '/login.html';
                     return;
                 }
                 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    showToast(t('common.error'), errorData.error?.message || '下载失败', 'error');
+                    const errorData = await response.json().catch(() => ({}));
+                    showToast(t('common.error'), errorData.error?.message || t('common.downloadFailed'), 'error');
                     return;
                 }
-                
-                // 获取文件名
-                const contentDisposition = response.headers.get('Content-Disposition');
-                let filename = 'app.log';
-                if (contentDisposition) {
-                    const matches = /filename="?([^"]+)"?/.exec(contentDisposition);
-                    if (matches && matches[1]) {
-                        filename = matches[1];
-                    }
-                }
-                
-                // 下载文件
+
                 const blob = await response.blob();
                 const downloadUrl = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = downloadUrl;
-                a.download = filename;
+                a.download = `app-${new Date().toISOString().split('T')[0]}.log`;
                 document.body.appendChild(a);
                 a.click();
+                window.URL.revokeObjectURL(downloadUrl);
                 document.body.removeChild(a);
-        window.URL.revokeObjectURL(downloadUrl);
                 
-                showToast(t('common.success'), '日志下载成功', 'success');
+                showToast(t('common.success'), t('common.downloadSuccess'), 'success');
             } catch (error) {
                 console.error('下载日志失败:', error);
-                showToast(t('common.error'), '下载失败: ' + error.message, 'error');
+                showToast(t('common.error'), t('common.downloadFailed') + ': ' + error.message, 'error');
             }
         });
     }
