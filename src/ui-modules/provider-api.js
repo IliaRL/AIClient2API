@@ -117,6 +117,86 @@ function getManagedSupportedModels(providerType, providers = []) {
     );
 }
 
+function persistProviderStatusToFile(currentConfig, providerPoolManager) {
+    const filePath = currentConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
+    const providerPools = {};
+
+    for (const providerType in providerPoolManager.providerStatus) {
+        providerPools[providerType] = providerPoolManager.providerStatus[providerType].map(providerStatus => providerStatus.config);
+    }
+
+    writeFileSync(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
+    return filePath;
+}
+
+function isAuthHealthCheckError(errorMessage = '') {
+    return /\b(401|403)\b/.test(errorMessage) ||
+        /\b(Unauthorized|Forbidden|AccessDenied|InvalidToken|ExpiredToken)\b/i.test(errorMessage);
+}
+
+async function runProviderHealthCheck(providerPoolManager, providerType, providerStatus) {
+    const providerConfig = providerStatus.config;
+
+    try {
+        const healthResult = await providerPoolManager._checkProviderHealth(providerType, providerConfig);
+
+        if (healthResult.success) {
+            providerPoolManager.markProviderHealthy(providerType, providerConfig, false, healthResult.modelName);
+            return {
+                uuid: providerConfig.uuid,
+                success: true,
+                healthy: true,
+                modelName: healthResult.modelName,
+                message: 'Healthy'
+            };
+        }
+
+        const errorMessage = healthResult.errorMessage || 'Check failed';
+        const isAuthError = isAuthHealthCheckError(errorMessage);
+
+        if (isAuthError) {
+            providerPoolManager.markProviderUnhealthyImmediately(providerType, providerConfig, errorMessage);
+            logger.info(`[UI API] Auth error detected for ${providerConfig.uuid}, immediately marked as unhealthy`);
+        } else {
+            providerPoolManager.markProviderUnhealthy(providerType, providerConfig, errorMessage);
+        }
+
+        providerStatus.config.lastHealthCheckTime = new Date().toISOString();
+        if (healthResult.modelName) {
+            providerStatus.config.lastHealthCheckModel = healthResult.modelName;
+        }
+
+        return {
+            uuid: providerConfig.uuid,
+            success: false,
+            healthy: false,
+            modelName: healthResult.modelName,
+            message: errorMessage,
+            isAuthError
+        };
+    } catch (error) {
+        const errorMessage = error.message || 'Unknown error';
+        const isAuthError = isAuthHealthCheckError(errorMessage);
+
+        if (isAuthError) {
+            providerPoolManager.markProviderUnhealthyImmediately(providerType, providerConfig, errorMessage);
+            logger.info(`[UI API] Auth error detected for ${providerConfig.uuid}, immediately marked as unhealthy`);
+        } else {
+            providerPoolManager.markProviderUnhealthy(providerType, providerConfig, errorMessage);
+        }
+
+        providerStatus.config.lastHealthCheckTime = new Date().toISOString();
+
+        return {
+            uuid: providerConfig.uuid,
+            success: false,
+            healthy: false,
+            message: errorMessage,
+            isAuthError
+        };
+    }
+}
+
 // 使用 Promise 链式队列，确保文件操作顺序执行
 let _fileLockChain = Promise.resolve();
 
@@ -1144,6 +1224,59 @@ export async function handleHealthCheck(req, res, currentConfig, providerPoolMan
  * 快速链接配置文件到对应的提供商
  * 支持单个文件路径或文件路径数组
  */
+export async function handleSingleProviderHealthCheck(req, res, currentConfig, providerPoolManager, providerType, providerUuid) {
+    try {
+        if (!providerPoolManager) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Provider pool manager not initialized' } }));
+            return true;
+        }
+
+        const providers = providerPoolManager.providerStatus[providerType] || [];
+        const providerStatus = providers.find(item => item.config?.uuid === providerUuid);
+
+        if (!providerStatus) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
+            return true;
+        }
+
+        logger.info(`[UI API] Starting single health check for provider ${providerUuid} in ${providerType}`);
+
+        const result = await runProviderHealthCheck(providerPoolManager, providerType, providerStatus);
+        const filePath = persistProviderStatusToFile(currentConfig, providerPoolManager);
+
+        broadcastEvent('config_update', {
+            action: 'health_check_single',
+            filePath,
+            providerType,
+            providerUuid,
+            result: {
+                ...result,
+                message: sanitizeProviderData({ message: result.message }).message
+            },
+            timestamp: new Date().toISOString()
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            providerType,
+            uuid: providerUuid,
+            healthy: result.healthy,
+            modelName: result.modelName || null,
+            message: result.message,
+            isAuthError: result.isAuthError || false
+        }));
+        return true;
+    } catch (error) {
+        logger.error('[UI API] Single health check error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: error.message } }));
+        return true;
+    }
+}
+
 export async function handleQuickLinkProvider(req, res, currentConfig, providerPoolManager) {
     try {
         const body = await getRequestBody(req);

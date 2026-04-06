@@ -592,6 +592,11 @@ const translations = {
         'modal.provider.refreshUnhealthyUuids.failed': '刷新失败',
         'modal.provider.kiroAuthHint': '使用 AWS Builder ID 登录方式时，需要 <code>clientId</code> 和 <code>clientSecret</code> 字段，可在同文件夹下的另一个 JSON 文件中获取',
         
+        'modal.provider.healthCheckCurrentTitle': '对当前节点立即执行一次健康检查',
+        'modal.provider.healthCheckSingleSuccess': '健康检查通过',
+        'modal.provider.healthCheckSingleSuccessWithModel': '健康检查通过，使用模型: {model}',
+        'modal.provider.healthCheckSingleFailed': '健康检查失败: {message}',
+
         // Pagination
         'pagination.showing': '显示 {start}-{end} / 共 {total} 条',
         'pagination.jumpTo': '跳转到',
@@ -1474,6 +1479,10 @@ const translations = {
         'modal.provider.refreshUnhealthyUuids.success': 'Refreshed {count} UUID(s)',
         'modal.provider.refreshUnhealthyUuids.failed': 'Refresh failed',
         'modal.provider.kiroAuthHint': 'When using AWS Builder ID login, <code>clientId</code> and <code>clientSecret</code> fields are required, which can be found in another JSON file in the same folder',
+        'modal.provider.healthCheckCurrentTitle': 'Run a health check for this node now',
+        'modal.provider.healthCheckSingleSuccess': 'Health check passed',
+        'modal.provider.healthCheckSingleSuccessWithModel': 'Health check passed using model: {model}',
+        'modal.provider.healthCheckSingleFailed': 'Health check failed: {message}',
         
         // Pagination
         'pagination.showing': 'Showing {start}-{end} of {total}',

@@ -2,7 +2,8 @@ import { convertData } from '../convert/convert.js';
 import { MODEL_PROVIDER } from '../utils/common.js';
 
 /**
- * Provider model catalogs used by the Web UI.
+ * 各提供商支持的模型列表
+ * 用于前端UI选择不支持的模型
  */
 export const PROVIDER_MODELS = {
     'gemini-cli-oauth': [
@@ -49,7 +50,9 @@ export const PROVIDER_MODELS = {
         'vision-model'
     ],
     'openai-iflow': [
+        // iFlow 特有模型
         'iflow-rome-30ba3b',
+        // Qwen 模型
         'qwen3-coder-plus',
         'qwen3-max',
         'qwen3-vl-plus',
@@ -58,12 +61,16 @@ export const PROVIDER_MODELS = {
         'qwen3-235b-a22b-thinking-2507',
         'qwen3-235b-a22b-instruct',
         'qwen3-235b',
+        // Kimi 模型
         'kimi-k2-0905',
         'kimi-k2',
+        // GLM 模型
         'glm-4.6',
+        // DeepSeek 模型
         'deepseek-v3.2',
         'deepseek-r1',
         'deepseek-v3',
+        // 手动定义
         'glm-4.7',
         'glm-5',
         'kimi-k2.5',
@@ -181,15 +188,16 @@ export function getConfiguredSupportedModels(providerType, providerConfig = {}) 
 }
 
 /**
- * Gets models supported by a provider type.
- * @param {string} providerType
- * @returns {Array<string>}
+ * 获取指定提供商类型支持的模型列表
+ * @param {string} providerType - 提供商类型
+ * @returns {Array<string>} 模型列表
  */
 export function getProviderModels(providerType) {
     if (PROVIDER_MODELS[providerType]) {
         return PROVIDER_MODELS[providerType];
     }
 
+    // 尝试前缀匹配 (例如 openai-custom-1 -> openai-custom)
     for (const key of Object.keys(PROVIDER_MODELS)) {
         if (providerType.startsWith(key + '-')) {
             return PROVIDER_MODELS[key];
@@ -199,6 +207,10 @@ export function getProviderModels(providerType) {
     return [];
 }
 
+/**
+ * 获取所有提供商的模型列表
+ * @returns {Object} 所有提供商的模型映射
+ */
 export function getAllProviderModels() {
     return PROVIDER_MODELS;
 }

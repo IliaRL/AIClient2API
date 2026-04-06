@@ -796,6 +796,9 @@ function renderProviderList(providers) {
                         <button class="btn-small btn-edit" onclick="window.editProvider('${provider.uuid}', event)">
                             <i class="fas fa-edit"></i> <span data-i18n="modal.provider.edit">编辑</span>
                         </button>
+                        <button class="btn-small btn-info btn-provider-health-check" onclick="window.performSingleHealthCheck('${provider.uuid}', event)" title="${t('modal.provider.healthCheckCurrentTitle')}">
+                            <i class="fas fa-stethoscope"></i> <span data-i18n="modal.provider.healthCheck">${t('modal.provider.healthCheck')}</span>
+                        </button>
                         <button class="btn-small btn-delete" onclick="window.deleteProvider('${provider.uuid}', event)">
                             <i class="fas fa-trash"></i> <span data-i18n="modal.provider.delete">删除</span>
                         </button>
@@ -1267,6 +1270,9 @@ function cancelEdit(uuid, event) {
         </button>
         <button class="btn-small btn-edit" onclick="window.editProvider('${uuid}', event)">
             <i class="fas fa-edit"></i> <span data-i18n="modal.provider.edit">${t('modal.provider.edit')}</span>
+        </button>
+        <button class="btn-small btn-info btn-provider-health-check" onclick="window.performSingleHealthCheck('${uuid}', event)" title="${t('modal.provider.healthCheckCurrentTitle')}">
+            <i class="fas fa-stethoscope"></i> <span data-i18n="modal.provider.healthCheck">${t('modal.provider.healthCheck')}</span>
         </button>
         <button class="btn-small btn-delete" onclick="window.deleteProvider('${uuid}', event)">
             <i class="fas fa-trash"></i> <span data-i18n="modal.provider.delete">${t('modal.provider.delete')}</span>
@@ -1813,6 +1819,67 @@ async function performHealthCheck(providerType) {
  * @param {string} uuid - 提供商UUID
  * @param {Event} event - 事件对象
  */
+async function performSingleHealthCheck(uuid, event) {
+    event.stopPropagation();
+
+    const button = event.currentTarget || event.target.closest('button');
+    const providerDetail = event.target.closest('.provider-item-detail');
+    const providerType = providerDetail?.closest('.provider-modal')?.getAttribute('data-provider-type');
+
+    if (!providerDetail || !providerType) {
+        showToast(t('common.error'), t('modal.provider.healthCheckSingleFailed', { message: t('common.error') }), 'error');
+        return;
+    }
+
+    const originalHtml = button ? button.innerHTML : '';
+
+    try {
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>${t('modal.provider.healthCheck')}</span>`;
+        }
+
+        showToast(t('common.info'), t('modal.provider.healthCheck') + '...', 'info');
+
+        const response = await window.apiClient.post(
+            `/providers/${encodeURIComponent(providerType)}/${uuid}/health-check`,
+            {}
+        );
+
+        if (!response.success) {
+            showToast(t('common.error'), t('modal.provider.healthCheckSingleFailed', { message: t('common.error') }), 'error');
+            return;
+        }
+
+        const message = response.healthy
+            ? (response.modelName
+                ? t('modal.provider.healthCheckSingleSuccessWithModel', { model: response.modelName })
+                : t('modal.provider.healthCheckSingleSuccess'))
+            : t('modal.provider.healthCheckSingleFailed', { message: response.message || t('common.error') });
+
+        showToast(
+            response.healthy ? t('common.success') : t('common.warning'),
+            message,
+            response.healthy ? 'success' : 'warning'
+        );
+
+        await window.apiClient.post('/reload-config');
+        await refreshProviderConfig(providerType);
+    } catch (error) {
+        console.error('Single provider health check failed:', error);
+        showToast(
+            t('common.error'),
+            t('modal.provider.healthCheckSingleFailed', { message: error.message }),
+            'error'
+        );
+    } finally {
+        if (button && button.isConnected) {
+            button.innerHTML = originalHtml;
+            button.disabled = false;
+        }
+    }
+}
+
 async function refreshProviderUuid(uuid, event) {
     event.stopPropagation();
     
@@ -1993,6 +2060,7 @@ export {
     loadModelsForProviderType,
     renderNotSupportedModelsSelector,
     goToProviderPage,
+    performSingleHealthCheck,
     refreshProviderUuid
 };
 
@@ -2008,6 +2076,7 @@ window.addProvider = addProvider;
 window.toggleProviderStatus = toggleProviderStatus;
 window.resetAllProvidersHealth = resetAllProvidersHealth;
 window.performHealthCheck = performHealthCheck;
+window.performSingleHealthCheck = performSingleHealthCheck;
 window.deleteUnhealthyProviders = deleteUnhealthyProviders;
 window.refreshUnhealthyUuids = refreshUnhealthyUuids;
 window.openSupportedModelsPicker = openSupportedModelsPicker;
