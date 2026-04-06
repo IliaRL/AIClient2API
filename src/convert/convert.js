@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import logger from '../utils/logger.js';
 import { MODEL_PROTOCOL_PREFIX, getProtocolPrefix } from '../utils/common.js';
 import { ConverterFactory } from '../converters/ConverterFactory.js';
+import { CONFIG } from '../core/config-manager.js';
 import {
     generateResponseCreated,
     generateResponseInProgress,
@@ -237,8 +238,8 @@ export function toOpenAIStreamChunkFromOpenAIResponses(responsesChunk, model) {
 
 // 辅助函数导出
 export async function extractAndProcessSystemMessages(messages) {
-    const { Utils } = await import('../converters/utils.js');
-    return Utils.extractSystemMessages(messages);
+    const { extractAndProcessSystemMessages: extract } = await import('../converters/utils.js');
+    return extract(messages, CONFIG?.SYSTEM_PROMPT_REPLACEMENTS);
 }
 
 export async function extractTextFromMessageContent(content) {

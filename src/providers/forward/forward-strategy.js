@@ -1,4 +1,7 @@
 import { ProviderStrategy } from '../../utils/provider-strategy.js';
+import logger from '../../utils/logger.js';
+import { extractSystemPromptFromRequestBody, MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
+import { applySystemPromptReplacements } from '../../converters/utils.js';
 
 /**
  * Forward provider strategy implementation.
@@ -40,8 +43,35 @@ class ForwardStrategy extends ProviderStrategy {
     }
 
     async applySystemPromptFromFile(config, requestBody) {
-        // For forwarder, we might want to skip automatic system prompt application 
-        // to keep it transparent, but let's follow the base implementation just in case.
+        if (!config.SYSTEM_PROMPT_FILE_PATH) {
+            return requestBody;
+        }
+
+        const filePromptContent = config.SYSTEM_PROMPT_CONTENT;
+        if (filePromptContent === null) {
+            return requestBody;
+        }
+
+        const existingSystemText = extractSystemPromptFromRequestBody(requestBody, MODEL_PROTOCOL_PREFIX.OPENAI);
+
+        const newSystemText = config.SYSTEM_PROMPT_MODE === 'append' && existingSystemText
+            ? `${existingSystemText}\n${filePromptContent}`
+            : filePromptContent;
+
+        // Apply system prompt replacements
+        const finalSystemText = applySystemPromptReplacements(newSystemText, config.SYSTEM_PROMPT_REPLACEMENTS);
+
+        if (!requestBody.messages) {
+            requestBody.messages = [];
+        }
+        const systemMessageIndex = requestBody.messages.findIndex(m => m.role === 'system');
+        if (systemMessageIndex !== -1) {
+            requestBody.messages[systemMessageIndex].content = finalSystemText;
+        } else {
+            requestBody.messages.unshift({ role: 'system', content: finalSystemText });
+        }
+        logger.info(`[System Prompt] Applied system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'forward'.`);
+
         return requestBody;
     }
 

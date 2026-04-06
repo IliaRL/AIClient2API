@@ -40,3 +40,30 @@ export const RETRY = {
     // 最大重试次数
     MAX_RETRIES: 100
 };
+
+// 协议前缀常量
+export const MODEL_PROTOCOL_PREFIX = {
+    GEMINI: 'gemini',
+    OPENAI: 'openai',
+    OPENAI_RESPONSES: 'openaiResponses',
+    CLAUDE: 'claude',
+    CODEX: 'codex',
+    FORWARD: 'forward',
+    GROK: 'grok',
+};
+
+// 提供商标识符常量
+export const MODEL_PROVIDER = {
+    GEMINI_CLI: 'gemini-cli-oauth',
+    ANTIGRAVITY: 'gemini-antigravity',
+    OPENAI_CUSTOM: 'openai-custom',
+    OPENAI_CUSTOM_RESPONSES: 'openaiResponses-custom',
+    CLAUDE_CUSTOM: 'claude-custom',
+    KIRO_API: 'claude-kiro-oauth',
+    QWEN_API: 'openai-qwen-oauth',
+    IFLOW_API: 'openai-iflow',
+    CODEX_API: 'openai-codex-oauth',
+    FORWARD_API: 'forward-api',
+    GROK_CUSTOM: 'grok-custom',
+    AUTO: 'auto',
+};

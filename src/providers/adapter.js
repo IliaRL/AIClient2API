@@ -9,7 +9,7 @@ import { IFlowApiService } from './openai/iflow-core.js';
 import { CodexApiService } from './openai/codex-core.js';
 import { ForwardApiService } from './forward/forward-core.js';
 import { GrokApiService } from './grok/grok-core.js';
-import { MODEL_PROVIDER } from '../utils/common.js';
+import { MODEL_PROVIDER } from '../utils/constants.js';
 import logger from '../utils/logger.js';
 
 // 适配器注册表

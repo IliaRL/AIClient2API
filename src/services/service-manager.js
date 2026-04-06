@@ -13,7 +13,7 @@ import {
     getFileName,
     formatSystemPath
 } from '../utils/provider-utils.js';
-import { MODEL_PROVIDER } from '../utils/common.js';
+import { MODEL_PROVIDER } from '../utils/constants.js';
 
 // 存储 ProviderPoolManager 实例
 let providerPoolManager = null;

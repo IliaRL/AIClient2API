@@ -1,6 +1,7 @@
 import { API_ACTIONS, extractSystemPromptFromRequestBody, MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
 import logger from '../../utils/logger.js';
 import { ProviderStrategy } from '../../utils/provider-strategy.js';
+import { applySystemPromptReplacements } from '../../converters/utils.js';
 
 /**
  * Gemini provider strategy implementation.
@@ -52,7 +53,10 @@ class GeminiStrategy extends ProviderStrategy {
             ? `${existingSystemText}\n${filePromptContent}`
             : filePromptContent;
 
-        requestBody.systemInstruction = { parts: [{ text: newSystemText }] };
+        // Apply system prompt replacements
+        const finalSystemText = applySystemPromptReplacements(newSystemText, config.SYSTEM_PROMPT_REPLACEMENTS);
+
+        requestBody.systemInstruction = { parts: [{ text: finalSystemText }] };
         if (requestBody.system_instruction) {
             delete requestBody.system_instruction;
         }

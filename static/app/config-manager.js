@@ -127,11 +127,64 @@ function updatePinnedStatus(container) {
 }
 
 /**
+ * 初始化系统提示词替换规则 UI
+ */
+function initReplacementsUI() {
+    const addBtn = document.getElementById('addReplacementBtn');
+    if (addBtn && !addBtn.dataset.listenerAttached) {
+        addBtn.addEventListener('click', () => {
+            addReplacementRow('', '');
+        });
+        addBtn.dataset.listenerAttached = 'true';
+    }
+}
+
+/**
+ * 添加一条替换规则行
+ * @param {string} oldVal - 查找内容
+ * @param {string} newVal - 替换内容
+ */
+function addReplacementRow(oldVal = '', newVal = '') {
+    const container = document.getElementById('systemPromptReplacementsContainer');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'replacement-row';
+    row.innerHTML = `
+        <input type="text" class="form-control replacement-old" placeholder="${t('config.advanced.replacement.old')}" value="${oldVal}">
+        <input type="text" class="form-control replacement-new" placeholder="${t('config.advanced.replacement.new')}" value="${newVal}">
+        <button type="button" class="remove-replacement-btn" title="${t('config.advanced.replacement.remove')}">
+            <i class="fas fa-trash-alt"></i>
+        </button>
+    `;
+
+    // 绑定删除按钮事件
+    const removeBtn = row.querySelector('.remove-replacement-btn');
+    removeBtn.addEventListener('click', () => {
+        row.remove();
+    });
+
+    container.appendChild(row);
+}
+
+/**
  * 加载配置
  */
 async function loadConfiguration() {
     try {
         const data = await window.apiClient.get('/config');
+
+        // 初始化替换规则 UI
+        initReplacementsUI();
+        const replacementsContainer = document.getElementById('systemPromptReplacementsContainer');
+        if (replacementsContainer) {
+            replacementsContainer.innerHTML = '';
+            if (data.SYSTEM_PROMPT_REPLACEMENTS && Array.isArray(data.SYSTEM_PROMPT_REPLACEMENTS)) {
+                data.SYSTEM_PROMPT_REPLACEMENTS.forEach(r => {
+                    addReplacementRow(r.old || '', r.new || '');
+                });
+            }
+        }
 
         // 基础配置
         const apiKeyEl = document.getElementById('apiKey');
@@ -380,6 +433,19 @@ async function saveConfiguration() {
     // 保存高级配置参数
     config.SYSTEM_PROMPT_FILE_PATH = document.getElementById('systemPromptFilePath')?.value || 'configs/input_system_prompt.txt';
     config.SYSTEM_PROMPT_MODE = document.getElementById('systemPromptMode')?.value || 'append';
+    
+    // 收集系统提示词内容替换规则
+    const replacements = [];
+    const replacementRows = document.querySelectorAll('.replacement-row');
+    replacementRows.forEach(row => {
+        const oldVal = row.querySelector('.replacement-old')?.value || '';
+        const newVal = row.querySelector('.replacement-new')?.value || '';
+        if (oldVal) {
+            replacements.push({ old: oldVal, new: newVal });
+        }
+    });
+    config.SYSTEM_PROMPT_REPLACEMENTS = replacements;
+
     config.PROMPT_LOG_BASE_NAME = document.getElementById('promptLogBaseName')?.value || '';
     config.PROMPT_LOG_MODE = document.getElementById('promptLogMode')?.value || '';
     config.REQUEST_MAX_RETRIES = parseInt(document.getElementById('requestMaxRetries')?.value || 3);

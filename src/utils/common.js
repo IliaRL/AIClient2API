@@ -1,3 +1,4 @@
+export { MODEL_PROTOCOL_PREFIX, MODEL_PROVIDER } from './constants.js';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as http from 'http'; // Add http for IncomingMessage and ServerResponse types
@@ -6,6 +7,7 @@ import logger from './logger.js';
 import { convertData, getOpenAIStreamChunkStop } from '../convert/convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 import { getPluginManager } from '../core/plugin-manager.js';
+import { MODEL_PROTOCOL_PREFIX, MODEL_PROVIDER } from './constants.js';
 
 // ==================== 网络错误处理 ====================
 
@@ -48,33 +50,6 @@ export const API_ACTIONS = {
     GENERATE_CONTENT: 'generateContent',
     STREAM_GENERATE_CONTENT: 'streamGenerateContent',
 };
-
-export const MODEL_PROTOCOL_PREFIX = {
-    // Model provider constants
-    GEMINI: 'gemini',
-    OPENAI: 'openai',
-    OPENAI_RESPONSES: 'openaiResponses',
-    CLAUDE: 'claude',
-    CODEX: 'codex',
-    FORWARD: 'forward',
-    GROK: 'grok',
-}
-
-export const MODEL_PROVIDER = {
-    // Model provider constants
-    GEMINI_CLI: 'gemini-cli-oauth',
-    ANTIGRAVITY: 'gemini-antigravity',
-    OPENAI_CUSTOM: 'openai-custom',
-    OPENAI_CUSTOM_RESPONSES: 'openaiResponses-custom',
-    CLAUDE_CUSTOM: 'claude-custom',
-    KIRO_API: 'claude-kiro-oauth',
-    QWEN_API: 'openai-qwen-oauth',
-    IFLOW_API: 'openai-iflow',
-    CODEX_API: 'openai-codex-oauth',
-    FORWARD_API: 'forward-api',
-    GROK_CUSTOM: 'grok-custom',
-    AUTO: 'auto',
-}
 
 import {
     usesManagedModelList,

@@ -1,6 +1,7 @@
 import { ProviderStrategy } from '../../utils/provider-strategy.js';
 import logger from '../../utils/logger.js';
 import { extractSystemPromptFromRequestBody, MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
+import { applySystemPromptReplacements } from '../../converters/utils.js';
 
 /**
  * OpenAI Responses API strategy implementation.
@@ -65,16 +66,19 @@ class CodexResponsesAPIStrategy extends ProviderStrategy {
             return requestBody;
         }
 
+        // Apply system prompt replacements
+        const finalSystemText = applySystemPromptReplacements(filePromptContent, config.SYSTEM_PROMPT_REPLACEMENTS);
+
         // In Responses API, system instructions are typically passed in 'instructions' field
         // or in the input array with role: 'developer'
-        requestBody.instructions = requestBody.instructions || filePromptContent;
+        requestBody.instructions = requestBody.instructions || finalSystemText;
 
         // If using instructions field is not desired, append to input array instead
         if (!requestBody.instructions || config.SYSTEM_PROMPT_MODE === 'append') {
             if (typeof requestBody.input === 'string') {
                 // Convert to array format to add system message
                 requestBody.input = [
-                    { type: 'message', role: 'developer', content: filePromptContent },
+                    { type: 'message', role: 'developer', content: finalSystemText },
                     { type: 'message', role: 'user', content: requestBody.input }
                 ];
             } else if (Array.isArray(requestBody.input)) {
@@ -84,17 +88,17 @@ class CodexResponsesAPIStrategy extends ProviderStrategy {
                 );
 
                 if (systemMessageIndex !== -1) {
-                    requestBody.input[systemMessageIndex].content = filePromptContent;
+                    requestBody.input[systemMessageIndex].content = finalSystemText;
                 } else {
-                    requestBody.input.unshift({ type: 'message', role: 'developer', content: filePromptContent });
+                    requestBody.input.unshift({ type: 'message', role: 'developer', content: finalSystemText });
                 }
             } else {
                 // If input is not defined, initialize with system message
-                requestBody.input = [{ type: 'message', role: 'developer', content: filePromptContent }];
+                requestBody.input = [{ type: 'message', role: 'developer', content: finalSystemText }];
             }
         } else if (requestBody.instructions) {
             // If system prompt mode is not append, then replace the instructions
-            requestBody.instructions = filePromptContent;
+            requestBody.instructions = finalSystemText;
         }
 
         logger.info(`[System Prompt] Applied system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'responses'.`);

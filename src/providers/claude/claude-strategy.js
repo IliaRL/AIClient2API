@@ -1,6 +1,7 @@
 import { ProviderStrategy } from '../../utils/provider-strategy.js';
 import logger from '../../utils/logger.js';
 import { extractSystemPromptFromRequestBody, MODEL_PROTOCOL_PREFIX } from '../../utils/common.js';
+import { applySystemPromptReplacements } from '../../converters/utils.js';
 
 /**
  * Claude provider strategy implementation.
@@ -59,7 +60,8 @@ class ClaudeStrategy extends ProviderStrategy {
             ? `${existingSystemText}\n${filePromptContent}`
             : filePromptContent;
 
-        requestBody.system = newSystemText;
+        // Apply system prompt replacements
+        requestBody.system = applySystemPromptReplacements(newSystemText, config.SYSTEM_PROMPT_REPLACEMENTS);
         logger.info(`[System Prompt] Applied system prompt from ${config.SYSTEM_PROMPT_FILE_PATH} in '${config.SYSTEM_PROMPT_MODE}' mode for provider 'claude'.`);
 
         return requestBody;

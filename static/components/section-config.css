@@ -300,6 +300,43 @@ input:checked + .toggle-slider:before {
     box-shadow: 0 4px 12px var(--primary-40);
 }
 
+/* 系统提示词替换规则样式 */
+.replacements-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.replacement-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    background: var(--bg-tertiary);
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.replacement-row .form-control {
+    margin-bottom: 0;
+}
+
+.remove-replacement-btn {
+    color: var(--danger-color);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    transition: var(--transition);
+}
+
+.remove-replacement-btn:hover {
+    color: #dc2626;
+    transform: scale(1.1);
+}
+
 /* 提供商标签选择器样式 */
 .provider-tags {
     display: flex;

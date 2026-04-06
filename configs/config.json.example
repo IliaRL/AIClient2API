@@ -5,6 +5,10 @@
     "MODEL_PROVIDER": "gemini-cli-oauth",
     "SYSTEM_PROMPT_FILE_PATH": "configs/input_system_prompt.txt",
     "SYSTEM_PROMPT_MODE": "overwrite",
+    "SYSTEM_PROMPT_REPLACEMENTS": [
+        { "old": "Old text to replace", "new": "New replacement text" },
+        { "old": "AI", "new": "Smart Bot" }
+    ],
     "PROMPT_LOG_BASE_NAME": "prompt_log",
     "PROMPT_LOG_MODE": "none",
     "REQUEST_MAX_RETRIES": 3,

@@ -94,21 +94,20 @@ export const PROVIDER_MODELS = {
     ],
     'forward-api': [],
     'grok-custom': [
-        'grok-3',
-        'grok-3-mini',
-        'grok-3-thinking',
-        'grok-4',
-        'grok-4-mini',
-        'grok-4-thinking',
-        'grok-4-heavy',
-        'grok-4.1-mini',
-        'grok-4.1-fast',
-        'grok-4.1-expert',
-        'grok-4.1-thinking',
-        'grok-4.20-beta',
+        'grok-4.20',
+        'grok-4.20-auto',
+        'grok-4.20-fast',
+        'grok-4.20-expert',
+        'grok-4.20-heavy',
         'grok-imagine-1.0',
         'grok-imagine-1.0-edit',
-        'grok-imagine-1.0-video'
+        'grok-4.20-nsfw',
+        'grok-4.20-auto-nsfw',
+        'grok-4.20-fast-nsfw',
+        'grok-4.20-expert-nsfw',
+        'grok-4.20-heavy-nsfw',
+        'grok-imagine-1.0-nsfw',
+        'grok-imagine-1.0-edit-nsfw'
     ]
 };
 

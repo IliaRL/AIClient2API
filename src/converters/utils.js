@@ -120,17 +120,48 @@ export function extractTextFromMessageContent(content) {
 }
 
 /**
+ * 应用系统提示词内容替换
+ * @param {string} content - 原始内容
+ * @param {Array} replacements - 替换规则数组
+ * @returns {string} 替换后的内容
+ */
+export function applySystemPromptReplacements(content, replacements = []) {
+    if (!content || !replacements || !Array.isArray(replacements) || replacements.length === 0) {
+        return content;
+    }
+    let newContent = content;
+    for (const replacement of replacements) {
+        if (replacement.old !== undefined && replacement.new !== undefined) {
+            if (typeof replacement.old === 'string') {
+                // 简单字符串全量替换
+                newContent = newContent.split(replacement.old).join(replacement.new);
+            } else if (replacement.old instanceof RegExp || (typeof replacement.old === 'object' && replacement.old !== null)) {
+                // 正则表达式替换
+                newContent = newContent.replace(replacement.old, replacement.new);
+            }
+        }
+    }
+    return newContent;
+}
+
+/**
  * 提取并处理系统消息
  * @param {Array} messages - 消息数组
+ * @param {Array} replacements - 替换规则数组，可选
  * @returns {{systemInstruction: Object|null, nonSystemMessages: Array}}
  */
-export function extractAndProcessSystemMessages(messages) {
+export function extractAndProcessSystemMessages(messages, replacements = []) {
     const systemContents = [];
     const nonSystemMessages = [];
 
     for (const message of messages) {
         if (message.role === 'system') {
-            systemContents.push(extractTextFromMessageContent(message.content));
+            let content = extractTextFromMessageContent(message.content);
+            
+            // 应用系统提示词内容替换
+            content = applySystemPromptReplacements(content, replacements);
+            
+            systemContents.push(content);
         } else {
             nonSystemMessages.push(message);
         }
