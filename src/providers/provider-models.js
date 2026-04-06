@@ -113,8 +113,9 @@ export const PROVIDER_MODELS = {
 };
 
 export const MANAGED_MODEL_LIST_PROVIDERS = [
-    MODEL_PROVIDER.OPENAI_CUSTOM,
-    MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES
+    'openai-custom',
+    'openaiResponses-custom',
+    'claude-custom'
 ];
 
 export function getManagedModelListProviderType(providerType) {
@@ -165,10 +166,13 @@ function extractModelIdsFromListShape(modelList) {
 export function extractModelIdsFromNativeList(modelList, providerType) {
     let convertedModelList = modelList;
 
-    try {
-        convertedModelList = convertData(modelList, 'modelList', providerType, MODEL_PROVIDER.OPENAI_CUSTOM);
-    } catch {
-        convertedModelList = modelList;
+    // 只有在提供商类型与目标类型协议不同时才尝试转换
+    if (providerType !== MODEL_PROVIDER.OPENAI_CUSTOM && !providerType.startsWith(MODEL_PROVIDER.OPENAI_CUSTOM + '-')) {
+        try {
+            convertedModelList = convertData(modelList, 'modelList', providerType, MODEL_PROVIDER.OPENAI_CUSTOM);
+        } catch {
+            convertedModelList = modelList;
+        }
     }
 
     const convertedIds = normalizeModelIds(extractModelIdsFromListShape(convertedModelList));

@@ -76,30 +76,17 @@ export const MODEL_PROVIDER = {
     AUTO: 'auto',
 }
 
-const MANAGED_MODEL_LIST_PROVIDER_TYPES = new Set([
-    'openai-custom',
-    'openaiResponses-custom'
-]);
+import {
+    usesManagedModelList,
+    getConfiguredSupportedModels
+} from '../providers/provider-models.js';
 
-function usesManagedModelList(providerType = '') {
-    return [...MANAGED_MODEL_LIST_PROVIDER_TYPES].some(baseType =>
-        providerType === baseType || providerType.startsWith(baseType + '-')
-    );
-}
-
-function getConfiguredSupportedModels(providerType, providerConfig = {}) {
-    if (!usesManagedModelList(providerType)) {
-        return [];
-    }
-
-    return [...new Set(
-        (Array.isArray(providerConfig?.supportedModels) ? providerConfig.supportedModels : [])
-            .filter(model => typeof model === 'string')
-            .map(model => model.trim())
-            .filter(Boolean)
-    )].sort((a, b) => a.localeCompare(b));
-}
-
+/**
+ * 获取指定提供商类型下，所有节点配置的已选模型列表（去重聚合）
+ * @param {object} providerPoolManager - 提供商池管理器
+ * @param {string} providerType - 提供商类型
+ * @returns {string[]} 聚合后的模型 ID 列表
+ */
 function getConfiguredSupportedModelsFromPool(providerPoolManager, providerType) {
     if (!providerPoolManager?.providerStatus?.[providerType]) {
         return [];

@@ -138,7 +138,23 @@ async function runProviderHealthCheck(providerPoolManager, providerType, provide
     const providerConfig = providerStatus.config;
 
     try {
-        const healthResult = await providerPoolManager._checkProviderHealth(providerType, providerConfig);
+        // 对于管理模型列表的提供商，如果配置了支持的模型，从中挑选一个用于健康检查
+        let checkModelName = providerConfig.checkModelName;
+        if (!checkModelName && usesManagedModelList(providerType)) {
+            const supportedModels = getConfiguredSupportedModels(providerType, providerConfig);
+            if (supportedModels.length > 0) {
+                // 优先挑选常见的/轻量级的模型，或者直接取第一个
+                checkModelName = supportedModels.find(m =>
+                    m.includes('flash') || m.includes('mini') || m.includes('3.5') || m.includes('small')
+                ) || supportedModels[0];
+                logger.info(`[UI API] Selected model ${checkModelName} for health check of managed provider ${providerConfig.uuid}`);
+            }
+        }
+
+        const healthResult = await providerPoolManager._checkProviderHealth(providerType, {
+            ...providerConfig,
+            checkModelName
+        });
 
         if (healthResult.success) {
             providerPoolManager.markProviderHealthy(providerType, providerConfig, false, healthResult.modelName);
@@ -404,18 +420,13 @@ export async function handleDetectProviderModels(req, res, currentConfig, provid
             return true;
         }
 
-        const providerPools = loadProviderPools(currentConfig, providerPoolManager);
-        const providers = providerPools[providerType] || [];
-        const existingProvider = providers.find(provider => provider.uuid === providerUuid);
-
-        if (!existingProvider) {
-            res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'Provider not found' } }));
-            return true;
-        }
-
         const body = await getRequestBody(req);
         const draftConfig = filterMaskedData(body?.providerConfig || {});
+
+        const providerPools = loadProviderPools(currentConfig, providerPoolManager);
+        const providers = providerPools[providerType] || [];
+        const existingProvider = providers.find(provider => provider.uuid === providerUuid) || {};
+
         const detectionUuid = `${providerUuid}-detect-models`;
         const instanceKey = `${providerType}${detectionUuid}`;
         const tempConfig = {
@@ -1244,7 +1255,11 @@ export async function handleSingleProviderHealthCheck(req, res, currentConfig, p
         logger.info(`[UI API] Starting single health check for provider ${providerUuid} in ${providerType}`);
 
         const result = await runProviderHealthCheck(providerPoolManager, providerType, providerStatus);
-        const filePath = persistProviderStatusToFile(currentConfig, providerPoolManager);
+
+        // 使用文件锁进行持久化，防止并发写入冲突
+        const filePath = await withFileLock(async () => {
+            return persistProviderStatusToFile(currentConfig, providerPoolManager);
+        });
 
         broadcastEvent('config_update', {
             action: 'health_check_single',
@@ -1376,7 +1391,10 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
         // Save to file only if there were successful links
         const successCount = results.filter(r => r.success).length;
         if (successCount > 0) {
-            writeFileSync(poolsFilePath, JSON.stringify(providerPools, null, 2), 'utf-8');
+            await withFileLock(async () => {
+                writeFileSync(poolsFilePath, JSON.stringify(providerPools, null, 2), 'utf-8');
+                return poolsFilePath;
+            });
 
             // Update provider pool manager if available
             if (providerPoolManager) {

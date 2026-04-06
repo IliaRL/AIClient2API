@@ -1269,12 +1269,16 @@
 }
 
 .provider-model-picker-empty {
-    padding: 24px 12px;
+    grid-column: 1 / -1;
+    padding: 40px 20px;
     text-align: center;
     color: var(--neutral-500);
-    border: 1px dashed var(--neutral-300);
-    border-radius: 8px;
+    border: 2px dashed var(--neutral-300);
+    border-radius: 12px;
     background: var(--neutral-100);
+    margin: 10px 0;
+    font-size: 14px;
+    line-height: 1.6;
 }
 
 @media (max-width: 640px) {
@@ -1638,6 +1642,15 @@
 [data-theme="dark"] .auth-url-input { background: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-primary); }
 [data-theme="dark"] .model-checkbox-label { background: var(--bg-primary); border-color: var(--border-color); }
 [data-theme="dark"] .not-supported-models-container { background: var(--bg-secondary); border-color: var(--border-color); }
+[data-theme="dark"] .supported-models-container { background: var(--bg-secondary); border-color: var(--border-color); }
+[data-theme="dark"] .supported-model-tag { background: var(--bg-primary); border-color: var(--border-color); color: var(--text-primary); }
+[data-theme="dark"] .supported-models-empty { color: var(--text-secondary); }
+[data-theme="dark"] .provider-model-picker-empty { background: var(--bg-secondary); border-color: var(--border-color); color: var(--text-secondary); }
+[data-theme="dark"] .provider-model-picker-search { background: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary); }
+[data-theme="dark"] .provider-model-picker-item { background: var(--bg-primary); border-color: var(--border-color); color: var(--text-primary); }
+[data-theme="dark"] .provider-model-picker-item:hover { background: var(--bg-tertiary); border-color: var(--primary-color); }
+[data-theme="dark"] .provider-model-picker-item span { color: var(--text-primary); }
+[data-theme="dark"] .provider-model-picker-summary { color: var(--text-secondary); }
 [data-theme="dark"] .stat-card { transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease; }
 /* 高亮说明样式 - 暗黑主题 */
 [data-theme="dark"] .highlight-note {
