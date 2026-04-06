@@ -64,6 +64,7 @@ export async function handleGetConfig(req, res, currentConfig) {
         HOST: currentConfig.HOST,
         SERVER_PORT: currentConfig.SERVER_PORT,
         MODEL_PROVIDER: currentConfig.MODEL_PROVIDER,
+        DEFAULT_MODEL_PROVIDERS: currentConfig.DEFAULT_MODEL_PROVIDERS,
         SYSTEM_PROMPT_FILE_PATH: currentConfig.SYSTEM_PROMPT_FILE_PATH,
         SYSTEM_PROMPT_MODE: currentConfig.SYSTEM_PROMPT_MODE,
         PROMPT_LOG_BASE_NAME: currentConfig.PROMPT_LOG_BASE_NAME,

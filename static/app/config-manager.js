@@ -54,10 +54,15 @@ function renderProviderTags(container, configs, isRequired) {
     const visibleConfigs = configs.filter(c => c.visible !== false);
     
     const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    
+    // 如果是预加载模型提供商选择，添加置顶图标
+    const isModelProviderSelect = container.id === 'modelProvider';
+    
     container.innerHTML = visibleConfigs.map(c => `
         <button type="button" class="provider-tag" data-value="${escHtml(c.id)}">
             <i class="fas ${escHtml(c.icon || 'fa-server')}"></i>
             <span>${escHtml(c.name)}</span>
+            ${isModelProviderSelect ? `<span class="tag-pin-icon" title="${t('config.pin') || '设为默认 (置顶)'}"><i class="fas fa-thumbtack"></i></span>` : ''}
         </button>
     `).join('');
     
@@ -65,6 +70,20 @@ function renderProviderTags(container, configs, isRequired) {
     const tags = container.querySelectorAll('.provider-tag');
     tags.forEach(tag => {
         tag.addEventListener('click', (e) => {
+            // 如果点击的是置顶图标
+            if (e.target.closest('.tag-pin-icon')) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // 置顶逻辑：将其移动到容器最前面并设为选中
+                tag.classList.add('selected');
+                container.prepend(tag);
+                
+                // 更新视觉样式
+                updatePinnedStatus(container);
+                return;
+            }
+
             e.preventDefault();
             const isSelected = tag.classList.contains('selected');
             
@@ -79,7 +98,31 @@ function renderProviderTags(container, configs, isRequired) {
             
             // 切换选中状态
             tag.classList.toggle('selected');
+            
+            // 如果取消选中了当前置顶的，重新计算置顶状态
+            if (!tag.classList.contains('selected') && isModelProviderSelect) {
+                updatePinnedStatus(container);
+            }
         });
+    });
+}
+
+/**
+ * 更新置顶状态的视觉表现
+ * @param {HTMLElement} container 
+ */
+function updatePinnedStatus(container) {
+    const tags = container.querySelectorAll('.provider-tag');
+    tags.forEach((tag, index) => {
+        // 第一个被选中的即为“置顶”的默认提供商
+        const isFirstSelected = tag.classList.contains('selected') && 
+            index === Array.from(tags).findIndex(t => t.classList.contains('selected'));
+        
+        if (isFirstSelected) {
+            tag.classList.add('pinned');
+        } else {
+            tag.classList.remove('pinned');
+        }
     });
 }
 
@@ -107,21 +150,34 @@ async function loadConfiguration() {
                 ? data.DEFAULT_MODEL_PROVIDERS
                 : (typeof data.MODEL_PROVIDER === 'string' ? data.MODEL_PROVIDER.split(',') : []);
             
-            const tags = modelProviderEl.querySelectorAll('.provider-tag');
+            const tags = Array.from(modelProviderEl.querySelectorAll('.provider-tag'));
+            
+            // 按照 providers 数组的顺序重新排列 DOM 中的标签
+            providers.forEach(id => {
+                const tag = tags.find(t => t.getAttribute('data-value') === id);
+                if (tag) {
+                    tag.classList.add('selected');
+                    modelProviderEl.appendChild(tag); // 依次移到末尾实现重排
+                }
+            });
+            
+            // 处理未选中的标签
             tags.forEach(tag => {
                 const value = tag.getAttribute('data-value');
-                if (providers.includes(value)) {
-                    tag.classList.add('selected');
-                } else {
+                if (!providers.includes(value)) {
                     tag.classList.remove('selected');
+                    modelProviderEl.appendChild(tag); // 移到最后
                 }
             });
             
             // 如果没有任何选中的，默认选中第一个（保持兼容性）
-            const anySelected = Array.from(tags).some(tag => tag.classList.contains('selected'));
+            const anySelected = Array.from(modelProviderEl.querySelectorAll('.provider-tag.selected')).length > 0;
             if (!anySelected && tags.length > 0) {
                 tags[0].classList.add('selected');
             }
+            
+            // 更新置顶视觉样式
+            updatePinnedStatus(modelProviderEl);
         }
         
         if (systemPromptEl) systemPromptEl.value = data.systemPrompt || '';

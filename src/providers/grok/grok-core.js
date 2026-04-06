@@ -35,21 +35,14 @@ const httpsAgent = new https.Agent({
 });
 
 const CORE_MODEL_MAPPING = {
-    'grok-3': { name: 'grok-3', mode: 'MODEL_MODE_GROK_3' },
-    'grok-3-mini': { name: 'grok-3', mode: 'MODEL_MODE_GROK_3_MINI_THINKING' },
-    'grok-3-thinking': { name: 'grok-3', mode: 'MODEL_MODE_GROK_3_THINKING' },
-    'grok-4': { name: 'grok-4', mode: 'MODEL_MODE_GROK_4' },
-    'grok-4-mini': { name: 'grok-4-mini', mode: 'MODEL_MODE_GROK_4_MINI_THINKING' },
-    'grok-4-thinking': { name: 'grok-4', mode: 'MODEL_MODE_GROK_4_THINKING' },
-    'grok-4-heavy': { name: 'grok-4', mode: 'MODEL_MODE_HEAVY' },
-    'grok-4.1-mini': { name: 'grok-4-1-thinking-1129', mode: 'MODEL_MODE_GROK_4_1_MINI_THINKING' },
-    'grok-4.1-fast': { name: 'grok-4-1-thinking-1129', mode: 'MODEL_MODE_FAST' },
-    'grok-4.1-expert': { name: 'grok-4-1-thinking-1129', mode: 'MODEL_MODE_EXPERT' },
-    'grok-4.1-thinking': { name: 'grok-4-1-thinking-1129', mode: 'MODEL_MODE_GROK_4_1_THINKING' },
-    'grok-4.20-beta': { name: 'grok-420', mode: 'MODEL_MODE_GROK_420' },
-    'grok-imagine-1.0': { name: 'grok-3', mode: 'MODEL_MODE_FAST' },
-    'grok-imagine-1.0-edit': { name: 'imagine-image-edit', mode: 'MODEL_MODE_FAST' },
-    'grok-imagine-1.0-video': { name: 'grok-3', mode: 'MODEL_MODE_FAST' }
+    'grok-4.20': { name: 'grok-420', mode: 'MODEL_MODE_AUTO', modeId: 'auto' },
+    'grok-4.20-auto': { name: 'grok-420', mode: 'MODEL_MODE_AUTO', modeId: 'auto' },
+    'grok-4.20-fast': { name: 'grok-420', mode: 'MODEL_MODE_FAST', modeId: 'fast' },
+    'grok-4.20-expert': { name: 'grok-420', mode: 'MODEL_MODE_EXPERT', modeId: 'expert' },
+    'grok-4.20-heavy': { name: 'grok-420', mode: 'MODEL_MODE_HEAVY', modeId: 'heavy' },
+    'grok-imagine-1.0': { name: 'imagine-image', mode: 'MODEL_MODE_FAST', modeId: 'fast' },
+    'grok-imagine-1.0-edit': { name: 'imagine-image-edit', mode: 'MODEL_MODE_FAST', modeId: 'fast' },
+    // 'grok-imagine-1.0-video': { name: 'grok-3', mode: 'MODEL_MODE_FAST', modeId: 'fast' }
 };
 
 const MODEL_MAPPING = { ...CORE_MODEL_MAPPING };
@@ -96,14 +89,28 @@ export class GrokApiService {
     }
 
     classifyApiError(error) {
-        const status = error.response?.status;
+        let status = error.response?.status;
         const errorCode = error.code;
         const errorMessage = error.message || '';
         const isNetworkError = isRetryableNetworkError(error);
 
-        if (status === 401 || status === 403) {
+        // 如果是 WS 错误，尝试从 message 中提取状态码
+        if (!status && errorMessage.includes('Unexpected server response:')) {
+            const match = errorMessage.match(/Unexpected server response: (\d+)/);
+            if (match) status = parseInt(match[1], 10);
+        }
+
+        if (!status && errorMessage.includes('Image rate limit exceeded')) {
+            status = 429;
+        }
+
+        if (status === 401 || status === 403 || status === 429 || status === 502) {
             error.shouldSwitchCredential = true;
-            error.message = 'Grok authentication failed (SSO token invalid or expired)';
+            const messages = {
+                429: 'Grok rate limit reached (429)',
+                502: 'Grok bad gateway (502) - possibly account or proxy issue'
+            };
+            error.message = messages[status] || 'Grok authentication failed (SSO token invalid or expired)';
         } else if (isNetworkError) {
             // Network jitter or request timeout should not immediately degrade account health.
             // Let the upper retry layer switch credential without incrementing the provider error count.
@@ -128,17 +135,22 @@ export class GrokApiService {
     }
 
     async acceptTos() {
-        const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/accept-tos`, headers: this.buildHeaders(), data: {}, httpAgent, httpsAgent, timeout: 15000 };
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
-        try { await axios(axiosConfig); } catch (e) { logger.debug(`[Grok TOS] ${e.message}`); }
+        try { 
+            await this._request({ url: `${this.baseUrl}/rest/app-chat/accept-tos` }); 
+        } catch (e) { 
+            logger.debug(`[Grok TOS] ${e.message}`); 
+        }
     }
 
     async setBirthDate() {
-        const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/set-birth-date`, headers: this.buildHeaders(), data: { "birthDate": "1990-01-01" }, httpAgent, httpsAgent, timeout: 15000 };
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
-        try { await axios(axiosConfig); } catch (e) { logger.debug(`[Grok Birth] ${e.message}`); }
+        try { 
+            await this._request({ 
+                url: `${this.baseUrl}/rest/app-chat/set-birth-date`, 
+                data: { "birthDate": "1990-01-01" } 
+            }); 
+        } catch (e) { 
+            logger.debug(`[Grok Birth] ${e.message}`); 
+        }
     }
 
     async enableNsfwAccount() {
@@ -157,23 +169,144 @@ export class GrokApiService {
         headers['x-user-agent'] = 'connect-es/2.1.1';
         headers['referer'] = `${this.baseUrl}/?_s=data`;
 
-        const axiosConfig = { 
-            method: 'post', 
-            url: `${this.baseUrl}/auth_mgmt.AuthManagement/UpdateUserFeatureControls`, 
-            headers, 
-            data: payload, 
-            httpAgent, 
-            httpsAgent, 
-            timeout: 15000,
-            responseType: 'arraybuffer' 
-        };
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
-        try { await axios(axiosConfig); } catch (e) { throw e; }
+        try {
+            await this._request({
+                url: `${this.baseUrl}/auth_mgmt.AuthManagement/UpdateUserFeatureControls`,
+                headers,
+                data: payload,
+                responseType: 'arraybuffer'
+            });
+        } catch (e) { throw e; }
+    }
+
+    _isPart0(url) {
+        return typeof url === 'string' && url.includes('part-0');
+    }
+
+    _normalizeImageUrl(url) {
+        if (!url || typeof url !== 'string') return url;
+        if (url.startsWith('http') || url.startsWith('data:')) return url;
+        return `https://assets.grok.com/${url.startsWith('/') ? url.slice(1) : url}`;
     }
 
     _applySidecar(axiosConfig) {
         return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
+    }
+
+    /**
+     * 获取模型映射
+     */
+    _getModelMapping(modelId) {
+        const rawModelId = typeof modelId === 'string' ? modelId : '';
+        const normalizedModelId = normalizeGrokModelId(rawModelId);
+        return MODEL_MAPPING[normalizedModelId] || MODEL_MAPPING['grok-4.20'] || { name: 'grok-3', modeId: 'auto' };
+    }
+
+    /**
+     * 统一的 Axios 请求封装
+     */
+    async _request(options) {
+        const {
+            method = 'post',
+            url,
+            data = {},
+            headers = this.buildHeaders(),
+            timeout = 15000,
+            responseType,
+            ...otherOptions
+        } = options;
+
+        const axiosConfig = { 
+            method, 
+            url, 
+            headers, 
+            data, 
+            httpAgent, 
+            httpsAgent, 
+            timeout,
+            ...otherOptions
+        };
+        if (responseType) axiosConfig.responseType = responseType;
+
+        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
+        this._applySidecar(axiosConfig);
+
+        return await axios(axiosConfig);
+    }
+
+    /**
+     * 统一执行内部请求转换钩子
+     */
+    async _executeInternalRequestHook(payload, converterName) {
+        if (!this.config?._monitorRequestId) return;
+        try {
+            const { getPluginManager } = await import('../../core/plugin-manager.js');
+            const pluginManager = getPluginManager();
+            if (pluginManager) {
+                await pluginManager.executeHook('onInternalRequestConverted', {
+                    requestId: this.config._monitorRequestId,
+                    internalRequest: payload,
+                    converterName
+                });
+            }
+        } catch (e) {
+            logger.error(`[Grok] Error calling onInternalRequestConverted hook (${converterName}):`, e.message);
+        }
+    }
+
+    _extractMessagesAndFiles(requestBody, isVideoModel = false) {
+        if (!requestBody.messages || !Array.isArray(requestBody.messages)) return;
+
+        let processedMessages = requestBody.messages;
+        if (this.converter && requestBody.tools?.length > 0) {
+            processedMessages = this.converter.formatToolHistory(requestBody.messages);
+        }
+        
+        let toolPrompt = "";
+        let toolOverrides = {};
+        if (this.converter && requestBody.tools) {
+            toolPrompt = this.converter.buildToolPrompt(requestBody.tools, requestBody.tool_choice);
+            toolOverrides = this.converter.buildToolOverrides(requestBody.tools);
+        }
+
+        const extracted = [];
+        const imageAttachments = [];
+        const localFileAttachments = [];
+
+        for (const msg of processedMessages) {
+            const role = msg.role || "user";
+            const content = msg.content;
+            const parts = [];
+            if (typeof content === 'string') { if (content.trim()) parts.push(content.trim()); }
+            else if (Array.isArray(content)) {
+                for (const item of content) {
+                    if (item.type === 'text' && item.text?.trim()) parts.push(item.text.trim());
+                    else if (item.type === 'image_url' && item.image_url?.url) imageAttachments.push(item.image_url.url);
+                    else if (item.type === 'file' && item.file?.file_data) localFileAttachments.push(item.file.file_data);
+                }
+            }
+            if (role === "assistant" && parts.length === 0 && Array.isArray(msg.tool_calls)) {
+                for (const call of msg.tool_calls) {
+                    const fn = call.function || {};
+                    parts.push(`[tool_call] ${fn.name || call.name} ${typeof fn.arguments === 'string' ? fn.arguments : JSON.stringify(fn.arguments)}`);
+                }
+            }
+            if (parts.length > 0) extracted.push({ role, text: parts.join("\n") });
+        }
+
+        let lastUserIdx = -1;
+        for (let i = extracted.length - 1; i >= 0; i--) { if (extracted[i].role === 'user') { lastUserIdx = i; break; } }
+        const texts = extracted.map((item, i) => i === lastUserIdx ? item.text : `${item.role}: ${item.text}`);
+        let message = texts.join("\n\n");
+        if (toolPrompt) message = `${toolPrompt}\n\n${message}`;
+        if (!message.trim() && (imageAttachments.length || localFileAttachments.length)) message = "Refer to the following content:";
+        
+        requestBody.message = message;
+        requestBody._extractedImages = imageAttachments;
+        requestBody._extractedFiles = localFileAttachments;
+        if (Object.keys(toolOverrides).length > 0 && !requestBody.toolOverrides) {
+            requestBody.toolOverrides = toolOverrides;
+        }
     }
 
     async initialize() {
@@ -199,13 +332,12 @@ export class GrokApiService {
     }
 
     async getUsageLimits() {
-        const headers = this.buildHeaders();
-        const payload = { "requestKind": "DEFAULT", "modelName": "grok-3" };
-        const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/rate-limits`, headers, data: payload, httpAgent, httpsAgent, timeout: 30000 };
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
         try {
-            const response = await axios(axiosConfig);
+            const response = await this._request({
+                url: `${this.baseUrl}/rest/rate-limits`,
+                data: { "requestKind": "DEFAULT", "modelName": "grok-3" },
+                timeout: 30000
+            });
             const data = response.data;
             let remaining = data.remainingTokens !== undefined ? data.remainingTokens : (data.remainingQueries !== undefined ? data.remainingQueries : data.totalQueries);
             if (data.totalQueries > 0) {
@@ -256,19 +388,45 @@ export class GrokApiService {
             'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
             'sec-ch-ua-arch': '"x86"',
             'sec-ch-ua-bitness': '"64"',
+            'sec-ch-ua-full-version': '"143.0.7499.110"',
+            'sec-ch-ua-full-version-list': '"Google Chrome";v="143.0.7499.110", "Chromium";v="143.0.7499.110", "Not A(Brand";v="24.0.0.0"',
             'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-model': '""',
             'sec-ch-ua-platform': '"Windows"',
+            'sec-ch-ua-platform-version': '"19.0.0"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
             'user-agent': this.userAgent,
             'x-statsig-id': this.genStatsigId(),
             'x-xai-request-id': uuidv4()
         };
     }
 
+    /**
+     * 视频生成专属请求头
+     */
+    buildVideoHeaders() {
+        const headers = this.buildHeaders();
+        const traceId = uuidv4().replace(/-/g, '');
+        const parentId = uuidv4().replace(/-/g, '').substring(0, 16);
+
+        Object.assign(headers, {
+            'baggage': `sentry-environment=production,sentry-release=19b21d09e8a9dd440b9caae1bc973b88d50a73a6,sentry-public_key=b311e0f2690c81f25e2c4cf6d4f7ce1c,sentry-trace_id=${traceId},sentry-org_id=4508179396558848,sentry-transaction=%2Fc%2F%3Aslug*%3F,sentry-sampled=false`,
+            'referer': `${this.baseUrl}/imagine`,
+            'sentry-trace': `${traceId}-${parentId}-0`,
+            'traceparent': `00-${traceId}-${parentId}-00`
+        });
+
+        return headers;
+    }
+
     _extractPostId(text) {
         if (!text || typeof text !== 'string') return null;
         const match = text.match(/\/post\/([0-9a-fA-F-]{32,36})/) || 
                       text.match(/\/generated\/([0-9a-fA-F-]{32,36})\//) || 
-                      text.match(/\/([0-9a-fA-F-]{32,36})\/generated_video/);
+                      text.match(/\/([0-9a-fA-F-]{32,36})\/generated_video/) ||
+                      text.match(/\/images\/([0-9a-fA-F-]{32,36})\./); // 提取 imagine-public 图片 ID
         return match ? match[1] : null;
     }
 
@@ -281,11 +439,13 @@ export class GrokApiService {
         if (prompt && prompt.trim()) payload.prompt = prompt;
         if (mediaUrl && mediaUrl.trim()) payload.mediaUrl = mediaUrl;
 
-        const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/media/post/create`, headers, data: payload, httpAgent, httpsAgent, timeout: 30000 };
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
         try {
-            const response = await axios(axiosConfig);
+            const response = await this._request({
+                url: `${this.baseUrl}/rest/media/post/create`,
+                headers,
+                data: payload,
+                timeout: 30000
+            });
             const postId = response.data?.post?.id;
             if (postId) logger.info(`[Grok Post] Media post created: ${postId} (type=${mediaType})`);
             return postId;
@@ -301,11 +461,13 @@ export class GrokApiService {
         const idMatch = videoUrl.match(/\/generated\/([0-9a-fA-F-]{32,36})\//) || videoUrl.match(/\/([0-9a-fA-F-]{32,36})\/generated_video/);
         if (!idMatch) return videoUrl;
         const videoId = idMatch[1];
-        const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/media/video/upscale`, headers: this.buildHeaders(), data: { videoId }, httpAgent, httpsAgent, timeout: 30000 };
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
+        
         try {
-            const response = await axios(axiosConfig);
+            const response = await this._request({
+                url: `${this.baseUrl}/rest/media/video/upscale`,
+                data: { videoId },
+                timeout: 30000
+            });
             return response.data?.hdMediaUrl || videoUrl;
         } catch (error) { return videoUrl; }
     }
@@ -320,19 +482,13 @@ export class GrokApiService {
             "source": "post-page",
             "platform": "web"
         };
-        const axiosConfig = {
-            method: 'post',
-            url: `${this.baseUrl}/rest/media/post/create-link`,
-            headers,
-            data: payload,
-            httpAgent,
-            httpsAgent,
-            timeout: 15000
-        };
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
+        
         try {
-            const response = await axios(axiosConfig);
+            const response = await this._request({
+                url: `${this.baseUrl}/rest/media/post/create-link`,
+                headers,
+                data: payload
+            });
             const shareLink = response.data?.shareLink;
             if (shareLink) {
                 // 从 shareLink 中提取 ID (通常与输入的 postId 一致)
@@ -353,94 +509,193 @@ export class GrokApiService {
         }
     }
 
-    buildPayload(modelId, requestBody) {
+    async buildPayload(modelId, requestBody) {
         if (requestBody && Object.prototype.hasOwnProperty.call(requestBody, 'tools')) {
             delete requestBody.tools;
         }
 
         const rawModelId = typeof modelId === 'string' ? modelId : '';
         const normalizedModelId = normalizeGrokModelId(rawModelId);
-        const mapping = MODEL_MAPPING[normalizedModelId] || MODEL_MAPPING['grok-3'];
+        const mapping = this._getModelMapping(normalizedModelId);
+        
+        const modelLower = normalizedModelId.toLowerCase();
+        const isVideoModel = modelLower.includes('video');
+        const isEditModel = modelLower.includes('edit');
+
+        if (isVideoModel) {
+            return await this._buildVideoPayload(requestBody);
+        }
+
+        // --- 预处理消息和文件 (如果尚未处理) ---
+        if (!requestBody._extractedImages && !requestBody._extractedFiles) {
+            this._extractMessagesAndFiles(requestBody, isVideoModel);
+        }
+
         let message = requestBody.message || "";
         let toolOverrides = requestBody.toolOverrides || {};
         let fileAttachments = requestBody.fileAttachments || [];
-        let modelConfigOverride = requestBody.responseMetadata?.modelConfigOverride || {};
+        let responseMetadata = requestBody.responseMetadata || {};
 
-        if (requestBody.messages && Array.isArray(requestBody.messages)) {
-            let processedMessages = requestBody.messages;
-            if (requestBody.tools?.length > 0) processedMessages = this.converter.formatToolHistory(requestBody.messages);
-            const toolPrompt = this.converter.buildToolPrompt(requestBody.tools, requestBody.tool_choice);
-            if (requestBody.tools && Object.keys(toolOverrides).length === 0) toolOverrides = this.converter.buildToolOverrides(requestBody.tools);
-
-            const extracted = [];
-            const imageAttachments = [];
-            const localFileAttachments = [];
-
-            for (const msg of processedMessages) {
-                const role = msg.role || "user";
-                const content = msg.content;
-                const parts = [];
-                if (typeof content === 'string') { if (content.trim()) parts.push(content.trim()); }
-                else if (Array.isArray(content)) {
-                    for (const item of content) {
-                        if (item.type === 'text' && item.text?.trim()) parts.push(item.text.trim());
-                        else if (item.type === 'image_url' && item.image_url?.url) imageAttachments.push(item.image_url.url);
-                        else if (item.type === 'file' && item.file?.file_data) localFileAttachments.push(item.file.file_data);
-                    }
-                }
-                if (role === "assistant" && parts.length === 0 && Array.isArray(msg.tool_calls)) {
-                    for (const call of msg.tool_calls) {
-                        const fn = call.function || {};
-                        parts.push(`[tool_call] ${fn.name || call.name} ${typeof fn.arguments === 'string' ? fn.arguments : JSON.stringify(fn.arguments)}`);
-                    }
-                }
-                if (parts.length > 0) extracted.push({ role, text: parts.join("\n") });
-            }
-
-            let lastUserIdx = -1;
-            for (let i = extracted.length - 1; i >= 0; i--) { if (extracted[i].role === 'user') { lastUserIdx = i; break; } }
-            const texts = extracted.map((item, i) => i === lastUserIdx ? item.text : `${item.role}: ${item.text}`);
-            message = texts.join("\n\n");
-            if (toolPrompt) message = `${toolPrompt}\n\n${message}`;
-            if (!message.trim() && (imageAttachments.length || localFileAttachments.length)) message = "Refer to the following content:";
-            requestBody._extractedImages = imageAttachments;
-            requestBody._extractedFiles = localFileAttachments;
-        }
-
-        if (requestBody.videoGenModelConfig) {
-            modelConfigOverride.modelMap = { videoGenModelConfig: requestBody.videoGenModelConfig };
-            toolOverrides.videoGen = true;
-            if (requestBody.videoGenPrompt) message = requestBody.videoGenPrompt;
-        }
-
-        const modelLower = normalizedModelId.toLowerCase();
-        const isMediaModel = modelLower.includes('imagine') || modelLower.includes('video') || modelLower.includes('edit');
+        const isMediaModel = modelLower.includes('imagine') || isVideoModel || isEditModel;
         const isNsfw = isGrokNsfwModel(rawModelId) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
 
-        // 处理生成图片数量，API 通常限制单次最多 2 张
-        const imageGenerationCount = Math.min(parseInt(requestBody.n || requestBody.imageGenerationCount || (isMediaModel ? 2 : 0)), 2);
-        
-        // 处理响应格式
+        const shouldEnableImage = isMediaModel || 
+                                 modelLower.includes('expert') || 
+                                 modelLower.includes('fast') || 
+                                 modelLower.includes('grok-3') || 
+                                 requestBody.enableImageGeneration === true;
+
+        const imageGenerationCount = Math.min(parseInt(requestBody.n || requestBody.imageGenerationCount || (shouldEnableImage ? 2 : 0)), 2);
         const returnImageBytes = requestBody.response_format === 'b64_json' || requestBody.responseFormat === 'b64_json';
 
-        const payload = {
-            "deviceEnvInfo": { "darkModeEnabled": false, "devicePixelRatio": 2, "screenWidth": 2056, "screenHeight": 1329, "viewportWidth": 2056, "viewportHeight": 1083 },
-            "disableMemory": false, "disableNsfwFilter": isNsfw, "disableSearch": false, "disableSelfHarmShortCircuit": false, "disableTextFollowUps": false,
-            "enableImageGeneration": isMediaModel, "enableImageStreaming": isMediaModel, "enableSideBySide": true,
-            "fileAttachments": fileAttachments, "forceConcise": false, "forceSideBySide": false, "imageAttachments": [], 
-            "imageGenerationCount": imageGenerationCount,
-            "isAsyncChat": false, "isReasoning": false, "message": message, "modelMode": mapping.mode, "modelName": mapping.name,
-            "responseMetadata": { "requestModelDetails": { "modelId": mapping.name }, "modelConfigOverride": modelConfigOverride },
-            "returnImageBytes": returnImageBytes, "returnRawGrokInXaiRequest": false, "sendFinalMetadata": true, "temporary": true, "toolOverrides": toolOverrides,
+        const finalToolOverrides = {
+            "gmailSearch": false,
+            "googleCalendarSearch": false,
+            "outlookSearch": false,
+            "outlookCalendarSearch": false,
+            "googleDriveSearch": false,
+            ...toolOverrides
         };
 
-        if (isMediaModel && !modelLower.includes('video')) {
+        const payload = {
+            "temporary": requestBody.temporary !== undefined ? requestBody.temporary : true,
+            "modelName": requestBody.modelName || mapping.name || "grok-3",
+            "message": message,
+            "parentResponseId": requestBody.parentResponseId || undefined,
+            "disableSearch": false,
+            "enableImageGeneration": shouldEnableImage,
+            "imageAttachments": [],
+            "returnImageBytes": returnImageBytes,
+            "returnRawGrokInXaiRequest": false,
+            "fileAttachments": fileAttachments,
+            "enableImageStreaming": shouldEnableImage,
+            "imageGenerationCount": imageGenerationCount,
+            "forceConcise": false,
+            "toolOverrides": finalToolOverrides,
+            "enableSideBySide": true,
+            "responseMetadata": responseMetadata,
+            "sendFinalMetadata": true,
+            "metadata": { "request_metadata": {} },
+            "disableTextFollowUps": false,
+            "isFromGrokFiles": false,
+            "disableMemory": false,
+            "forceSideBySide": false,
+            "isAsyncChat": false,
+            "skipCancelCurrentInflightRequests": false,
+            "isRegenRequest": false,
+            "disableSelfHarmShortCircuit": false,
+            "collectionIds": [],
+            "connectors": [],
+            "searchAllConnectors": false,
+            "deviceEnvInfo": { 
+                "darkModeEnabled": false, 
+                "devicePixelRatio": 1, 
+                "screenWidth": 2560, 
+                "screenHeight": 1440, 
+                "viewportWidth": 1774, 
+                "viewportHeight": 1271 
+            }
+        };
+
+        if (mapping.modeId && mapping.name !== 'grok-3') {
+            payload.modeId = mapping.modeId;
+            // 对于特定的编辑/媒体模式，如果已经有了 modeId，某些情况下 modelName 可能需要调整或保持一致
+        }
+
+        if (isMediaModel && !isVideoModel && !isEditModel) {
             payload.enable_nsfw = isNsfw;
             const aspectRatio = requestBody.aspect_ratio || requestBody.aspectRatio;
             if (aspectRatio) {
                 payload.aspect_ratio = aspectRatio;
             }
         }
+
+        // 监控钩子
+        await this._executeInternalRequestHook(payload, 'grok-buildPayload');
+
+        return payload;
+    }
+
+    /**
+     * 专门构建视频生成的精简载荷
+     */
+    async _buildVideoPayload(requestBody) {
+        const videoConfig = requestBody.videoGenModelConfig || {};
+        const aspectRatio = requestBody.aspect_ratio || requestBody.aspectRatio || videoConfig.aspectRatio || "16:9";
+        const videoLength = parseInt(requestBody.video_length || requestBody.videoLength || videoConfig.videoLength || 6);
+        const resolutionName = requestBody.resolution_name || requestBody.resolution || videoConfig.resolutionName || "480p";
+        const preset = requestBody.preset || requestBody.mode || "custom";
+        
+        // 1. 提取 Prompt 和参考图片 (通过复用逻辑)
+        this._extractMessagesAndFiles(requestBody, true);
+        let message = requestBody.message || "";
+        let referenceImageUrl = null;
+        let parentPostId = videoConfig.parentPostId;
+
+        if (requestBody.messages?.length > 0) {
+            const lastMsg = requestBody.messages[requestBody.messages.length - 1];
+            if (Array.isArray(lastMsg.content)) {
+                const imgPart = lastMsg.content.find(p => p.type === 'image_url');
+                if (imgPart) referenceImageUrl = imgPart.image_url.url;
+                const textPart = lastMsg.content.find(p => p.type === 'text');
+                if (textPart) message = textPart.text;
+            }
+        }
+
+        // 2. 视频前置准备：创建 Post 以获取 parentPostId
+        if (!parentPostId && referenceImageUrl) {
+            let mediaUrl = referenceImageUrl;
+            if (mediaUrl.startsWith('data:') || !mediaUrl.startsWith('http')) {
+                const up = await this.uploadFile(mediaUrl);
+                if (up?.fileUri) mediaUrl = `https://assets.grok.com/${up.fileUri}`;
+            }
+            parentPostId = this._extractPostId(mediaUrl) || await this.createPost("MEDIA_POST_TYPE_VIDEO", mediaUrl);
+            referenceImageUrl = mediaUrl;
+        } else if (!parentPostId && message) {
+            parentPostId = await this.createPost("MEDIA_POST_TYPE_VIDEO", null, message);
+        }
+
+        // 3. 处理模式标记
+        let modeFlag = "";
+        if (!message.includes("--mode=")) {
+            if (preset === "fun") modeFlag = "--mode=extremely-crazy";
+            else if (preset === "spicy") modeFlag = "--mode=extremely-spicy-or-crazy";
+            else if (preset === "custom") modeFlag = "--mode=custom";
+            else modeFlag = "--mode=normal";
+        }
+
+        if (referenceImageUrl && referenceImageUrl.startsWith('http')) {
+            message = `${referenceImageUrl}${modeFlag ? '  ' + modeFlag : ''}`;
+        } else {
+            message = `${message || "Generate video"}${modeFlag ? ' ' + modeFlag : ''}`;
+        }
+
+        // 4. 构建精简载荷
+        const payload = {
+            "temporary": true,
+            "modelName": "grok-3",
+            "message": message,
+            "toolOverrides": {
+                "videoGen": true
+            },
+            "enableSideBySide": true,
+            "responseMetadata": {
+                "experiments": [],
+                "modelConfigOverride": {
+                    "modelMap": {
+                        "videoGenModelConfig": {
+                            "parentPostId": parentPostId || "",
+                            "aspectRatio": aspectRatio,
+                            "videoLength": videoLength,
+                            "resolutionName": resolutionName
+                        }
+                    }
+                }
+            }
+        };
+
+        // 5. 监控钩子
+        await this._executeInternalRequestHook(payload, 'grok-buildVideoPayload');
 
         return payload;
     }
@@ -456,65 +711,194 @@ export class GrokApiService {
             modelResponse: null, 
             cardAttachment: null,
             cardAttachments: [],
+            cardMap: {}, // 存储 cardId -> {title, original} 的映射
+            generatedImageUrls: [], // 存储解析出的高清图片链接
             streamingImageGenerationResponse: null, 
             streamingVideoGenerationResponse: null, 
             finalVideoUrl: null, 
             finalThumbnailUrl: null 
         };
         
-        for await (const chunk of stream) {
-            const resp = chunk.result?.response;
-            if (!resp) continue;
-            if (resp.token) collected.message += resp.token;
-            if (resp.responseId) collected.responseId = resp.responseId;
-            if (resp.llmInfo) Object.assign(collected.llmInfo, resp.llmInfo);
-            if (resp.rolloutId) collected.rolloutId = resp.rolloutId;
-            if (resp._requestBaseUrl) collected._requestBaseUrl = resp._requestBaseUrl;
-            if (resp._uuid) collected._uuid = resp._uuid;
-            
-            if (resp.modelResponse) {
-                if (!collected.modelResponse) {
-                    collected.modelResponse = resp.modelResponse;
-                } else {
-                    // 合并 modelResponse 中的数据
-                    if (resp.modelResponse.message) collected.modelResponse.message = resp.modelResponse.message;
-                    if (Array.isArray(resp.modelResponse.cardAttachmentsJson)) {
-                        if (!collected.modelResponse.cardAttachmentsJson) {
-                            collected.modelResponse.cardAttachmentsJson = resp.modelResponse.cardAttachmentsJson;
-                        } else {
-                            const currentIds = new Set(collected.modelResponse.cardAttachmentsJson.map(raw => {
-                                try { return JSON.parse(raw).id; } catch (e) { return null; }
-                            }).filter(id => id));
-                            
-                            for (const raw of resp.modelResponse.cardAttachmentsJson) {
-                                try {
-                                    const id = JSON.parse(raw).id;
-                                    if (!id || !currentIds.has(id)) {
-                                        collected.modelResponse.cardAttachmentsJson.push(raw);
-                                        if (id) currentIds.add(id);
-                                    }
-                                } catch (e) {
-                                    collected.modelResponse.cardAttachmentsJson.push(raw);
-                                }
+        // 用于去重的集合
+        const seenCardIds = new Set();
+        const seenImageUrls = new Set();
+        
+        try {
+            for await (const chunk of stream) {
+                const resp = chunk.result?.response;
+                if (!resp) continue;
+
+                // 增加原始输出日志以排查多图生成问题
+                if (resp.cardAttachment || resp.streamingImageGenerationResponse || resp.modelResponse?.cardAttachmentsJson) {
+                    // logger.info(`[Grok Raw Output] Response chunk: ${JSON.stringify(resp)}`);
+                }
+
+                if (resp.token && !resp.isThinking && !resp.messageStepId) collected.message += resp.token;
+                if (resp.responseId) collected.responseId = resp.responseId;
+                if (resp.llmInfo) Object.assign(collected.llmInfo, resp.llmInfo);
+                if (resp.rolloutId) collected.rolloutId = resp.rolloutId;
+                if (resp._requestBaseUrl) collected._requestBaseUrl = resp._requestBaseUrl;
+                if (resp._uuid) collected._uuid = resp._uuid;
+                
+                if (resp.modelResponse) {
+                    const mr = resp.modelResponse;
+                    
+                    // 提取并记录 Grok 的流错误（例如：图片生成达到限制）
+                    const errors = mr.streamErrors || mr.metadata?.stream_errors;
+                    if (Array.isArray(errors)) {
+                        for (const err of errors) {
+                            if (err.message && !collected.message.includes(err.message)) {
+                                logger.warn(`[Grok Stream Error] ${err.message}`);
+                                collected.message += (collected.message ? "\n" : "") + `[Grok Error] ${err.message}`;
                             }
                         }
                     }
+
+                    if (!collected.modelResponse) {
+                        collected.modelResponse = mr;
+                    } else {
+                        // 合并 modelResponse 中的消息
+                        if (mr.message) collected.modelResponse.message = mr.message;
+                        // 合并 cardAttachmentsJson (如果存在且未预过滤，但此处通常已由流预处理)
+                        if (Array.isArray(mr.cardAttachmentsJson)) {
+                            if (!collected.modelResponse.cardAttachmentsJson) collected.modelResponse.cardAttachmentsJson = [];
+                            for (const raw of mr.cardAttachmentsJson) {
+                                try {
+                                    const parsed = JSON.parse(raw);
+                                    if (parsed.id && !seenCardIds.has(parsed.id)) {
+                                        collected.modelResponse.cardAttachmentsJson.push(raw);
+                                        seenCardIds.add(parsed.id);
+                                    }
+                                } catch(e) { collected.modelResponse.cardAttachmentsJson.push(raw); }
+                            }
+                        }
+                    }
+
+                    // 使用 generateContentStream 预先提取出的图片信息
+                    if (Array.isArray(mr.generatedImageUrls)) {
+                        for (const url of mr.generatedImageUrls) {
+                            if (!seenImageUrls.has(url)) {
+                                collected.generatedImageUrls.push(url);
+                                seenImageUrls.add(url);
+                            }
+                        }
+                    }
+                    if (mr._cardIdMap) {
+                        Object.assign(collected.cardMap, mr._cardIdMap);
+                    }
+                }
+
+                if (resp.cardAttachment) {
+                    try {
+                        const parsed = typeof resp.cardAttachment.jsonData === 'string' ? JSON.parse(resp.cardAttachment.jsonData) : resp.cardAttachment.jsonData;
+                        const id = parsed?.id;
+                        
+                        collected.cardAttachment = resp.cardAttachment;
+                        
+                        if (!id || !seenCardIds.has(id)) {
+                            collected.cardAttachments.push(resp.cardAttachment);
+                            if (id) seenCardIds.add(id);
+                        }
+                        
+                        // resp.cardAttachment 中的图片不再单独提取，避免重复或中间状态干扰 (已在 generateContentStream 中预处理)
+                    } catch(e) {
+                        collected.cardAttachment = resp.cardAttachment;
+                        collected.cardAttachments.push(resp.cardAttachment);
+                    }
+                }
+
+                if (resp.streamingImageGenerationResponse) {
+                    collected.streamingImageGenerationResponse = resp.streamingImageGenerationResponse;
+                }
+                if (resp.streamingVideoGenerationResponse) {
+                    collected.streamingVideoGenerationResponse = resp.streamingVideoGenerationResponse;
+                    // 同时检查 videoPostId, postId 和 videoId
+                    const videoId = resp.streamingVideoGenerationResponse.videoPostId || 
+                                  resp.streamingVideoGenerationResponse.postId || 
+                                  resp.streamingVideoGenerationResponse.videoId;
+                    if (videoId) collected.postId = videoId;
+
+                    if (resp.streamingVideoGenerationResponse.progress === 100 && resp.streamingVideoGenerationResponse.videoUrl) {
+                        collected.finalVideoUrl = resp.streamingVideoGenerationResponse.videoUrl;
+                        collected.finalThumbnailUrl = resp.streamingVideoGenerationResponse.thumbnailImageUrl;
+                    }
+                }
+            }
+        } catch (error) {
+            // 如果已经采集到了图片或视频，则不抛出异常，而是返回已有的结果
+            if (collected.cardAttachments.length > 0 || collected.generatedImageUrls.length > 0 || collected.finalVideoUrl) {
+                logger.warn(`[Grok] Error during collection, but partial results exist. Returning what we have: ${error.message}`);
+                return collected;
+            }
+            throw error;
+        }
+        return collected;
+    }
+
+    _mergeCollectedResults(results) {
+        if (!results || results.length === 0) return null;
+        const collected = results[0];
+        if (results.length === 1) return collected;
+
+        const seenCardIds = new Set();
+        const seenImageUrls = new Set();
+
+        const track = (res) => {
+            if (res.cardAttachments) {
+                for (const att of res.cardAttachments) {
+                    try {
+                        const parsed = typeof att.jsonData === 'string' ? JSON.parse(att.jsonData) : att.jsonData;
+                        if (parsed?.id) seenCardIds.add(parsed.id);
+                    } catch (e) {}
+                }
+            }
+            if (res.generatedImageUrls) {
+                for (const url of res.generatedImageUrls) seenImageUrls.add(url);
+            }
+        };
+
+        track(collected);
+
+        for (let i = 1; i < results.length; i++) {
+            const res = results[i];
+            if (res.message) collected.message += "\n" + res.message;
+            
+            if (res.cardAttachments) {
+                for (const att of res.cardAttachments) {
+                    try {
+                        const parsed = typeof att.jsonData === 'string' ? JSON.parse(att.jsonData) : att.jsonData;
+                        const id = parsed?.id;
+                        if (!id || !seenCardIds.has(id)) {
+                            collected.cardAttachments.push(att);
+                            if (id) seenCardIds.add(id);
+                        }
+                    } catch (e) { collected.cardAttachments.push(att); }
                 }
             }
             
-            if (resp.cardAttachment) {
-                collected.cardAttachment = resp.cardAttachment;
-                collected.cardAttachments.push(resp.cardAttachment);
+            if (res.generatedImageUrls) {
+                for (const url of res.generatedImageUrls) {
+                    if (!seenImageUrls.has(url)) {
+                        collected.generatedImageUrls.push(url);
+                        seenImageUrls.add(url);
+                    }
+                }
             }
-            if (resp.streamingImageGenerationResponse) {
-                collected.streamingImageGenerationResponse = resp.streamingImageGenerationResponse;
-            }
-            if (resp.streamingVideoGenerationResponse) {
-                collected.streamingVideoGenerationResponse = resp.streamingVideoGenerationResponse;
-                if (resp.streamingVideoGenerationResponse.postId) collected.postId = resp.streamingVideoGenerationResponse.postId;
-                if (resp.streamingVideoGenerationResponse.progress === 100 && resp.streamingVideoGenerationResponse.videoUrl) {
-                    collected.finalVideoUrl = resp.streamingVideoGenerationResponse.videoUrl;
-                    collected.finalThumbnailUrl = resp.streamingVideoGenerationResponse.thumbnailImageUrl;
+
+            if (res.cardMap) Object.assign(collected.cardMap, res.cardMap);
+
+            if (res.modelResponse?.cardAttachmentsJson) {
+                if (!collected.modelResponse) collected.modelResponse = { cardAttachmentsJson: [] };
+                if (!collected.modelResponse.cardAttachmentsJson) collected.modelResponse.cardAttachmentsJson = [];
+                for (const raw of res.modelResponse.cardAttachmentsJson) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        const id = parsed?.id;
+                        if (!id || !seenCardIds.has(id)) {
+                            collected.modelResponse.cardAttachmentsJson.push(raw);
+                            if (id) seenCardIds.add(id);
+                        }
+                    } catch (e) { collected.modelResponse.cardAttachmentsJson.push(raw); }
                 }
             }
         }
@@ -525,10 +909,24 @@ export class GrokApiService {
         logger.info(`[Grok] Starting generateContent (unified processing)`);
         
         const n = parseInt(requestBody.n || 1);
-        const isImagine = model.toLowerCase().includes('imagine');
+        const normalizedModel = normalizeGrokModelId(model);
+        const modelLower = normalizedModel.toLowerCase();
+        const isImagine = modelLower.includes('imagine');
+        // 识别优先使用 WS 的模型 (仅限图片生成，排除视频)
+        // const isWSPreferred = isImagine && !modelLower.includes('video');
         
         let collected;
         try {
+            // 如果是优先 WS 的模型，尝试直接走 WS 逻辑
+            /* if (isWSPreferred) {
+                try {
+                    return await this._generateAndCollectWS(model, requestBody);
+                } catch (wsError) {
+                    logger.warn(`[Grok] Initial WS generation failed, falling back to app_chat: ${wsError.message}`);
+                    // 失败后继续向下走传统的 app_chat 逻辑
+                }
+            } */
+
             if (n <= 2 || !isImagine) {
                 // 单次请求处理
                 collected = await this._generateAndCollect(model, requestBody);
@@ -546,26 +944,11 @@ export class GrokApiService {
                 }
                 
                 const results = await Promise.all(tasks);
-                
-                // 合并所有批次的结果
-                collected = results[0];
-                for (let i = 1; i < results.length; i++) {
-                    const res = results[i];
-                    // 合并消息文本
-                    if (res.message) collected.message += "\n" + res.message;
-                    // 合并卡片附件
-                    if (res.cardAttachments) collected.cardAttachments.push(...res.cardAttachments);
-                    // 合并 modelResponse 中的卡片 JSON
-                    if (res.modelResponse?.cardAttachmentsJson) {
-                        if (!collected.modelResponse) collected.modelResponse = { cardAttachmentsJson: [] };
-                        if (!collected.modelResponse.cardAttachmentsJson) collected.modelResponse.cardAttachmentsJson = [];
-                        collected.modelResponse.cardAttachmentsJson.push(...res.modelResponse.cardAttachmentsJson);
-                    }
-                }
+                collected = this._mergeCollectedResults(results);
             }
         } catch (error) {
-            // 只有图片生成才支持 WebSocket Fallback
-            if (isImagine) {
+            // 只有图片生成才支持 WebSocket Fallback，排除视频模型
+            if (isImagine && !modelLower.includes('video')) {
                 logger.warn(`[Grok] app_chat image generation failed, trying ws_imagine fallback: ${error.message}`);
                 try {
                     return await this._generateAndCollectWS(model, requestBody);
@@ -644,26 +1027,88 @@ export class GrokApiService {
             postId: "", 
             llmInfo: { modelHash: "ws-imagine" }, 
             rolloutId: "", 
+            _uuid: this.uuid,
+            _requestBaseUrl: this.config.requestBaseUrl,
             modelResponse: { cardAttachmentsJson: [] }, 
             cardAttachments: [] 
         };
         
-        for await (const item of stream) {
-            if (item.type === 'error') {
-                throw new Error(item.error || 'WebSocket generation failed');
+        let imagesCollected = 0;
+        const latestImages = new Map(); // 用于缓存每个 imageId 的最新状态
+
+        const addImgToCollected = async (item) => {
+            const imageUrl = item.url || ((item.blob && !item.blob.startsWith('data:')) ? `data:image/png;base64,${item.blob}` : item.blob);
+            
+            // 处理 imagine-public 图片：创建媒体发布（Post）以获取持久化链接
+            let shareLink = null;
+            if (imageUrl.includes('imagine-public.x.ai')) {
+                const postId = await this.createPost('IMAGE', imageUrl, prompt);
+                if (postId) {
+                    shareLink = await this.createVideoShareLink(postId);
+                    collected.postId = postId;
+                }
             }
-            if (item.type === 'image' && item.stage === 'final') {
-                const cardData = {
-                    id: item.image_id || uuidv4(),
-                    image: {
-                        original: item.blob.startsWith('data:') ? item.blob : `data:image/png;base64,${item.blob}`,
-                        title: "Generated Image"
+            
+            const cardData = {
+                id: item.id || item.image_id || item.job_id || uuidv4(),
+                image: {
+                    original: imageUrl,
+                    title: "Generated Image",
+                    shareLink: shareLink
+                }
+            };
+            const jsonStr = JSON.stringify(cardData);
+            collected.cardAttachments.push({ jsonData: jsonStr });
+            collected.modelResponse.cardAttachmentsJson.push(jsonStr);
+            imagesCollected++;
+            logger.info(`[Grok WS] Collected image: ${cardData.id} (progress: ${item.percentage_complete}%)`);
+        };
+
+        for await (const item of stream) {
+            // 增加 WS 原始输出日志
+            if (item.type === 'image' || item.type === 'error') {
+                logger.info(`[Grok WS Raw] Item: ${JSON.stringify(item)}`);
+            }
+
+            if (item.type === 'error') {
+                const errorMsg = item.err_msg || item.error || 'WebSocket generation failed';
+                
+                // 救回逻辑：如果发生错误且没有 100% 的图，但有中间图，则使用中间图
+                if (imagesCollected === 0 && latestImages.size > 0) {
+                    logger.info(`[Grok WS] Salvaging ${latestImages.size} intermediate images on error.`);
+                    for (const img of latestImages.values()) {
+                        await addImgToCollected(img);
                     }
-                };
-                const jsonStr = JSON.stringify(cardData);
-                collected.modelResponse.cardAttachmentsJson.push(jsonStr);
-                collected.cardAttachments.push({ jsonData: jsonStr });
-                logger.info(`[Grok WS] Received image: ${cardData.id}`);
+                }
+
+                if (imagesCollected > 0) {
+                    logger.warn(`[Grok WS] Error after collecting ${imagesCollected} images: ${errorMsg}. Returning partial results.`);
+                    collected.message += (collected.message ? "\n" : "") + `[Grok Error] ${errorMsg}`;
+                    break;
+                }
+                throw new Error(errorMsg);
+            }
+
+            if (item.type === 'image') {
+                // 如果是包含 part-0 的分块图片资源，则直接过滤不处理
+                if (this._isPart0(item.url)) continue;
+
+                const imgId = item.id || item.image_id || item.job_id || uuidv4();
+                latestImages.set(imgId, item);
+
+                const hasMedia = item.url || item.blob;
+                const isFinal = item.percentage_complete === 100 || item.stage === 'final';
+
+                if (hasMedia && isFinal) {
+                    await addImgToCollected(item);
+                }
+            }
+        }
+        
+        // 结束循环后的救回逻辑
+        if (imagesCollected === 0 && latestImages.size > 0) {
+            for (const img of latestImages.values()) {
+                await addImgToCollected(img);
             }
         }
         
@@ -694,29 +1139,68 @@ export class GrokApiService {
         
         const responseId = `ws-${uuidv4()}`;
 
+        let imagesYielded = 0;
         for await (const item of stream) {
+            // 增加 WS 流式原始输出日志
+            if (item.type === 'image' || item.type === 'error') {
+                // logger.info(`[Grok WS Stream Raw] Item: ${JSON.stringify(item)}`);
+            }
+
             if (item.type === 'error') {
-                throw new Error(item.error || 'WebSocket generation failed');
+                const errorMsg = item.err_msg || item.error || 'WebSocket generation failed';
+                if (imagesYielded > 0) {
+                    logger.warn(`[Grok WS] Error after yielding ${imagesYielded} images: ${errorMsg}. Ending stream gracefully.`);
+                    yield {
+                        result: {
+                            response: {
+                                responseId,
+                                token: `\n\n[Grok Error] ${errorMsg}`
+                            }
+                        }
+                    };
+                    break;
+                }
+                throw new Error(errorMsg);
             }
             if (item.type === 'image') {
+                // 如果是包含 part-0 的分块图片资源，则直接过滤不处理
+                if (this._isPart0(item.url)) continue;
+
                 yield {
                     result: {
                         response: {
                             responseId,
                             streamingImageGenerationResponse: {
                                 imageIndex: 0,
-                                progress: item.stage === 'final' ? 100 : (item.stage === 'medium' ? 50 : 10)
+                                progress: item.percentage_complete || (item.stage === 'final' ? 100 : (item.stage === 'medium' ? 50 : 10))
                             }
                         }
                     }
                 };
                 
-                if (item.stage === 'final') {
+                // 只有最终阶段且有媒体数据时，才输出图片
+                const hasMedia = item.url || item.blob;
+                const isFinal = item.percentage_complete === 100 || item.stage === 'final';
+                
+                if (hasMedia && isFinal) {
+                    // 优先从 url 字段获取链接，如果不存在则使用 blob 降级
+                    const imageUrl = item.url || ((item.blob && !item.blob.startsWith('data:')) ? `data:image/png;base64,${item.blob}` : item.blob);
+                    
+                    // 处理 imagine-public 图片：创建媒体发布（Post）以获取持久化链接
+                    let shareLink = null;
+                    if (imageUrl.includes('imagine-public.x.ai')) {
+                        const postId = await this.createPost('IMAGE', imageUrl, prompt);
+                        if (postId) {
+                            shareLink = await this.createVideoShareLink(postId);
+                        }
+                    }
+
                     const cardData = {
-                        id: item.image_id || uuidv4(),
+                        id: item.id || item.image_id || uuidv4(),
                         image: {
-                            original: item.blob.startsWith('data:') ? item.blob : `data:image/png;base64,${item.blob}`,
-                            title: "Generated Image"
+                            original: imageUrl,
+                            title: "Generated Image",
+                            shareLink: shareLink
                         }
                     };
                     yield {
@@ -729,6 +1213,7 @@ export class GrokApiService {
                             }
                         }
                     };
+                    imagesYielded++;
                 }
             }
         }
@@ -742,10 +1227,15 @@ export class GrokApiService {
             if (match) { mime = match[1]; b64 = match[2]; }
         }
         if (!b64) return null;
-        const axiosConfig = { method: 'post', url: `${this.baseUrl}/rest/app-chat/upload-file`, headers: this.buildHeaders(), data: { fileName: `file.${mime.split("/")[1] || "bin"}`, fileMimeType: mime, content: b64 }, httpAgent, httpsAgent, timeout: 30000 };
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
-        try { return (await axios(axiosConfig)).data; } catch (error) { return null; }
+        
+        try {
+            const response = await this._request({
+                url: `${this.baseUrl}/rest/app-chat/upload-file`,
+                data: { fileName: `file.${mime.split("/")[1] || "bin"}`, fileMimeType: mime, content: b64 },
+                timeout: 30000
+            });
+            return response.data;
+        } catch (error) { return null; }
     }
 
     async * generateContentStream(model, requestBody, retryCount = 0) {
@@ -769,65 +1259,25 @@ export class GrokApiService {
         const rawModel = typeof model === 'string' ? model : '';
         const normalizedModel = normalizeGrokModelId(rawModel);
         const modelLower = normalizedModel.toLowerCase();
+        const isImagine = modelLower.includes('imagine') || modelLower.includes('edit');
+        // 识别优先使用 WS 的模型 (仅限图片生成，排除视频)
+        // const isWSPreferred = isImagine && !modelLower.includes('video');
         const isNsfw = isGrokNsfwModel(rawModel) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
         if (isNsfw) await this.setupNsfw();
 
-        this.buildPayload(model, requestBody);
+        // 提前提取图片和消息，确保上传逻辑能获取到图片
+        this._extractMessagesAndFiles(requestBody, modelLower.includes('video'));
 
-        const isVideoModel = modelLower.includes('video');
-        const isImageModel = modelLower.includes('imagine') && !isVideoModel && !modelLower.includes('edit');
-        const isImageEditModel = modelLower.includes('edit');
-
-        if (isVideoModel) {
-            const videoConfig = requestBody.videoGenModelConfig || {};
-            const aspectRatio = requestBody.aspect_ratio || requestBody.aspectRatio || videoConfig.aspectRatio || "3:2";
-            const videoLength = parseInt(requestBody.video_length || requestBody.videoLength || videoConfig.videoLength || 6);
-            const resolutionName = requestBody.resolution_name || requestBody.resolution || videoConfig.resolutionName || "480p";
-            const preset = requestBody.preset || "normal";
-            let parentPostId = videoConfig.parentPostId;
-
-            if (!parentPostId) {
-                // 修复：从 requestBody.message 或 messages 数组中提取 prompt
-                let prompt = requestBody.videoGenPrompt || requestBody.message;
-                if (!prompt && requestBody.messages?.length > 0) {
-                    const lastMsg = requestBody.messages[requestBody.messages.length - 1];
-                    if (typeof lastMsg.content === 'string') {
-                        prompt = lastMsg.content;
-                    } else if (Array.isArray(lastMsg.content)) {
-                        const textPart = lastMsg.content.find(p => p.type === 'text');
-                        if (textPart) prompt = textPart.text;
-                    }
-                }
-                prompt = prompt || "";
-
-                let lastMsgImages = [];
-                if (requestBody.messages?.length > 0) {
-                    const lastMsg = requestBody.messages[requestBody.messages.length - 1];
-                    if (lastMsg.role === 'user' && Array.isArray(lastMsg.content)) {
-                        lastMsg.content.forEach(item => { if (item.type === 'image_url' && item.image_url?.url) lastMsgImages.push(item.image_url.url); });
-                    }
-                }
-                if (lastMsgImages.length > 0) {
-                    let mediaUrl = lastMsgImages[0];
-                    if (mediaUrl.startsWith('data:') || !mediaUrl.startsWith('http')) {
-                        const up = await this.uploadFile(mediaUrl);
-                        if (up?.fileUri) mediaUrl = `https://assets.grok.com/${up.fileUri}`;
-                    }
-                    parentPostId = await this.createPost("MEDIA_POST_TYPE_VIDEO", mediaUrl);
-                } else {
-                    parentPostId = await this.createPost("MEDIA_POST_TYPE_VIDEO", null, prompt);
-                }
+        // 如果是优先 WS 的模型，尝试直接走 WS 流逻辑
+        /* if (isWSPreferred && retryCount === 0) {
+            try {
+                yield* this._generateContentStreamWS(model, requestBody);
+                return;
+            } catch (wsError) {
+                logger.warn(`[Grok] Initial WS stream failed, falling back to app_chat: ${wsError.message}`);
+                // 失败后继续向下执行传统的 app_chat 逻辑
             }
-
-            if (parentPostId) {
-                requestBody.videoGenModelConfig = { aspectRatio, parentPostId, resolutionName, videoLength };
-                const modeMap = { "fun": "--mode=extremely-crazy", "normal": "--mode=normal", "spicy": "--mode=extremely-spicy-or-crazy" };
-                requestBody.videoGenPrompt = `${requestBody.videoGenPrompt || requestBody.message || ""} ${modeMap[preset] || "--mode=custom"}`;
-                requestBody.toolOverrides = { ...requestBody.toolOverrides, videoGen: true };
-            }
-        } else if (isImageModel || isImageEditModel) {
-            requestBody.toolOverrides = { ...requestBody.toolOverrides, imageGen: true };
-        }
+        } */
 
         let fileAttachments = requestBody.fileAttachments || [];
         const toUpload = [...(requestBody._extractedImages || []), ...(requestBody._extractedFiles || [])];
@@ -839,13 +1289,26 @@ export class GrokApiService {
             requestBody.fileAttachments = fileAttachments;
         }
 
-        const payload = this.buildPayload(model, requestBody);
-        const axiosConfig = { method: 'post', url: this.chatApi, headers: this.buildHeaders(), data: payload, responseType: 'stream', httpAgent, httpsAgent, timeout: 60000, maxRedirects: 0 };
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
-        this._applySidecar(axiosConfig);
+        const payload = await this.buildPayload(model, requestBody);
+        
+        let url = this.chatApi;
+        if (requestBody.conversationId) {
+            url = `${this.baseUrl}/rest/app-chat/conversations/${requestBody.conversationId}/responses`;
+        }
+
+        const isVideo = modelLower.includes('video');
+        const headers = isVideo ? this.buildVideoHeaders() : this.buildHeaders();
 
         try {
-            const response = await axios(axiosConfig);
+            const response = await this._request({
+                method: 'post',
+                url,
+                headers,
+                data: payload,
+                responseType: 'stream',
+                timeout: 60000,
+                maxRedirects: 0
+            });
             const rl = readline.createInterface({ input: response.data, terminal: false });
             let lastResponseId = payload.responseMetadata?.requestModelDetails?.modelId || "final";
 
@@ -860,6 +1323,65 @@ export class GrokApiService {
                         const resp = json.result.response;
                         resp._requestBaseUrl = reqBaseUrl;
                         resp._uuid = this.uuid;
+
+                        // --- 预处理与中心化过滤 ---
+                        
+                        // 0. 处理思考内容过滤 (根据指令：不要返回思考内容)
+                        if (resp.isThinking || resp.messageStepId) {
+                            // 清空 token 以抑制思考输出
+                            resp.token = "";
+                            // 标记为非思考，防止 converter 产生 <think> 标签或 reasoning_content
+                            resp.isThinking = false;
+                            delete resp.messageStepId;
+                        }
+
+                        // 1. 处理 cardAttachment (根据最新指令，若是图片则不处理)
+                        if (resp.cardAttachment) {
+                            try {
+                                const parsed = typeof resp.cardAttachment.jsonData === 'string' ? JSON.parse(resp.cardAttachment.jsonData) : resp.cardAttachment.jsonData;
+                                const url = parsed?.image_chunk?.imageUrl || parsed?.image?.original;
+                                if (url) {
+                                    // 只要包含图片资源，直接从流中删除该卡片 (指令：resp.cardAttachment 中的图片都不处理)
+                                    delete resp.cardAttachment;
+                                }
+                            } catch (e) {}
+                        }
+
+                        // 2. 处理 modelResponse.cardAttachmentsJson (核心图片源)
+                        if (Array.isArray(resp.modelResponse?.cardAttachmentsJson)) {
+                            const extractedUrls = [];
+                            const cardIdMap = {};
+
+                            resp.modelResponse.cardAttachmentsJson = resp.modelResponse.cardAttachmentsJson.filter(raw => {
+                                try {
+                                    const parsed = JSON.parse(raw);
+                                    const url = parsed?.image_chunk?.imageUrl || parsed?.image?.original;
+                                    
+                                    // 过滤：如果是 part-0 分块资源，直接丢弃
+                                    if (this._isPart0(url)) return false;
+                                    
+                                    // 提取：如果是完成的图片，记录其 URL 和 元数据
+                                    if (url && (parsed.image_chunk?.progress === 100 || parsed.image?.original)) {
+                                        const fullUrl = this._normalizeImageUrl(url);
+                                        extractedUrls.push(fullUrl);
+                                        if (parsed.id) {
+                                            cardIdMap[parsed.id] = {
+                                                title: parsed.image_chunk?.imageTitle || parsed.image?.title || "image",
+                                                original: fullUrl
+                                            };
+                                        }
+                                    }
+                                    return true;
+                                } catch (e) { return true; }
+                            });
+                            
+                            // 将提取出的扁平化数据注入响应块，供后续 converter 和 collector 直接使用，避免二次解析
+                            if (extractedUrls.length > 0) {
+                                resp.modelResponse.generatedImageUrls = (resp.modelResponse.generatedImageUrls || []).concat(extractedUrls);
+                                resp.modelResponse._cardIdMap = cardIdMap; // 内部临时字段
+                            }
+                        }
+
                         if (resp.responseId) lastResponseId = resp.responseId;
                         if (resp.streamingImageGenerationResponse) {
                             // 图片生成进度通过流透传，暂无额外处理
@@ -881,9 +1403,9 @@ export class GrokApiService {
             const { status, errorCode, errorMessage, isNetworkError } = this.classifyApiError(error);
             const canRetryInRequest = !hasYieldedData && retryCount < maxRetries;
 
-            // 只有图片生成且未发送过数据时才尝试 WebSocket Fallback
-            const isImagine = modelLower.includes('imagine');
-            if (isImagine && !hasYieldedData && retryCount === 0) {
+            // 只有图片生成且未发送过数据时才尝试 WebSocket Fallback (明确排除视频)
+            const isImagineImage = (modelLower.includes('imagine') || modelLower.includes('edit')) && !modelLower.includes('video');
+            if (isImagineImage && !hasYieldedData && retryCount === 0) {
                 logger.warn(`[Grok] app_chat stream failed, trying ws_imagine fallback: ${error.message}`);
                 try {
                     yield* this._generateContentStreamWS(model, requestBody);

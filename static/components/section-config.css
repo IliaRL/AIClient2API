@@ -362,6 +362,47 @@ input:checked + .toggle-slider:before {
     white-space: nowrap;
 }
 
+/* 置顶图标样式 */
+.tag-pin-icon {
+    margin-left: 6px;
+    padding: 2px;
+    opacity: 0.3;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.provider-tag:hover .tag-pin-icon {
+    opacity: 0.6;
+}
+
+.tag-pin-icon:hover {
+    opacity: 1 !important;
+    color: #ffc107;
+    transform: scale(1.2);
+}
+
+/* 置顶状态标签样式 */
+.provider-tag.pinned {
+    position: relative;
+    border-color: #ffc107;
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.3);
+}
+
+.provider-tag.pinned .tag-pin-icon {
+    opacity: 1;
+    color: #ffc107;
+}
+
+.provider-tag.pinned i.fa-thumbtack {
+    transform: rotate(0deg);
+}
+
+.provider-tag:not(.pinned) .tag-pin-icon i {
+    transform: rotate(45deg);
+}
+
 
 /* 高级配置区域 */
 .advanced-config-section {

@@ -50,8 +50,11 @@ export class GrokConverter extends BaseConverter {
 
         if (!url || !uuid) return url;
         
-        // 检查是否为 assets.grok.com 域名或相对路径
-        const isGrokAsset = url.includes('assets.grok.com') || (!url.startsWith('http') && !url.startsWith('data:'));
+        // 检查是否为 Grok 资源域名或相对路径
+        const isGrokAsset = url.includes('assets.grok.com') || 
+                           url.includes('imagine-public.x.ai') || 
+                           url.includes('grok.com') ||
+                           (!url.startsWith('http') && !url.startsWith('data:'));
         
         if (!isGrokAsset) return url;
 
@@ -73,14 +76,14 @@ export class GrokConverter extends BaseConverter {
     }
 
     /**
-     * 在文本中查找并替换所有 assets.grok.com 的资源链接为绝对代理链接
+     * 在文本中查找并替换所有 Grok 资源链接为绝对代理链接
      */
     _processGrokAssetsInText(text, state = null) {
         const uuid = state?.uuid || GrokConverter.sharedUuid;
         if (!text || !uuid) return text;
         
-        // 更宽松的正则匹配 assets.grok.com 的 URL
-        const grokUrlRegex = /https?:\/\/assets\.grok\.com\/[^\s\)\"\'\>]+/g;
+        // 匹配 assets.grok.com, imagine-public.x.ai 或 grok.com 的 URL
+        const grokUrlRegex = /https?:\/\/(assets\.grok\.com|imagine-public\.x\.ai|grok\.com)\/[^\s\)\"\'\>]+/g;
         
         return text.replace(grokUrlRegex, (url) => {
             return this._appendSsoToken(url, state);
@@ -107,6 +110,7 @@ export class GrokConverter extends BaseConverter {
                 content_started: false, // 是否已经开始输出正式内容
                 requestBaseUrl: "",
                 uuid: null,
+                seen_images: new Set(), // 用于去重已输出的图片
                 pending_text_buffer: "" // 用于处理流式输出中被截断的 URL
             });
         }
@@ -358,10 +362,19 @@ export class GrokConverter extends BaseConverter {
                                 if (typeof jsonStr !== 'string') return;
                                 try {
                                     const card = JSON.parse(jsonStr);
-                                    const url = card.image?.original;
+                                    const url = card.image?.original || card.image_chunk?.imageUrl;
+                                    if (this._isPart0(url)) return;
                                     if (url) add(url);
                                 } catch (e) {}
                             });
+                            continue;
+                        }
+                        if (key === "jsonData" && typeof item === "string") {
+                            try {
+                                const card = JSON.parse(item);
+                                const url = card.image?.original || card.image_chunk?.imageUrl;
+                                if (url) add(url);
+                            } catch (e) {}
                             continue;
                         }
                         walk(item);
@@ -464,8 +477,8 @@ export class GrokConverter extends BaseConverter {
         filtered = filtered.replace(/<xai:tool_usage_card[^>]*>.*?<\/xai:tool_usage_card>/gs, "");
         filtered = filtered.replace(/<xai:tool_usage_card[^>]*\/>/gs, "");
         
-        // 移除其他内部标签
-        const tagsToFilter = ["rolloutId", "responseId", "isThinking"];
+        // 移除其他内部标签，包括渲染标签（流式模式下我们通过卡片逻辑单独渲染图片）
+        const tagsToFilter = ["rolloutId", "responseId", "isThinking", "grok:render"];
         for (const tag of tagsToFilter) {
             const pattern = new RegExp(`<${tag}[^>]*>.*?<\\/${tag}>|<${tag}[^>]*\\/>`, 'gs');
             filtered = filtered.replace(pattern, "");
@@ -496,55 +509,44 @@ export class GrokConverter extends BaseConverter {
         content = this._filterToken(content, responseId);
         content = this._processGrokAssetsInText(content, state);
 
-        // 处理 cardAttachmentsJson 中的图片，将其映射到卡片 ID
+        // 处理 cardMap (已由 grok-core 预先提取映射关系)
         const cardMap = new Map();
-        const modelResponse = grokResponse.modelResponse || {};
+        if (grokResponse.cardMap && typeof grokResponse.cardMap === 'object') {
+            for (const [id, data] of Object.entries(grokResponse.cardMap)) {
+                cardMap.set(id, data);
+            }
+        }
         
-        // 收集所有的卡片原始数据（可能是 cardAttachmentsJson 中的，或者是单独收集的 cardAttachments 数组）
-        const allCardSources = [];
-        if (Array.isArray(modelResponse.cardAttachmentsJson)) allCardSources.push(...modelResponse.cardAttachmentsJson);
-        if (Array.isArray(grokResponse.cardAttachments)) {
-            grokResponse.cardAttachments.forEach(card => card.jsonData && allCardSources.push(card.jsonData));
-        } else if (grokResponse.cardAttachment?.jsonData) {
-            allCardSources.push(grokResponse.cardAttachment.jsonData);
-        }
-
-        for (const raw of allCardSources) {
-            try {
-                const cardData = JSON.parse(raw);
-                const cardId = cardData.id;
-                const image = cardData.image || {};
-                const original = image.original;
-                const title = image.title || "image";
-                if (cardId && original) {
-                    cardMap.set(cardId, { title, original });
-                }
-            } catch (e) {}
-        }
+        const modelResponse = grokResponse.modelResponse || {};
 
         // 替换正文中的 <grok:render> 标签为 Markdown 图片
+        const renderedCardIds = new Set();
         if (content && cardMap.size > 0) {
             content = content.replace(/<grok:render[^>]*card_id="([^"]+)"[^>]*>.*?<\/grok:render>/gs, (match, cardId) => {
                 const item = cardMap.get(cardId);
                 if (!item) return "";
+                renderedCardIds.add(cardId);
                 return this._renderImage(item.original, item.title || "image", state);
             });
         }
 
-        // 收集未在正文中渲染的其他图片并追加
+        // 收集所有图片并追加（排除已在正文中渲染过的）
         const imageUrls = this._collectImages(grokResponse);
         if (imageUrls.length > 0) {
-            // 已通过卡片 ID 渲染过的 URL 记录
-            const handledUrls = new Set();
-            for (const item of cardMap.values()) handledUrls.add(item.original);
+            const renderedUrls = new Set();
+            for (const cardId of renderedCardIds) {
+                const item = cardMap.get(cardId);
+                if (item) renderedUrls.add(item.original);
+            }
             
             let appendContent = "";
             for (const url of imageUrls) {
-                if (!handledUrls.has(url)) {
+                if (!renderedUrls.has(url)) {
                     appendContent += this._renderImage(url, "image", state) + "\n";
+                    renderedUrls.add(url); // 防止重复追加同一张图
                 }
             }
-            if (appendContent) content += "\n" + appendContent;
+            if (appendContent) content += (content ? "\n" : "") + appendContent;
         }
 
         // 处理视频 (非流式模式)
@@ -737,44 +739,20 @@ export class GrokConverter extends BaseConverter {
         // 3. 处理模型响应（通常包含完整消息或图片）
         if (resp.modelResponse) {
             const mr = resp.modelResponse;
-            /*
-            if ((state.image_think_active || state.video_think_active) && state.think_opened) {
-                deltaContent += "\n</think>\n";
-                state.think_opened = false;
-            }
-            */
             state.image_think_active = false;
             state.video_think_active = false;
 
             const imageUrls = this._collectImages(mr);
             for (const url of imageUrls) {
-                deltaContent += this._renderImage(url, "image", state) + "\n";
+                // 检查是否已经在流中输出过
+                if (!state.seen_images.has(url)) {
+                    deltaContent += this._renderImage(url, "image", state) + "\n";
+                    state.seen_images.add(url);
+                }
             }
 
             if (mr.metadata?.llm_info?.modelHash) {
                 state.fingerprint = mr.metadata.llm_info.modelHash;
-            }
-        }
-
-        // 4. 处理卡片附件
-        if (resp.cardAttachment) {
-            const card = resp.cardAttachment;
-            if (card.jsonData) {
-                try {
-                    const cardData = JSON.parse(card.jsonData);
-                    let original = cardData.image?.original;
-                    const title = cardData.image?.title || "image";
-                    if (original) {
-                        // 确保是绝对路径
-                        if (!original.startsWith('http')) {
-                            original = `https://assets.grok.com${original.startsWith('/') ? '' : '/'}${original}`;
-                        }
-                        original = this._appendSsoToken(original, state);
-                        deltaContent += `![${title}](${original})\n`;
-                    }
-                } catch (e) {
-                    // 忽略 JSON 解析错误
-                }
             }
         }
 

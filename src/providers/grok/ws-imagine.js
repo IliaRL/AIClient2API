@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import logger from '../../utils/logger.js';
+import { v4 as uuidv4 } from 'uuid';
 import { getProxyConfigForProvider } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER } from '../../utils/common.js';
 
@@ -11,7 +12,7 @@ export class ImagineWebSocketService {
     constructor(config) {
         this.config = config;
         this.baseUrl = (config.GROK_BASE_URL || 'https://grok.com').replace(/\/$/, '');
-        this.wsUrl = this.baseUrl.replace(/^http/, 'ws') + '/rpc/imagine/streaming';
+        this.wsUrl = this.baseUrl.replace(/^http/, 'ws') + '/ws/imagine/listen';
     }
 
     /**
@@ -30,11 +31,17 @@ export class ImagineWebSocketService {
 
         let ssoToken = token || "";
         if (ssoToken.startsWith("sso=")) ssoToken = ssoToken.substring(4);
-        const cookie = ssoToken ? `sso=${ssoToken}; sso-rw=${ssoToken}` : "";
+        const cfClearance = this.config.GROK_CF_CLEARANCE;
+        const cookie = ssoToken ? `sso=${ssoToken}; sso-rw=${ssoToken}${cfClearance ? `; cf_clearance=${cfClearance}` : ""}` : "";
 
         const headers = {
             'Cookie': cookie,
             'Origin': this.baseUrl,
+            'Host': 'grok.com',
+            'Connection': 'Upgrade',
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-cache',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7',
             'User-Agent': this.config.GROK_USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
         };
 
@@ -43,7 +50,7 @@ export class ImagineWebSocketService {
         const ws = new WebSocket(this.wsUrl, {
             headers,
             agent,
-            handshakeTimeout: 15000,
+            handshakeTimeout: 30000,
             rejectUnauthorized: false
         });
 
@@ -52,16 +59,49 @@ export class ImagineWebSocketService {
         let resolveNext = null;
 
         ws.on('open', () => {
-            logger.debug(`[Grok WS] Connected. Sending imagine request.`);
-            ws.send(JSON.stringify({
-                method: 'imagine',
-                params: {
-                    prompt,
-                    aspectRatio,
-                    count: n,
-                    enableNsfw
+            logger.debug(`[Grok WS] Connected. Sending reset and imagine request.`);
+            
+            // 遵循协议：首先发送重置消息
+            const resetPayload = {
+                "type": "conversation.item.create",
+                "timestamp": Date.now(),
+                "item": {
+                    "type": "message",
+                    "content": [{ "type": "reset" }]
                 }
-            }));
+            };
+            ws.send(JSON.stringify(resetPayload));
+
+            // 延迟 50ms 发送实际生成请求 (模拟浏览器行为)
+            setTimeout(() => {
+                if (ws.readyState !== WebSocket.OPEN) return;
+
+                const payload = {
+                    "type": "conversation.item.create",
+                    "timestamp": Date.now(),
+                    "item": {
+                        "type": "message",
+                        "content": [
+                            {
+                                "requestId": uuidv4(),
+                                "text": prompt,
+                                "type": "input_text",
+                                "properties": {
+                                    "section_count": 0,
+                                    "is_kids_mode": false,
+                                    "enable_nsfw": enableNsfw,
+                                    "skip_upsampler": false,
+                                    "enable_side_by_side": true,
+                                    "is_initial": false,
+                                    "aspect_ratio": aspectRatio,
+                                    "enable_pro": false
+                                }
+                            }
+                        ]
+                    }
+                };
+                ws.send(JSON.stringify(payload));
+            }, 50);
         });
 
         ws.on('message', (data) => {
