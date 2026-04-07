@@ -555,7 +555,7 @@ export class GrokApiService {
             "outlookSearch": false,
             "outlookCalendarSearch": false,
             "googleDriveSearch": false,
-            ...toolOverrides
+            // ...toolOverrides
         };
 
         const payload = {
