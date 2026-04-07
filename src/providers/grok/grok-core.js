@@ -42,8 +42,10 @@ const CORE_MODEL_MAPPING = {
     'grok-4.20-fast': { name: 'grok-420', mode: 'MODEL_MODE_FAST', modeId: 'fast' },
     'grok-4.20-expert': { name: 'grok-420', mode: 'MODEL_MODE_EXPERT', modeId: 'expert' },
     'grok-4.20-heavy': { name: 'grok-420', mode: 'MODEL_MODE_HEAVY', modeId: 'heavy' },
-    'grok-imagine-1.0': { name: 'imagine-image', mode: 'MODEL_MODE_FAST', modeId: 'fast' },
-    'grok-imagine-1.0-edit': { name: 'imagine-image-edit', mode: 'MODEL_MODE_FAST', modeId: 'fast' },
+    'grok-imagine-1.0-fast': { name: 'imagine-image', mode: 'MODEL_MODE_FAST', modeId: 'fast' },
+    'grok-imagine-1.0-fast-edit': { name: 'imagine-image', mode: 'MODEL_MODE_FAST', modeId: 'fast' },
+    'grok-imagine-1.0': { name: 'imagine-image', mode: 'MODEL_MODE_FAST', modeId: 'expert' },
+    'grok-imagine-1.0-edit': { name: 'imagine-image', mode: 'MODEL_MODE_FAST', modeId: 'expert' },
     // 'grok-imagine-1.0-video': { name: 'grok-3', mode: 'MODEL_MODE_FAST', modeId: 'fast' }
 };
 
@@ -541,10 +543,7 @@ export class GrokApiService {
         const isMediaModel = modelLower.includes('imagine') || isVideoModel || isEditModel;
         const isNsfw = isGrokNsfwModel(rawModelId) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
 
-        const shouldEnableImage = isMediaModel || 
-                                 modelLower.includes('expert') || 
-                                 modelLower.includes('fast') || 
-                                 modelLower.includes('grok-3') || 
+        const shouldEnableImage = (modelLower.includes('imagine') || modelLower.includes('edit')) && !modelLower.includes('video') || 
                                  requestBody.enableImageGeneration === true;
 
         const imageGenerationCount = Math.min(parseInt(requestBody.n || requestBody.imageGenerationCount || (shouldEnableImage ? 2 : 0)), 2);
@@ -913,7 +912,7 @@ export class GrokApiService {
         const n = parseInt(requestBody.n || 1);
         const normalizedModel = normalizeGrokModelId(model);
         const modelLower = normalizedModel.toLowerCase();
-        const isImagine = modelLower.includes('imagine');
+        const isImagine = (modelLower.includes('imagine') || modelLower.includes('edit')) && !modelLower.includes('video');
         // 识别优先使用 WS 的模型 (仅限图片生成，排除视频)
         // const isWSPreferred = isImagine && !modelLower.includes('video');
         
@@ -1261,7 +1260,7 @@ export class GrokApiService {
         const rawModel = typeof model === 'string' ? model : '';
         const normalizedModel = normalizeGrokModelId(rawModel);
         const modelLower = normalizedModel.toLowerCase();
-        const isImagine = modelLower.includes('imagine') || modelLower.includes('edit');
+        const isImagine = (modelLower.includes('imagine') || modelLower.includes('edit')) && !modelLower.includes('video');
         // 识别优先使用 WS 的模型 (仅限图片生成，排除视频)
         // const isWSPreferred = isImagine && !modelLower.includes('video');
         const isNsfw = isGrokNsfwModel(rawModel) || requestBody.nsfw === true || requestBody.disableNsfwFilter === true;
