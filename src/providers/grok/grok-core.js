@@ -35,6 +35,8 @@ const httpsAgent = new https.Agent({
 });
 
 const CORE_MODEL_MAPPING = {
+    'grok-4.1-mini': { name: 'grok-4-1-thinking-1129', mode: 'MODEL_MODE_GROK_4_1_MINI_THINKING', modeId: 'grok-4-1-mini' },
+    'grok-4.1-thinking': { name: 'grok-4-1-thinking-1129', mode: 'MODEL_MODE_GROK_4_1_THINKING', modeId: 'grok-4-1-thinking' },
     'grok-4.20': { name: 'grok-420', mode: 'MODEL_MODE_AUTO', modeId: 'auto' },
     'grok-4.20-auto': { name: 'grok-420', mode: 'MODEL_MODE_AUTO', modeId: 'auto' },
     'grok-4.20-fast': { name: 'grok-420', mode: 'MODEL_MODE_FAST', modeId: 'fast' },

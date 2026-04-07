@@ -94,6 +94,8 @@ export const PROVIDER_MODELS = {
     ],
     'forward-api': [],
     'grok-custom': [
+        'grok-4.1-mini',
+        'grok-4.1-thinking',
         'grok-4.20',
         'grok-4.20-auto',
         'grok-4.20-fast',
@@ -101,6 +103,8 @@ export const PROVIDER_MODELS = {
         'grok-4.20-heavy',
         'grok-imagine-1.0',
         'grok-imagine-1.0-edit',
+        'grok-4.1-mini-nsfw',
+        'grok-4.1-thinking-nsfw',
         'grok-4.20-nsfw',
         'grok-4.20-auto-nsfw',
         'grok-4.20-fast-nsfw',
