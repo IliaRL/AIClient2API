@@ -226,12 +226,17 @@ export class CodexConverter extends BaseConverter {
         if (data.response_format || data.text?.verbosity) {
             const textObj = {};
             if (data.response_format) {
-                textObj.format = this.convertResponseFormat(data.response_format);
+                const converted = this.convertResponseFormat(data.response_format);
+                if (converted) {
+                    textObj.format = converted;
+                }
             }
             if (data.text?.verbosity) {
                 textObj.verbosity = data.text.verbosity;
             }
-            codexRequest.text = textObj;
+            if (Object.keys(textObj).length > 0) {
+                codexRequest.text = textObj;
+            }
         }
 
         // 在 input 开头注入特殊指令（如果配置允许）
@@ -531,9 +536,7 @@ export class CodexConverter extends BaseConverter {
                 schema: responseFormat.json_schema?.schema || {}
             };
         } else if (responseFormat.type === 'json_object') {
-            return {
-                type: 'json_object'
-            };
+            return null;
         }
         return responseFormat;
     }

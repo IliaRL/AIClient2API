@@ -596,9 +596,13 @@ export class CodexApiService {
     parseNonStreamResponse(data) {
         // 确保 data 是字符串
         const responseText = typeof data === 'string' ? data : String(data);
-        
-        // 从 SSE 流中提取 response.completed 事件
+
+        // 从 SSE 流中提取所有事件，累积 output
         const lines = responseText.split('\n');
+        const outputItems = new Map(); // id -> output item
+        const textDeltas = new Map(); // item_id -> accumulated text
+        let completedEvent = null;
+
         for (const line of lines) {
             if (line.startsWith('data: ')) {
                 const jsonData = line.slice(6).trim();
@@ -607,8 +611,26 @@ export class CodexApiService {
                 }
                 try {
                     const parsed = JSON.parse(jsonData);
-                    if (parsed.type === 'response.completed') {
-                        return parsed;
+                    switch (parsed.type) {
+                        case 'response.output_item.added':
+                            if (parsed.item) {
+                                outputItems.set(parsed.item.id, parsed.item);
+                            }
+                            break;
+                        case 'response.output_text.delta':
+                            if (parsed.item_id && parsed.delta) {
+                                const existing = textDeltas.get(parsed.item_id) || '';
+                                textDeltas.set(parsed.item_id, existing + parsed.delta);
+                            }
+                            break;
+                        case 'response.output_text.done':
+                            if (parsed.item_id && parsed.text) {
+                                textDeltas.set(parsed.item_id, parsed.text);
+                            }
+                            break;
+                        case 'response.completed':
+                            completedEvent = parsed;
+                            break;
                     }
                 } catch (e) {
                     // 继续解析下一行
@@ -616,10 +638,47 @@ export class CodexApiService {
                 }
             }
         }
-        
-        // 如果没有找到 response.completed，抛出错误
-        logger.error('[Codex] No completed response found in Codex response');
-        throw new Error('stream error: stream disconnected before completion: stream closed before response.completed');
+
+        if (!completedEvent) {
+            logger.error('[Codex] No completed response found in Codex response');
+            throw new Error('stream error: stream disconnected before completion: stream closed before response.completed');
+        }
+
+        // 用累积的 delta 文本填充 output items 中缺失的内容
+        if (completedEvent.response && textDeltas.size > 0) {
+            const output = completedEvent.response.output || [];
+            for (const item of output) {
+                if (item.type === 'message' && item.role === 'assistant') {
+                    const accumulatedText = textDeltas.get(item.id);
+                    if (accumulatedText !== undefined) {
+                        // content 为空或不含 output_text，直接注入
+                        if (!item.content || item.content.length === 0) {
+                            item.content = [{ type: 'output_text', text: accumulatedText }];
+                        } else {
+                            item.content = item.content.map(c => {
+                                if (c.type === 'output_text' && !c.text) {
+                                    return { ...c, text: accumulatedText };
+                                }
+                                return c;
+                            });
+                        }
+                    }
+                }
+            }
+            // 如果 output 完全为空，从累积事件重建
+            if (output.length === 0 && outputItems.size > 0) {
+                for (const [id, item] of outputItems) {
+                    const accumulatedText = textDeltas.get(id);
+                    if (accumulatedText !== undefined && item.type === 'message') {
+                        item.content = [{ type: 'output_text', text: accumulatedText }];
+                    }
+                    output.push(item);
+                }
+                completedEvent.response.output = output;
+            }
+        }
+
+        return completedEvent;
     }
 
     /**
