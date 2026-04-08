@@ -1986,19 +1986,19 @@ export class ProviderPoolManager {
             return requests;
         }
 
-        // Codex OAuth 健康检查直接调用原生适配器，需要使用 Codex responses 原生 input 格式
+        // Codex OAuth 健康检查先构造标准 OpenAI messages，
+        // 再在这里显式转换为 Codex 所需的 responses input 格式
         if (this._getBaseProviderType(providerType) === MODEL_PROVIDER.CODEX_API) {
-            requests.push({
+            const openAICompatibleRequest = {
                 model: modelName,
-                input: [{
-                    type: 'message',
-                    role: 'user',
-                    content: [{
-                        type: 'input_text',
-                        text: baseMessage.content
-                    }]
-                }]
-            });
+                messages: [baseMessage]
+            };
+            requests.push(convertData(
+                openAICompatibleRequest,
+                'request',
+                MODEL_PROVIDER.OPENAI_CUSTOM,
+                MODEL_PROVIDER.CODEX_API
+            ));
             return requests;
         }
         
