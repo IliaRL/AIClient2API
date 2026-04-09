@@ -14,7 +14,7 @@ import { getProviderModels } from '../provider-models.js';
 const baseModels = getProviderModels(MODEL_PROVIDER.CODEX_API);
 const fastModels = baseModels.map(m => `${m}-fast`);
 const CODEX_MODELS = [...new Set([...baseModels, ...fastModels])];
-const CODEX_VERSION = '0.111.0';
+const CODEX_VERSION = '0.118.0';
 
 /**
  * Codex API 服务类
@@ -319,8 +319,8 @@ export class CodexApiService {
             'authorization': `Bearer ${this.accessToken}`,
             'chatgpt-account-id': this.accountId,
             'content-type': 'application/json',
-            'user-agent': `codex_cli_rs/${CODEX_VERSION} (Windows 10.0.26100; x86_64) WindowsTerminal`,
-            'originator': 'codex_cli_rs',
+            'user-agent': `codex-tui/${CODEX_VERSION} (Windows 10.0.26100; x86_64) WindowsTerminal (codex-tui; ${CODEX_VERSION})`,
+            'originator': 'codex-tui',
             'host': 'chatgpt.com',
             'Connection': 'Keep-Alive'
         };
@@ -364,6 +364,17 @@ export class CodexApiService {
         // 【关键修复】确保传给上游的模型名称不带 -fast 后缀
         // 即使 originalRequestBody 中已经带了 model，这里也必须覆盖
         cleanedBody.model = upstreamModel;
+
+        // 为所有 Codex 模型增加默认工具
+        if (!cleanedBody.tools) {
+            cleanedBody.tools = [];
+        }
+        if (Array.isArray(cleanedBody.tools)) {
+            const hasWebSearch = cleanedBody.tools.some(t => t.type === 'web_search');
+            if (!hasWebSearch) {
+                cleanedBody.tools.push({ type: 'web_search' });
+            }
+        }
 
         if (isFastModel) {
             logger.info(`[Codex] Detected -fast model: ${normalizedModel} -> ${upstreamModel}, service_tier: ${cleanedBody.service_tier || defaultServiceTier}`);
@@ -733,7 +744,7 @@ export class CodexApiService {
         try {
             const url = 'https://chatgpt.com/backend-api/wham/usage';
             const headers = {
-                'user-agent': `codex_cli_rs/${CODEX_VERSION} (Windows 10.0.26100; x86_64) WindowsTerminal`,
+                'user-agent': `codex-tui/${CODEX_VERSION} (Windows 10.0.26100; x86_64) WindowsTerminal (codex-tui; ${CODEX_VERSION})`,
                 'authorization': `Bearer ${this.accessToken}`,
                 'chatgpt-account-id': this.accountId,
                 'accept': '*/*',

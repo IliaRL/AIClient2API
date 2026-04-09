@@ -252,7 +252,7 @@ export async function checkForUpdates() {
             logger.info('[Update] Fetching remote tags...');
             await execAsync('git fetch --tags');
         } catch (error) {
-            logger.warn('[Update] Failed to fetch tags via git, falling back to GitHub API:', error.message);
+            logger.warn('[Update] Failed to fetch tags via git, falling back to GitHub API');
             // 如果 git fetch 失败，回退到 GitHub API
             availableVersions = await getVersionsFromGitHub(10);
             latestTag = availableVersions.length > 0 ? availableVersions[0] : null;

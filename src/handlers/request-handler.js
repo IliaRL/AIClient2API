@@ -142,7 +142,7 @@ export function createRequestHandler(config, providerPoolManager) {
                         return true;
                     } catch (error) {
                         logger.info(`[Server] req provider_health error: ${error.message}`);
-                        handleError(res, { statusCode: 500, message: `Failed to get providers health: ${error.message}` }, currentConfig.MODEL_PROVIDER);
+                        handleError(res, { status: 500, message: `Failed to get providers health: ${error.message}` }, currentConfig.MODEL_PROVIDER, null, req);
                         return;
                     }
                 }
@@ -157,8 +157,7 @@ export function createRequestHandler(config, providerPoolManager) {
                         logger.info(`[Config] MODEL_PROVIDER overridden by header to: ${currentConfig.MODEL_PROVIDER}`);
                     } else {
                         logger.warn(`[Config] Provider ${modelProviderHeader} in header is not available.`);
-                        res.writeHead(400, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: { message: `Provider ${modelProviderHeader} is not available.` } }));
+                        handleError(res, { status: 400, message: `Provider ${modelProviderHeader} in header is not available.` }, currentConfig.MODEL_PROVIDER, null, req);
                         return;
                     }
                 }
@@ -180,8 +179,7 @@ export function createRequestHandler(config, providerPoolManager) {
                     } else if (firstSegment && Object.values(MODEL_PROVIDER).includes(firstSegment)) {
                         // 如果在 MODEL_PROVIDER 中但没注册适配器，拦截并报错
                         logger.warn(`[Config] Provider ${firstSegment} is recognized but no adapter is registered.`);
-                        res.writeHead(400, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ error: { message: `Provider ${firstSegment} is not available.` } }));
+                        handleError(res, { status: 400, message: `Provider ${firstSegment} is not available.` }, currentConfig.MODEL_PROVIDER, null, req);
                         return;
                     } else if (firstSegment && !isValidProvider) {
                         logger.info(`[Config] Ignoring invalid MODEL_PROVIDER in path segment: ${firstSegment}`);
@@ -195,9 +193,8 @@ export function createRequestHandler(config, providerPoolManager) {
                     return;
                 }
                 if (!authResult.authorized) {
-                    // 没有认证插件授权，返回 401
-                    res.writeHead(401, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: { message: 'Unauthorized: API key is invalid or missing.' } }));
+                    // 没有认证插件授权，使用 handleError 返回 401
+                    handleError(res, { status: 401, message: 'Unauthorized: API key is invalid or missing.' }, currentConfig.MODEL_PROVIDER, null, req);
                     return;
                 }
                 
@@ -228,7 +225,7 @@ export function createRequestHandler(config, providerPoolManager) {
                         return true;
                     } catch (error) {
                         logger.error(`[Server] count_tokens error: ${error.message}`);
-                        handleError(res, { statusCode: 500, message: `Failed to count tokens: ${error.message}` }, currentConfig.MODEL_PROVIDER);
+                        handleError(res, { status: 500, message: `Failed to count tokens: ${error.message}` }, currentConfig.MODEL_PROVIDER, null, req);
                         return;
                     }
                 }
@@ -254,10 +251,9 @@ export function createRequestHandler(config, providerPoolManager) {
                     if (apiHandled) return;
 
                     // Fallback for unmatched routes
-                    res.writeHead(404, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: { message: 'Not Found' } }));
+                    handleError(res, { status: 404, message: 'Not Found' }, currentConfig.MODEL_PROVIDER, null, req);
                 } catch (error) {
-                    handleError(res, error, currentConfig.MODEL_PROVIDER);
+                    handleError(res, error, currentConfig.MODEL_PROVIDER, null, req);
                 }
             } finally {
                 // Clear request context after request is complete

@@ -1301,12 +1301,21 @@ export class ProviderPoolManager {
                 }
                 
                 // 如果硬编码的模型列表为空，或者该类型的提供商在号池中没有配置节点，尝试从服务获取
-                if (models.length === 0) {
+                // 只有在非号池模式，或者号池中有节点时才尝试获取，避免无节点时读取全局默认配置
+                if (models.length === 0 && (!this.providerStatus[providerType] || this.providerStatus[providerType].length > 0)) {
                     try {
                         // 确定使用的配置：优先使用号池中第一个节点的配置，否则使用全局配置
                         let targetConfig = this.globalConfig;
-                if (this.providerStatus[providerType] && this.providerStatus[providerType].length > 0) {
+                        if (this.providerStatus[providerType] && this.providerStatus[providerType].length > 0) {
                             targetConfig = this.providerStatus[providerType][0].config;
+                        } else {
+                            // 如果该提供商是属于号池类型的提供商（在 PROVIDER_MAPPINGS 中），且号池为空，则不应尝试读取全局配置
+                            const { PROVIDER_MAPPINGS } = await import('../utils/provider-utils.js');
+                            const isPoolable = PROVIDER_MAPPINGS.some(m => m.providerType === providerType);
+                            if (isPoolable) {
+                                this._log('debug', `Skipping model fetch for poolable provider ${providerType} with empty pool to avoid reading default config.`);
+                                continue;
+                            }
                         }
 
                         const tempConfig = {
