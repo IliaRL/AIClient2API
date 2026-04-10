@@ -51,13 +51,15 @@ function normalizeUsageCandidate(candidate) {
         candidate.prompt_tokens ??
         usage?.prompt_tokens ??
         usage?.input_tokens ??
-        usage?.promptTokenCount
+        usage?.promptTokenCount ??
+        usage?.inputTokenCount
     );
     const completionTokens = toNumber(
         candidate.completion_tokens ??
         usage?.completion_tokens ??
         usage?.output_tokens ??
-        usage?.candidatesTokenCount
+        usage?.candidatesTokenCount ??
+        usage?.outputTokenCount
     );
     const totalTokens = toNumber(
         candidate.total_tokens ??
