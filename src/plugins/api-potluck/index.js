@@ -91,6 +91,24 @@ function extractUsage(...candidates) {
     });
 }
 
+function getTrackedRequestIds(hookContext = {}) {
+    return [...new Set([
+        hookContext._monitorRequestId,
+        hookContext._pluginRequestId
+    ].filter(Boolean))];
+}
+
+function getPendingUsageForHookContext(hookContext = {}) {
+    for (const requestId of getTrackedRequestIds(hookContext)) {
+        const usage = pendingUsage.get(requestId);
+        if (usage) {
+            return usage;
+        }
+    }
+
+    return { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+}
+
 /**
  * 插件定义
  */
@@ -224,13 +242,11 @@ const apiPotluckPlugin = {
          * @param {Object} hookContext - 钩子上下文，包含请求和模型信息
          */
         async onContentGenerated(hookContext) {
-            const requestId = hookContext._pluginRequestId || hookContext._monitorRequestId;
+            const trackedRequestIds = getTrackedRequestIds(hookContext);
 
             if (hookContext.potluckApiKey) {
                 try {
-                    const usage = requestId
-                        ? (pendingUsage.get(requestId) || { promptTokens: 0, completionTokens: 0, totalTokens: 0 })
-                        : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+                    const usage = getPendingUsageForHookContext(hookContext);
 
                     // 传入提供商和模型信息
                     await incrementUsage(
@@ -245,7 +261,7 @@ const apiPotluckPlugin = {
                 }
             }
 
-            if (requestId) {
+            for (const requestId of trackedRequestIds) {
                 pendingUsage.delete(requestId);
             }
         }
