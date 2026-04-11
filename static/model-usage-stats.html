@@ -70,6 +70,7 @@
         <h2 class="section-title" style="margin:0"><i class="fas fa-layer-group"></i>Provider 视图</h2>
         <div class="row">
           <button class="btn btn-secondary" id="refreshBtn" type="button"><i class="fas fa-rotate-right"></i><span>刷新</span></button>
+          <button class="btn btn-secondary" id="resetTokensBtn" type="button"><i class="fas fa-eraser"></i><span>重置 Token</span></button>
           <button class="btn btn-danger" id="resetBtn" type="button"><i class="fas fa-trash-can"></i><span>重置统计</span></button>
         </div>
       </div>
@@ -123,7 +124,8 @@
     function render(data){rows=flatten(data);el('emptyState').style.display=rows.length?'none':'block';renderSummary(data);const providers=Object.entries(data.providers||{}).map(([name,p])=>({name,totalTokens:Number(p.summary?.totalTokens||0)})).sort((a,b)=>b.totalTokens-a.totalTokens).slice(0,8);const topModels=rows.slice().sort((a,b)=>Number(b.totalTokens||0)-Number(a.totalTokens||0)).slice(0,8);bars('providerBars',providers,i=>i.totalTokens,i=>i.name);bars('topModelBars',topModels,i=>Number(i.totalTokens||0),i=>`${i.provider} / ${i.model}`);renderProviders(data);renderTable()}
     async function loadData(){try{saveCredential();status('正在加载统计数据...');const payload=await request(API_BASE);render(payload.data||payload);badge('已连接',true);status(`已加载 ${fmt(rows.length)} 条模型统计。`,'success')}catch(error){console.error(error);badge('连接失败',false);status(error.message,'error')}}
     async function resetData(){if(!confirm('确认重置全部模型统计吗？此操作会清空已落库的累计数据。'))return;try{status('正在重置统计数据...');const payload=await request(`${API_BASE}/reset`,{method:'POST'});render(payload.data||payload);status('统计数据已重置。','success')}catch(error){console.error(error);status(error.message,'error')}}
-    el('connectBtn').addEventListener('click',loadData);el('refreshBtn').addEventListener('click',loadData);el('resetBtn').addEventListener('click',resetData);el('clearBtn').addEventListener('click',clearCredential);el('searchInput').addEventListener('input',renderTable);el('sortSelect').addEventListener('change',renderTable);el('credentialValue').addEventListener('keydown',e=>{if(e.key==='Enter')loadData()});
+    async function resetTokenData(){if(!confirm('确认重置模型 Token 统计吗？这会清空 Prompt / Completion / Cached / Total Tokens，但保留请求次数与最近使用时间。'))return;try{status('正在重置 Token 统计...');const payload=await request(`${API_BASE}/reset-tokens`,{method:'POST'});render(payload.data||payload);status('模型 Token 统计已重置。','success')}catch(error){console.error(error);status(error.message,'error')}}
+    el('connectBtn').addEventListener('click',loadData);el('refreshBtn').addEventListener('click',loadData);el('resetBtn').addEventListener('click',resetData);el('resetTokensBtn').addEventListener('click',resetTokenData);el('clearBtn').addEventListener('click',clearCredential);el('searchInput').addEventListener('input',renderTable);el('sortSelect').addEventListener('change',renderTable);el('credentialValue').addEventListener('keydown',e=>{if(e.key==='Enter')loadData()});
     restoreCredential();if(el('credentialValue').value.trim())loadData();
   </script>
 </body>

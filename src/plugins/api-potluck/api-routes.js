@@ -10,6 +10,7 @@ import {
     deleteKey,
     updateKeyLimit,
     resetKeyUsage,
+    resetKeyTokenStats,
     toggleKey,
     updateKeyName,
     regenerateKey,
@@ -17,7 +18,8 @@ import {
     validateKey,
     KEY_PREFIX,
     applyDailyLimitToAllKeys,
-    getAllKeyIds
+    getAllKeyIds,
+    resetAllTokenStats
 } from './key-manager.js';
 import logger from '../../utils/logger.js';
 
@@ -131,6 +133,18 @@ export async function handlePotluckApiRoutes(method, path, req, res) {
             return true;
         }
 
+        // POST /api/potluck/stats/reset-tokens - 重置全部 Key 的 Token 统计
+        if (method === 'POST' && path === '/api/potluck/stats/reset-tokens') {
+            const result = await resetAllTokenStats();
+            const stats = await getStats();
+            sendJson(res, 200, {
+                success: true,
+                message: `已重置 ${result.updated}/${result.total} 个 Key 的 Token 统计`,
+                data: stats
+            });
+            return true;
+        }
+
         // GET /api/potluck/keys - 获取所有 Key 列表
         if (method === 'GET' && path === '/api/potluck/keys') {
             const keys = await listKeys();
@@ -239,6 +253,21 @@ export async function handlePotluckApiRoutes(method, path, req, res) {
                     success: true, 
                     message: '使用量重置成功',
                     data: keyData 
+                });
+                return true;
+            }
+
+            // POST /api/potluck/keys/:keyId/reset-tokens - 重置 Token 统计
+            if (method === 'POST' && subPath === '/reset-tokens') {
+                const keyData = await resetKeyTokenStats(keyId);
+                if (!keyData) {
+                    sendJson(res, 404, { success: false, error: { message: '未找到 Key' } });
+                    return true;
+                }
+                sendJson(res, 200, {
+                    success: true,
+                    message: 'Token 统计重置成功',
+                    data: keyData
                 });
                 return true;
             }

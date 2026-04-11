@@ -678,6 +678,9 @@
                         </select>
                     </div>
                     <div class="btn-limit-wrapper">
+                        <button class="btn btn-secondary btn-sm" onclick="resetAllTokenStats()">
+                            <i class="fas fa-eraser"></i> <span class="btn-limit-text">重置全部 Token</span>
+                        </button>
                         <button class="btn btn-secondary btn-sm" onclick="showApplyLimitModal()">
                             <i class="fas fa-cog"></i> <span class="btn-limit-text">批量应用限额</span>
                         </button>
@@ -1072,6 +1075,7 @@
                     </div>
                     <div class="key-actions">
                         <button class="btn btn-secondary btn-sm" onclick="resetUsage('${key.id}')" title="重置今日用量"><i class="fas fa-redo"></i> <span class="btn-text">重置</span></button>
+                        <button class="btn btn-secondary btn-sm" onclick="resetTokenStats('${key.id}')" title="重置 Token 统计"><i class="fas fa-eraser"></i> <span class="btn-text">Token</span></button>
                         <button class="btn btn-secondary btn-sm" onclick="openEditLimit('${key.id}', ${key.dailyLimit})" title="修改限额"><i class="fas fa-sliders-h"></i> <span class="btn-text">限额</span></button>
                         <button class="btn btn-secondary btn-sm" onclick="toggleKey('${key.id}')" title="${key.enabled ? '禁用' : '启用'}">${key.enabled ? '<i class="fas fa-toggle-on"></i>' : '<i class="fas fa-toggle-off"></i>'} <span class="btn-text">${key.enabled ? '禁用' : '启用'}</span></button>
                         <button class="btn btn-danger btn-sm" onclick="deleteKey('${key.id}')" title="删除"><i class="fas fa-trash"></i> <span class="btn-text">删除</span></button>
@@ -1135,6 +1139,20 @@
             if (!confirm('确定要重置该 Key 的今日调用次数吗？')) return;
             const result = await apiRequest(`${API_BASE}/keys/${encodeURIComponent(keyId)}/reset`, { method: 'POST' });
             if (result && result.success) { showToast('已重置', 'success'); loadData(); }
+            else { showToast(result?.error?.message || '操作失败', 'error'); }
+        }
+
+        async function resetTokenStats(keyId) {
+            if (!confirm('确定要重置该 Key 的 Token 统计吗？这会清空该 Key 的今日/累计 Token 与历史 Token 统计，但保留调用次数。')) return;
+            const result = await apiRequest(`${API_BASE}/keys/${encodeURIComponent(keyId)}/reset-tokens`, { method: 'POST' });
+            if (result && result.success) { showToast('Token 统计已重置', 'success'); loadData(); }
+            else { showToast(result?.error?.message || '操作失败', 'error'); }
+        }
+
+        async function resetAllTokenStats() {
+            if (!confirm('确定要重置全部 Key 的 Token 统计吗？这会清空所有 Key 的今日/累计 Token 与历史 Token 统计，但保留调用次数。')) return;
+            const result = await apiRequest(`${API_BASE}/stats/reset-tokens`, { method: 'POST' });
+            if (result && result.success) { showToast('全部 Token 统计已重置', 'success'); loadData(); }
             else { showToast(result?.error?.message || '操作失败', 'error'); }
         }
 

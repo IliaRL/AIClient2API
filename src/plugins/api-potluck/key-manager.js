@@ -138,6 +138,31 @@ function addUsage(target, usage = {}) {
     target.cachedTokens += toNumber(usage.cachedTokens);
 }
 
+function resetUsageBucketTokens(bucket) {
+    if (!bucket || typeof bucket !== 'object') return;
+    bucket.promptTokens = 0;
+    bucket.completionTokens = 0;
+    bucket.totalTokens = 0;
+    bucket.cachedTokens = 0;
+}
+
+function resetUsageHistoryTokens(usageHistory) {
+    if (!usageHistory || typeof usageHistory !== 'object') return;
+
+    for (const day of Object.values(usageHistory)) {
+        if (!day || typeof day !== 'object') continue;
+        resetUsageBucketTokens(day.summary);
+
+        for (const usage of Object.values(day.providers || {})) {
+            resetUsageBucketTokens(usage);
+        }
+
+        for (const usage of Object.values(day.models || {})) {
+            resetUsageBucketTokens(usage);
+        }
+    }
+}
+
 /**
  * 初始化：从文件加载数据到内存
  */
@@ -367,6 +392,59 @@ export async function resetKeyUsage(keyId) {
     keyStore.keys[keyId].usageHistory[getTodayDateString()] = normalizeUsageHistoryDay();
     markDirty();
     return keyStore.keys[keyId];
+}
+
+/**
+ * 重置单个 Key 的 Token 统计（保留调用次数）
+ */
+export async function resetKeyTokenStats(keyId) {
+    ensureLoaded();
+    const keyData = keyStore.keys[keyId];
+    if (!keyData) return null;
+
+    keyData.todayPromptTokens = 0;
+    keyData.todayCompletionTokens = 0;
+    keyData.todayTotalTokens = 0;
+    keyData.todayCachedTokens = 0;
+    keyData.totalPromptTokens = 0;
+    keyData.totalCompletionTokens = 0;
+    keyData.totalTokens = 0;
+    keyData.totalCachedTokens = 0;
+    resetUsageHistoryTokens(keyData.usageHistory);
+
+    markDirty();
+    await persistIfDirty();
+    logger.info(`[API Potluck] Reset token stats for key: ${keyId.substring(0, 12)}...`);
+    return keyData;
+}
+
+/**
+ * 重置所有 Key 的 Token 统计（保留调用次数）
+ */
+export async function resetAllTokenStats() {
+    ensureLoaded();
+    let updated = 0;
+
+    for (const keyData of Object.values(keyStore.keys)) {
+        keyData.todayPromptTokens = 0;
+        keyData.todayCompletionTokens = 0;
+        keyData.todayTotalTokens = 0;
+        keyData.todayCachedTokens = 0;
+        keyData.totalPromptTokens = 0;
+        keyData.totalCompletionTokens = 0;
+        keyData.totalTokens = 0;
+        keyData.totalCachedTokens = 0;
+        resetUsageHistoryTokens(keyData.usageHistory);
+        updated++;
+    }
+
+    if (updated > 0) {
+        markDirty();
+        await persistIfDirty();
+    }
+
+    logger.info(`[API Potluck] Reset token stats for all keys: ${updated}`);
+    return { total: Object.keys(keyStore.keys).length, updated };
 }
 
 /**

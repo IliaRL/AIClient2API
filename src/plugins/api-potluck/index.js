@@ -15,11 +15,13 @@ import {
     deleteKey,
     updateKeyLimit,
     resetKeyUsage,
+    resetKeyTokenStats,
     toggleKey,
     updateKeyName,
     validateKey,
     incrementUsage,
     getStats,
+    resetAllTokenStats,
     KEY_PREFIX,
     setConfigGetter
 } from './key-manager.js';
@@ -47,6 +49,13 @@ function normalizeUsageCandidate(candidate) {
     }
 
     const usage = candidate.usage || candidate.message?.usage || candidate.usageMetadata || candidate.response?.usage || null;
+    const reasoningTokens = toNumber(
+        candidate.completion_tokens_details?.reasoning_tokens ??
+        candidate.output_tokens_details?.reasoning_tokens ??
+        usage?.completion_tokens_details?.reasoning_tokens ??
+        usage?.output_tokens_details?.reasoning_tokens ??
+        usage?.thoughtsTokenCount
+    );
     const promptTokens = toNumber(
         candidate.prompt_tokens ??
         usage?.prompt_tokens ??
@@ -60,7 +69,7 @@ function normalizeUsageCandidate(candidate) {
         usage?.output_tokens ??
         usage?.candidatesTokenCount ??
         usage?.outputTokenCount
-    );
+    ) + reasoningTokens;
     const totalTokens = toNumber(
         candidate.total_tokens ??
         usage?.total_tokens ??
@@ -286,11 +295,13 @@ const apiPotluckPlugin = {
         deleteKey,
         updateKeyLimit,
         resetKeyUsage,
+        resetKeyTokenStats,
         toggleKey,
         updateKeyName,
         validateKey,
         incrementUsage,
         getStats,
+        resetAllTokenStats,
         KEY_PREFIX,
         extractPotluckKey,
         isPotluckRequest
@@ -307,11 +318,13 @@ export {
     deleteKey,
     updateKeyLimit,
     resetKeyUsage,
+    resetKeyTokenStats,
     toggleKey,
     updateKeyName,
     validateKey,
     incrementUsage,
     getStats,
+    resetAllTokenStats,
     KEY_PREFIX,
     extractPotluckKey,
     isPotluckRequest
