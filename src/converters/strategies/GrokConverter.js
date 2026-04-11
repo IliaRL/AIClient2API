@@ -467,48 +467,8 @@ export class GrokConverter extends BaseConverter {
                 return this.toOpenAIResponsesStreamChunk(chunk, model);
             case MODEL_PROTOCOL_PREFIX.CODEX:
                 return this.toCodexStreamChunk(chunk, model);
-            case MODEL_PROTOCOL_PREFIX.CLAUDE: {
-                const openaiPieces = this.toOpenAIStreamChunk(chunk, model);
-                if (!openaiPieces) return null;
-                const key = requestId || '_';
-                const openaiConverter = ConverterFactory.getConverter(MODEL_PROTOCOL_PREFIX.OPENAI);
-                const pieces = Array.isArray(openaiPieces) ? openaiPieces : [openaiPieces];
-                const out = [];
-                for (const p of pieces) {
-                    const events = openaiConverter.toClaudeStreamChunk(p, model);
-                    if (!events) continue;
-                    const arr = Array.isArray(events) ? events : [events];
-                    for (const ev of arr) {
-                        if (!this._claudeMsgStartSent.get(key)) {
-                            this._claudeMsgStartSent.set(key, true);
-                            const msgId = `msg_${String(p.id || uuidv4()).replace(/^chatcmpl-/, '')}`;
-                            out.push({
-                                type: 'message_start',
-                                message: {
-                                    id: msgId,
-                                    type: 'message',
-                                    role: 'assistant',
-                                    content: [],
-                                    model: model || p.model || 'unknown',
-                                    stop_reason: null,
-                                    stop_sequence: null,
-                                    usage: {
-                                        input_tokens: 0,
-                                        output_tokens: 0,
-                                        cache_creation_input_tokens: 0,
-                                        cache_read_input_tokens: 0
-                                    }
-                                }
-                            });
-                        }
-                        out.push(ev);
-                    }
-                }
-                if (chunk?.result?.response?.isDone) {
-                    this._claudeMsgStartSent.delete(key);
-                }
-                return out.length === 0 ? null : (out.length === 1 ? out[0] : out);
-            }
+            case MODEL_PROTOCOL_PREFIX.CLAUDE:
+                return this.toClaudeStreamChunk(chunk, model, requestId);
             default:
                 return chunk;
         }
@@ -1422,6 +1382,54 @@ export class GrokConverter extends BaseConverter {
         }
 
         return codexChunks.length > 0 ? codexChunks : null;
+    }
+
+    toClaudeStreamChunk(chunk, model, requestId) {
+        const openaiPieces = this.toOpenAIStreamChunk(chunk, model);
+        if (!openaiPieces) return null;
+
+        const key = requestId || '_';
+        const openaiConverter = ConverterFactory.getConverter(MODEL_PROTOCOL_PREFIX.OPENAI);
+        const pieces = Array.isArray(openaiPieces) ? openaiPieces : [openaiPieces];
+        const out = [];
+
+        for (const p of pieces) {
+            const events = openaiConverter.toClaudeStreamChunk(p, model);
+            if (!events) continue;
+
+            const arr = Array.isArray(events) ? events : [events];
+            for (const ev of arr) {
+                if (!this._claudeMsgStartSent.get(key)) {
+                    this._claudeMsgStartSent.set(key, true);
+                    const msgId = `msg_${String(p.id || uuidv4()).replace(/^chatcmpl-/, '')}`;
+                    out.push({
+                        type: 'message_start',
+                        message: {
+                            id: msgId,
+                            type: 'message',
+                            role: 'assistant',
+                            content: [],
+                            model: model || p.model || 'unknown',
+                            stop_reason: null,
+                            stop_sequence: null,
+                            usage: {
+                                input_tokens: 0,
+                                output_tokens: 0,
+                                cache_creation_input_tokens: 0,
+                                cache_read_input_tokens: 0
+                            }
+                        }
+                    });
+                }
+                out.push(ev);
+            }
+        }
+
+        if (chunk?.result?.response?.isDone) {
+            this._claudeMsgStartSent.delete(key);
+        }
+
+        return out.length === 0 ? null : (out.length === 1 ? out[0] : out);
     }
 
     /**

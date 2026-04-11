@@ -1348,15 +1348,11 @@ export class GrokApiService {
                 if (dataStr === '[DONE]') break;
                 try {
                     const json = JSON.parse(dataStr);
-                    if (json.result && requestBody && !grokStreamUsagePayloadAttached) {
-                        json.result._grokUsageEstimatePayload = {
-                            promptText: requestBody.message || "",
-                            toolsJson: requestBody.tools && Array.isArray(requestBody.tools) && requestBody.tools.length
-                                ? JSON.stringify(requestBody.tools) : ""
-                        };
-                        grokStreamUsagePayloadAttached = true;
-                    }
                     if (json.result?.response) {
+                        if (requestBody && !grokStreamUsagePayloadAttached) {
+                            attachGrokUsageEstimatePayload(json.result, requestBody);
+                            grokStreamUsagePayloadAttached = true;
+                        }
                         const resp = json.result.response;
                         resp._requestBaseUrl = reqBaseUrl;
                         resp._uuid = this.uuid;
