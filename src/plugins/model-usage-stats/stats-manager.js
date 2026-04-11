@@ -254,7 +254,7 @@ function normalizeUsageCandidate(candidate) {
     return {
         promptTokens,
         completionTokens,
-        totalTokens: totalTokens || promptTokens + completionTokens,
+        totalTokens: totalTokens || (promptTokens + completionTokens),
         cachedTokens
     };
 }

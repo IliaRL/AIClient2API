@@ -65,12 +65,20 @@ function normalizeUsageCandidate(candidate) {
         candidate.total_tokens ??
         usage?.total_tokens ??
         usage?.totalTokenCount
-    ) || promptTokens + completionTokens;
+    );
+
+    const cachedTokens = toNumber(
+        candidate.cached_tokens ??
+        usage?.cached_tokens ??
+        usage?.cache_read_input_tokens ??
+        usage?.cachedContentTokenCount
+    );
 
     return {
         promptTokens,
         completionTokens,
-        totalTokens
+        totalTokens: totalTokens || (promptTokens + completionTokens),
+        cachedTokens
     };
 }
 
@@ -79,7 +87,8 @@ function mergeUsage(baseUsage, nextUsage) {
     return {
         promptTokens: Math.max(baseUsage.promptTokens, nextUsage.promptTokens),
         completionTokens: Math.max(baseUsage.completionTokens, nextUsage.completionTokens),
-        totalTokens: Math.max(baseUsage.totalTokens, nextUsage.totalTokens)
+        totalTokens: Math.max(baseUsage.totalTokens, nextUsage.totalTokens),
+        cachedTokens: Math.max(baseUsage.cachedTokens || 0, nextUsage.cachedTokens || 0)
     };
 }
 
@@ -87,7 +96,8 @@ function extractUsage(...candidates) {
     return candidates.reduce((usage, candidate) => mergeUsage(usage, normalizeUsageCandidate(candidate)), {
         promptTokens: 0,
         completionTokens: 0,
-        totalTokens: 0
+        totalTokens: 0,
+        cachedTokens: 0
     });
 }
 

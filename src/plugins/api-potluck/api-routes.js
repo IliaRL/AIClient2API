@@ -423,13 +423,15 @@ export async function handlePotluckUserApiRoutes(method, path, req, res) {
                         resetDate: keyData.lastResetDate,
                         promptTokens: keyData.todayPromptTokens || 0,
                         completionTokens: keyData.todayCompletionTokens || 0,
-                        totalTokens: keyData.todayTotalTokens || 0
+                        totalTokens: keyData.todayTotalTokens || 0,
+                        cachedTokens: keyData.todayCachedTokens || 0
                     },
                     total: keyData.totalUsage,
                     tokens: {
                         prompt: keyData.totalPromptTokens || 0,
                         completion: keyData.totalCompletionTokens || 0,
-                        total: keyData.totalTokens || 0
+                        total: keyData.totalTokens || 0,
+                        cached: keyData.totalCachedTokens || 0
                     },
                     lastUsedAt: keyData.lastUsedAt,
                     createdAt: keyData.createdAt,
