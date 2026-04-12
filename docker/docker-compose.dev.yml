@@ -1,0 +1,12 @@
+# 开发模式覆盖配置 - 热重载
+# 使用方法: docker compose -f docker/docker-compose.build.yml -f docker/docker-compose.dev.yml up -d --build
+
+services:
+  aiclient-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    volumes:
+      - ./configs:/app/configs:ro
+      - ..:/app:ro
+    command: ["node", "--watch", "src/core/master.js"]
