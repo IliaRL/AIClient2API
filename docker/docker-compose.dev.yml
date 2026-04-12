@@ -7,6 +7,10 @@ services:
       context: ..
       dockerfile: Dockerfile
     volumes:
-      - ./configs:/app/configs:ro
-      - ..:/app:ro
+      # 从项目根目录挂载 configs，确保路径正确
+      - ../configs:/app/configs:ro
+      # 挂载源代码以支持热重载
+      - ../src:/app/src:ro
+      - ../package.json:/app/package.json:ro
+      # 保留容器内的 node_modules，避免被宿主机覆盖
     command: ["node", "--watch", "src/core/master.js"]
