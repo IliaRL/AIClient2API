@@ -413,9 +413,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: var(--overlay-bg);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1343,7 +1341,6 @@
     width: 100%;
     height: 100%;
     background: var(--overlay-bg);
-    backdrop-filter: blur(4px);
     display: none;
     justify-content: center;
     align-items: center;
