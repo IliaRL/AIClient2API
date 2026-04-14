@@ -688,9 +688,28 @@ export class ProviderPoolManager {
                     // Ensure initial health and usage stats are present in the config
                     providerConfig.isHealthy = providerConfig.isHealthy !== undefined ? providerConfig.isHealthy : true;
                     providerConfig.isDisabled = providerConfig.isDisabled !== undefined ? providerConfig.isDisabled : false;
-                    providerConfig.lastUsed = providerConfig.lastUsed !== undefined ? providerConfig.lastUsed : null;
-                    providerConfig.usageCount = providerConfig.usageCount !== undefined ? providerConfig.usageCount : 0;
-                    providerConfig.errorCount = providerConfig.errorCount !== undefined ? providerConfig.errorCount : 0;
+                    
+                    // --- V3: 统计数据管理 ---
+                    if (isColdStart) {
+                        // 冷启动：清空所有统计数据
+                        providerConfig.lastUsed = null;
+                        providerConfig.usageCount = 0;
+                        providerConfig.errorCount = 0;
+                        providerConfig.lastErrorTime = null;
+                        providerConfig.lastErrorMessage = null;
+                    } else if (existing) {
+                        // 热重载：从旧状态中恢复统计数据，避免被配置文件中的旧数据覆盖
+                        providerConfig.lastUsed = existing.config.lastUsed;
+                        providerConfig.usageCount = existing.config.usageCount;
+                        providerConfig.errorCount = existing.config.errorCount;
+                        providerConfig.lastErrorTime = existing.config.lastErrorTime;
+                        providerConfig.lastErrorMessage = existing.config.lastErrorMessage;
+                    } else {
+                        // 新增节点或默认初始化
+                        providerConfig.lastUsed = providerConfig.lastUsed || null;
+                        providerConfig.usageCount = providerConfig.usageCount || 0;
+                        providerConfig.errorCount = providerConfig.errorCount || 0;
+                    }
                     
                     // --- V2: 刷新监控字段 ---
                     const persistedNeedsRefresh = providerConfig.needsRefresh !== undefined ? providerConfig.needsRefresh : false;

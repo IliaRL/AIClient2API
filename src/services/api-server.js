@@ -180,6 +180,16 @@ function setupWorkerCommunication() {
 async function gracefulShutdown() {
     logger.info('[Server] Initiating graceful shutdown...');
 
+    // 停止所有插件
+    try {
+        const pluginManager = getPluginManager();
+        if (pluginManager) {
+            await pluginManager.destroyAll();
+        }
+    } catch (err) {
+        logger.error('[Server] Error destroying plugins:', err.message);
+    }
+
     // 停止 TLS sidecar
     try {
         await getTLSSidecar().stop();
