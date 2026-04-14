@@ -38,9 +38,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # 构建时代理（如果提供了的话）
-RUN echo "http_proxy=$HTTP_PROXY" && \
-    echo "https_proxy=$HTTPS_PROXY" && \
-    npm install || npm install --ignore-scripts
+RUN npm install || npm install --ignore-scripts
 
 # 复制源代码
 COPY . .

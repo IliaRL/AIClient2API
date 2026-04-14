@@ -539,17 +539,15 @@ function renderProviderStatusOverview(providers, configMap, sortedProviderTypes)
 
         card.innerHTML = `
             <div class="provider-info">
-                <span class="provider-name">${displayName}</span>
+                <span class="provider-name" title="${displayName}">${displayName}</span>
                 <span class="provider-count" style="font-size: 0.75rem; color: var(--text-secondary);">${healthyCount}/${totalCount}</span>
             </div>
             
-            ${totalCount > 10 ? `
-            <div class="provider-nodes-summary" style="display: flex; gap: 8px; font-size: 0.7rem; margin-bottom: 2px;">
+            <div class="provider-nodes-summary">
                 <span style="color: #10b981;"><i class="fas fa-check"></i> ${healthyCount}</span>
-                ${unhealthyCount > 0 ? `<span style="color: #ef4444;"><i class="fas fa-times"></i> ${unhealthyCount}</span>` : ''}
-                ${disabledCount > 0 ? `<span style="color: #9ca3af;"><i class="fas fa-minus-circle"></i> ${disabledCount}</span>` : ''}
+                <span style="color: #ef4444; ${unhealthyCount === 0 ? 'opacity: 0.3;' : ''}"><i class="fas fa-times"></i> ${unhealthyCount}</span>
+                <span style="color: #9ca3af; ${disabledCount === 0 ? 'opacity: 0.3;' : ''}"><i class="fas fa-minus-circle"></i> ${disabledCount}</span>
             </div>
-            ` : ''}
 
             <div class="node-dots">
                 ${accounts.map(acc => {
@@ -571,10 +569,10 @@ function renderProviderStatusOverview(providers, configMap, sortedProviderTypes)
                     return `<span class="node-dot ${statusClass}" title="${statusTitle}" onclick="window.jumpToProviderNode('${type}', '${acc.uuid}', event)"></span>`;
                 }).join('')}
             </div>
-            <div class="provider-stats-summary" style="display: flex; gap: 10px; font-size: 0.75rem; color: var(--text-secondary); border-top: 1px solid var(--border-color); pt-2; margin-top: 4px; padding-top: 8px;">
+            <div class="provider-stats-summary">
                 <span><i class="fas fa-paper-plane" style="font-size: 0.7rem; opacity: 0.7;"></i> ${totalUsage}</span>
                 <span><i class="fas fa-exclamation-circle" style="font-size: 0.7rem; opacity: 0.7;"></i> ${totalErrors}</span>
-                ${totalUsage > 0 ? `<span style="margin-left: auto; opacity: 0.8;">${((totalUsage - totalErrors) / totalUsage * 100).toFixed(1)}%</span>` : ''}
+                <span class="success-rate">${totalUsage > 0 ? ((totalUsage - totalErrors) / totalUsage * 100).toFixed(1) + '%' : '--'}</span>
             </div>
         `;
         grid.appendChild(card);
