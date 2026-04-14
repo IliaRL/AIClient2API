@@ -42,14 +42,8 @@ function createDefaultStore() {
     return {
         updatedAt: null,
         summary: createEmptyUsage(),
-        providers: {}
-    };
-}
-
-function normalizeUsageBlock(block = {}) {
-    return {
-        ...createEmptyUsage(),
-        ...block
+        providers: {},
+        daily: {} // 新增每日统计
     };
 }
 
@@ -57,7 +51,8 @@ function normalizeStore(store) {
     const normalizedStore = {
         updatedAt: store?.updatedAt || null,
         summary: normalizeUsageBlock(store?.summary),
-        providers: {}
+        providers: {},
+        daily: store?.daily || {} // 保留每日统计
     };
 
     for (const [provider, providerStore] of Object.entries(store?.providers || {})) {
@@ -394,6 +389,14 @@ export async function finalizeRequest({ requestId, model, provider, fromProvider
     applyUsage(statsStore.summary, usage, timestamp);
     applyUsage(ensureProviderStore(normalizedProvider).summary, usage, timestamp);
     applyUsage(ensureModelStore(normalizedProvider, normalizedModel), usage, timestamp);
+
+    // 记录每日统计
+    const dateKey = timestamp.split('T')[0];
+    if (!statsStore.daily[dateKey]) {
+        statsStore.daily[dateKey] = createEmptyUsage();
+    }
+    applyUsage(statsStore.daily[dateKey], usage, timestamp);
+
     logger.info(`${getTracePrefix(requestId)} >>> Request Finalized: Provider: ${normalizedProvider} | Model: ${normalizedModel} | Prompt: ${usage.promptTokens} | Completion: ${usage.completionTokens} | Total: ${usage.totalTokens} | Cached: ${usage.cachedTokens} | Stream: ${Boolean(state.isStream)}`);
     markDirty();
     await persistIfDirty();
@@ -419,6 +422,12 @@ export async function resetTokenStats() {
     ensureLoaded();
 
     resetUsageBlockTokens(statsStore.summary);
+
+    if (statsStore.daily) {
+        for (const dayBlock of Object.values(statsStore.daily)) {
+            resetUsageBlockTokens(dayBlock);
+        }
+    }
 
     for (const providerStore of Object.values(statsStore.providers || {})) {
         resetUsageBlockTokens(providerStore.summary);

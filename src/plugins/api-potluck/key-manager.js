@@ -580,10 +580,10 @@ export async function incrementUsage(apiKey, provider = 'unknown', model = 'unkn
     addUsage(userHistory.providers[pName], { requestCount: 1, ...usage });
     addUsage(userHistory.models[mName], { requestCount: 1, ...usage });
 
-    // 清理该 Key 的过期历史 (保留 7 天)
+    // 清理该 Key 的过期历史 (保留 100 天以支持 3 个月日历)
     const userDates = Object.keys(keyData.usageHistory).sort();
-    if (userDates.length > 7) {
-        const dropDates = userDates.slice(0, userDates.length - 7);
+    if (userDates.length > 100) {
+        const dropDates = userDates.slice(0, userDates.length - 100);
         dropDates.forEach(d => delete keyData.usageHistory[d]);
     }
 
