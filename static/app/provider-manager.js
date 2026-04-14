@@ -554,9 +554,7 @@ function showSimplePrompt(title, placeholder, callback) {
     overlay.className = 'modal-overlay';
     overlay.style.display = 'flex';
     overlay.style.zIndex = '3000';
-    overlay.style.background = 'rgba(0, 0, 0, 0.2)';
-    overlay.style.backdropFilter = 'blur(2px)';
-    
+
     overlay.innerHTML = `
         <div class="modal-content" style="max-width: 320px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: 1px solid var(--border-color); padding: 20px;">
             <div style="margin-bottom: 12px; font-weight: 600; font-size: 14px; color: var(--text-primary);">${title}</div>
