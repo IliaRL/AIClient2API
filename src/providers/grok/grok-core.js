@@ -1338,7 +1338,8 @@ export class GrokApiService {
                 maxRedirects: 0
             });
             const rl = readline.createInterface({ input: response.data, terminal: false });
-            let lastResponseId = payload.responseMetadata?.requestModelDetails?.modelId || "final";
+            const fallbackResponseId = uuidv4();
+            let lastResponseId = fallbackResponseId;
             let grokStreamUsagePayloadAttached = false;
 
             for await (const line of rl) {
@@ -1354,6 +1355,9 @@ export class GrokApiService {
                             grokStreamUsagePayloadAttached = true;
                         }
                         const resp = json.result.response;
+                        if (!resp.responseId) {
+                            resp.responseId = lastResponseId;
+                        }
                         resp._requestBaseUrl = reqBaseUrl;
                         resp._uuid = this.uuid;
 
@@ -1443,7 +1447,9 @@ export class GrokApiService {
                 }
                 this._grokLastStreamJsonForDebug = null;
             }
-            yield { result: { response: { isDone: true, responseId: lastResponseId, _requestBaseUrl: reqBaseUrl, _uuid: this.uuid } } };
+            const doneResult = { response: { isDone: true, responseId: lastResponseId, _requestBaseUrl: reqBaseUrl, _uuid: this.uuid } };
+            attachGrokUsageEstimatePayload(doneResult, requestBody);
+            yield { result: doneResult };
         } catch (error) {
             const { status, errorCode, errorMessage, isNetworkError } = this.classifyApiError(error);
             const canRetryInRequest = !hasYieldedData && retryCount < maxRetries;

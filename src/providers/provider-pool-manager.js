@@ -1453,7 +1453,7 @@ export class ProviderPoolManager {
         if (provider) {
             // 防并发机制 A: 如果已经在刷新中，忽略请求
             if (this.refreshingUuids.has(provider.uuid)) {
-                this._log('debug', `Provider ${providerConfig.uuid} is already in refresh queue, ignoring duplicate request.`);
+                this._log('info', `Provider ${providerConfig.uuid} is already in refresh queue, ignoring duplicate refresh request.`);
                 return;
             }
 
@@ -1472,6 +1472,17 @@ export class ProviderPoolManager {
             this._enqueueRefresh(providerType, provider, true);
             
             this._debouncedSave(providerType);
+        } else {
+            let matchedType = null;
+            for (const [type, providers] of Object.entries(this.providerStatus || {})) {
+                if (providers.some(p => p.uuid === providerConfig.uuid)) {
+                    matchedType = type;
+                    break;
+                }
+            }
+            const knownTypes = Object.keys(this.providerStatus || {}).join(', ') || 'none';
+            const typeHint = matchedType ? ` Found same uuid under provider type ${matchedType}.` : '';
+            this._log('warn', `Provider ${providerConfig.uuid} not found in providerStatus for type ${providerType}; refresh not enqueued.${typeHint} Known provider types: ${knownTypes}`);
         }
     }
 
