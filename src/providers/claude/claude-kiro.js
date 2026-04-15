@@ -729,9 +729,20 @@ async saveCredentialsToFile(filePath, newData) {
                 refreshToken: this.refreshToken,
             };
 
+            const hasIdcClientCredentials = !!(this.clientId && this.clientSecret);
+            const isSocialAuth = this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL ||
+                (!this.authMethod && !hasIdcClientCredentials);
+            if (!this.authMethod) {
+                this.authMethod = isSocialAuth ? KIRO_CONSTANTS.AUTH_METHOD_SOCIAL : 'builder-id';
+                logger.warn(`[Kiro Auth] authMethod missing in credentials. Inferred ${this.authMethod} from available fields.`);
+            }
+
             let refreshUrl = this.refreshUrl;
-            if (this.authMethod !== KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+            if (!isSocialAuth) {
                 refreshUrl = this.refreshIDCUrl;
+                if (!hasIdcClientCredentials) {
+                    throw new Error('IDC refresh requires clientId and clientSecret.');
+                }
                 requestBody.clientId = this.clientId;
                 requestBody.clientSecret = this.clientSecret;
                 requestBody.grantType = 'refresh_token';
@@ -749,7 +760,7 @@ async saveCredentialsToFile(filePath, newData) {
             };
             this._applySidecar(axiosConfig);
 
-            if (this.authMethod === KIRO_CONSTANTS.AUTH_METHOD_SOCIAL) {
+            if (isSocialAuth) {
                 response = await this.axiosSocialRefreshInstance.request(axiosConfig);
                 logger.info('[Kiro Auth] Token refresh social response: ok');
             } else {
@@ -759,9 +770,9 @@ async saveCredentialsToFile(filePath, newData) {
 
             if (response.data && response.data.accessToken) {
                 this.accessToken = response.data.accessToken;
-                this.refreshToken = response.data.refreshToken;
-                this.profileArn = response.data.profileArn;
-                const expiresIn = response.data.expiresIn;
+                this.refreshToken = response.data.refreshToken || this.refreshToken;
+                this.profileArn = response.data.profileArn || this.profileArn;
+                const expiresIn = Number(response.data.expiresIn) || 3600;
                 const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
                 this.expiresAt = expiresAt;
                 logger.info('[Kiro Auth] Access token refreshed successfully');
@@ -1591,27 +1602,10 @@ async saveCredentialsToFile(filePath, newData) {
                 await this._handle402Error(error, 'callApi');
             }
 
-            // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
+            // Handle 403 (Forbidden). Most Kiro 403s are account/policy/quota/profile issues,
+            // not expired access tokens, so do not blindly refresh.
             if (status === 403 && !isRetry) {
-                logger.info('[Kiro] Received 403. Marking credential as need refresh...');
-                
-                // 检查是否为 temporarily suspended 错误
-                const isSuspended = errorMessage && errorMessage.toLowerCase().includes('temporarily is suspended');
-                
-                if (isSuspended) {
-                    // temporarily suspended 错误：直接标记为不健康，不刷新 UUID
-                    logger.info('[Kiro] Account temporarily suspended. Marking as unhealthy without UUID refresh...');
-                    this._markCredentialUnhealthy('403 Forbidden - Account temporarily suspended', error);
-                } else {
-                    // 其他 403 错误：先刷新 UUID，然后标记需要刷新
-                    // const newUuid = this._refreshUuid();
-                    // if (newUuid) {
-                    //     logger.info(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
-                    //     this.uuid = newUuid;
-                    // }
-                    this._markCredentialNeedRefresh('403 Forbidden', error);
-                }
-                
+                this._handleForbiddenCredentialError(error, 'callApi');
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
@@ -1650,6 +1644,73 @@ async saveCredentialsToFile(filePath, newData) {
             if (error.response && error.response.data) { logger.error('[Kiro] 400 Response body:', typeof error.response.data === 'string' ? error.response.data.substring(0, 500) : JSON.stringify(error.response.data).substring(0, 500)); }
             logger.error(`[Kiro] API call failed (Status: ${status}, Code: ${errorCode}):`, error.message);
             throw error;
+        }
+    }
+
+    _getErrorResponseText(error) {
+        const data = error?.response?.data;
+        if (data === undefined || data === null) {
+            return error?.message || '';
+        }
+        if (Buffer.isBuffer(data)) {
+            return data.toString('utf8');
+        }
+        if (typeof data === 'string') {
+            return data;
+        }
+        try {
+            return JSON.stringify(data);
+        } catch {
+            return String(data);
+        }
+    }
+
+    _isRefreshableForbidden(error) {
+        const text = this._getErrorResponseText(error).toLowerCase();
+        if (!text) return false;
+
+        const nonRefreshablePatterns = [
+            'temporarily is suspended',
+            'temporarily suspended',
+            'disabled',
+            'violation of terms',
+            'terms of service',
+            'appeal',
+            'quota',
+            'limit exceeded',
+            'payment required',
+            'not authorized to access',
+            'not allowed'
+        ];
+        if (nonRefreshablePatterns.some(pattern => text.includes(pattern))) {
+            return false;
+        }
+
+        const tokenRelated = text.includes('token') ||
+            text.includes('authorization') ||
+            text.includes('authenticate') ||
+            text.includes('credential');
+        const refreshableAuthState = text.includes('expired') ||
+            text.includes('invalid') ||
+            text.includes('unauthorized');
+
+        return tokenRelated && refreshableAuthState;
+    }
+
+    _handleForbiddenCredentialError(error, context) {
+        const responseText = this._getErrorResponseText(error);
+        const responseSnippet = responseText ? responseText.substring(0, 500) : '';
+
+        if (responseSnippet) {
+            logger.warn(`[Kiro] 403 response body (${context}): ${responseSnippet}`);
+        }
+
+        if (this._isRefreshableForbidden(error)) {
+            logger.info(`[Kiro] Received token-related 403 in ${context}. Marking credential as needs refresh.`);
+            this._markCredentialNeedRefresh(`403 Forbidden (${context}) - token-related${responseSnippet ? `: ${responseSnippet}` : ''}`, error);
+        } else {
+            logger.info(`[Kiro] Received non-refreshable 403 in ${context}. Marking credential as unhealthy without refresh.`);
+            this._markCredentialUnhealthy(`403 Forbidden (${context})${responseSnippet ? `: ${responseSnippet}` : ''}`, error);
         }
     }
 
@@ -2132,27 +2193,10 @@ async saveCredentialsToFile(filePath, newData) {
                 await this._handle402Error(error, 'stream');
             }
 
-            // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
+            // Handle 403 (Forbidden). Most Kiro 403s are account/policy/quota/profile issues,
+            // not expired access tokens, so do not blindly refresh.
             if (status === 403 && !isRetry) {
-                logger.info('[Kiro] Received 403 in stream. Marking credential as need refresh...');
-                
-                // 检查是否为 temporarily suspended 错误
-                const isSuspended = errorMessage && errorMessage.toLowerCase().includes('temporarily is suspended');
-                
-                if (isSuspended) {
-                    // temporarily suspended 错误：直接标记为不健康，不刷新 UUID
-                    logger.info('[Kiro] Account temporarily suspended in stream. Marking as unhealthy without UUID refresh...');
-                    this._markCredentialUnhealthy('403 Forbidden - Account temporarily suspended', error);
-                } else {
-                    // 其他 403 错误：先刷新 UUID，然后标记需要刷新
-                    // const newUuid = this._refreshUuid();
-                    // if (newUuid) {
-                    //     logger.info(`[Kiro] UUID refreshed: ${this.uuid} -> ${newUuid}`);
-                    //     this.uuid = newUuid;
-                    // }
-                    this._markCredentialNeedRefresh('403 Forbidden', error);
-                }
-
+                this._handleForbiddenCredentialError(error, 'stream');
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
@@ -3082,20 +3126,8 @@ async saveCredentialsToFile(filePath, newData) {
             }
             
             if (status === 403) {
-                logger.info('[Kiro] Received 403 on getUsageLimits. Marking credential as unhealthy (no retry)...');
-                
-                // 检查是否为 temporarily suspended 错误
-                const isSuspended = errorMessage && errorMessage.toLowerCase().includes('temporarily is suspended');
-                
-                if (isSuspended) {
-                    // temporarily suspended 错误：直接标记为不健康，不刷新 UUID
-                    logger.info('[Kiro] Account temporarily suspended on usage query. Marking as unhealthy without UUID refresh...');
-                    this._markCredentialUnhealthy('403 Forbidden - Account temporarily suspended on usage query', formattedError);
-                } else {
-                    // 其他 403 错误：标记需要刷新
-                    this._markCredentialNeedRefresh('403 Forbidden on usage query', formattedError);
-                }
-                
+                this._handleForbiddenCredentialError(error, 'usage query');
+                formattedError.credentialMarkedUnhealthy = true;
                 throw formattedError;
             }
             
