@@ -113,6 +113,22 @@ export class ProviderPoolManager {
     }
 
     /**
+     * 强制刷新特定节点的令牌
+     * @param {string} providerType 
+     * @param {string} uuid 
+     * @param {boolean} force 
+     */
+    async refreshNode(providerType, uuid, force = true) {
+        const provider = this._findProvider(providerType, uuid);
+        if (provider) {
+            this._log('info', `Manually triggering refresh for node ${uuid} (${providerType})`);
+            this._enqueueRefresh(providerType, provider, force);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * 检查所有节点的配置文件，如果发现即将过期则触发刷新
      */
     async checkAndRefreshExpiringNodes() {
@@ -147,9 +163,16 @@ export class ProviderPoolManager {
                     try {
                         const fileContent = fs.readFileSync(configPath, 'utf-8');
                         const credData = JSON.parse(fileContent);
-                        const expiryTime = credData.expiry_date || credData.expiry || credData.expires_at;
+                        const rawExpiryTime = credData.expiry_date ?? credData.expiry ?? credData.expires_at ?? credData.expiresAt;
+                        let expiryTime = null;
+                        if (typeof rawExpiryTime === 'number') {
+                            expiryTime = rawExpiryTime;
+                        } else if (typeof rawExpiryTime === 'string') {
+                            const parsedDate = Date.parse(rawExpiryTime);
+                            expiryTime = Number.isNaN(parsedDate) ? Number(rawExpiryTime) : parsedDate;
+                        }
                         const nearExpiryMs = (this.globalConfig?.CRON_NEAR_MINUTES || 10) * 60 * 1000;
-                        if (!expiryTime) {
+                        if (!Number.isFinite(expiryTime)) {
                             // 凭据文件缺少 expiry 字段，无法判断是否快过期，作为安全措施强制刷新
                             this._log('warn', `Node ${providerStatus.uuid} (${providerType}) has no expiry field. Forcing refresh as safety measure...`);
                             this._enqueueRefresh(providerType, providerStatus);
@@ -347,7 +370,9 @@ export class ProviderPoolManager {
                     const nextTask = currentQueue.waitingTasks.shift();
                     currentQueue.activeCount++;
                     // 使用 Promise.resolve().then 避免过深的递归
-                    Promise.resolve().then(nextTask);
+                    Promise.resolve().then(nextTask).catch(err => {
+                        this._log('error', `Failed to execute next task for ${providerType}: ${err.message}`);
+                    });
                 } else if (currentQueue.activeCount === 0) {
                     // 清理空队列：无论是否持有全局槽位，都应删除已无任务的队列对象
                     if (currentQueue.waitingTasks.length === 0 &&
@@ -363,7 +388,9 @@ export class ProviderPoolManager {
                     // 3. 尝试启动下一个等待中的提供商队列
                     if (this.globalRefreshWaiters.length > 0) {
                         const nextProviderStart = this.globalRefreshWaiters.shift();
-                        Promise.resolve().then(nextProviderStart);
+                        Promise.resolve().then(nextProviderStart).catch(err => {
+                            this._log('error', `Failed to start next provider queue: ${err.message}`);
+                        });
                     }
                 }
             }
@@ -372,7 +399,9 @@ export class ProviderPoolManager {
         const tryStartProviderQueue = () => {
             if (queue.activeCount < this.refreshConcurrency.perProvider) {
                 queue.activeCount++;
-                runTask();
+                runTask().catch(err => {
+                    this._log('error', `Critical error in runTask for ${providerType}: ${err.message}`);
+                });
             } else {
                 queue.waitingTasks.push(runTask);
             }

@@ -73,7 +73,8 @@ function attachGrokUsageEstimatePayload(collected, requestBody) {
     const promptText = requestBody.message || "";
     const toolsJson = requestBody.tools && Array.isArray(requestBody.tools) && requestBody.tools.length
         ? JSON.stringify(requestBody.tools) : "";
-    collected._grokUsageEstimatePayload = { promptText, toolsJson };
+    const includeUsage = requestBody.stream_options?.include_usage === true;
+    collected._grokUsageEstimatePayload = { promptText, toolsJson, includeUsage };
 }
 
 export class GrokApiService {
@@ -1245,7 +1246,9 @@ export class GrokApiService {
                 }
             }
         }
-        yield { result: { response: { isDone: true, responseId } } };
+        const doneResult = { response: { isDone: true, responseId } };
+        attachGrokUsageEstimatePayload(doneResult, requestBody);
+        yield { result: doneResult };
     }
 
     async uploadFile(fileInput) {

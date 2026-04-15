@@ -68,7 +68,7 @@ export async function scanConfigFiles(currentConfig, providerPoolManager) {
  * @param {Set} usedPaths - Set of paths currently in use
  * @returns {Promise<Object|null>} OAuth file information object
  */
-async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
+export async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
     try {
         const stats = await fs.stat(filePath);
         const ext = path.extname(filePath).toLowerCase();
@@ -81,6 +81,8 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
         let isValid = true;
         let errorMessage = '';
         let oauthProvider = 'unknown';
+        let expiresAt = null;
+        let expiresAtTS = null;
         let usageInfo = getFileUsageInfo(relativePath, filename, usedPaths, currentConfig);
         
         // 从路径预检测提供商
@@ -120,34 +122,82 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
                 try {
                     const jsonData = JSON.parse(content);
                     
-                    // 如果文件名没识别出类型，尝试从内容识别
-                    if (type === 'oauth') {
-                        if (jsonData.providerPools || jsonData.provider_pools) {
-                            type = 'provider-pool';
-                        } else if (jsonData.apiKey || jsonData.api_key) {
-                            type = 'api-key';
+                    if (jsonData && typeof jsonData === 'object') {
+                        // 如果文件名没识别出类型，尝试从内容识别
+                        if (type === 'oauth') {
+                            if (jsonData.providerPools || jsonData.provider_pools) {
+                                type = 'provider-pool';
+                            } else if (jsonData.apiKey || jsonData.api_key) {
+                                type = 'api-key';
+                            }
                         }
-                    }
 
-                    // 识别具体的提供商/认证方式
-                    if (jsonData.client_id || jsonData.client_secret) {
-                        if (oauthProvider === 'unknown') oauthProvider = 'oauth2';
-                    } else if (jsonData.access_token || jsonData.refresh_token) {
-                        if (oauthProvider === 'unknown') oauthProvider = 'token_based';
-                    } else if (jsonData.credentials) {
-                        if (oauthProvider === 'unknown') oauthProvider = 'service_account';
-                    } else if (jsonData.apiKey || jsonData.api_key) {
-                        if (oauthProvider === 'unknown') oauthProvider = 'api_key';
-                    }
-                    
-                    if (jsonData.base_url || jsonData.endpoint) {
-                        const baseUrl = (jsonData.base_url || jsonData.endpoint).toLowerCase();
-                        if (baseUrl.includes('openai.com')) {
-                            oauthProvider = 'openai';
-                        } else if (baseUrl.includes('anthropic.com')) {
-                            oauthProvider = 'claude';
-                        } else if (baseUrl.includes('googleapis.com')) {
-                            oauthProvider = 'gemini';
+                        // 识别具体的提供商/认证方式
+                        if (jsonData.client_id || jsonData.client_secret) {
+                            if (oauthProvider === 'unknown') oauthProvider = 'oauth2';
+                        } else if (jsonData.access_token || jsonData.refresh_token) {
+                            if (oauthProvider === 'unknown') oauthProvider = 'token_based';
+                        } else if (jsonData.credentials) {
+                            if (oauthProvider === 'unknown') oauthProvider = 'service_account';
+                        } else if (jsonData.apiKey || jsonData.api_key) {
+                            if (oauthProvider === 'unknown') oauthProvider = 'api_key';
+                        }
+
+                        // 提取过期信息
+                        const getTimestamp = (val) => {
+                            if (val === null || val === undefined || val === '') return null;
+                            if (typeof val === 'number') return val;
+                            if (typeof val === 'string') {
+                                if (/^\d+$/.test(val)) return Number(val);
+                                const parsed = Date.parse(val);
+                                return isNaN(parsed) ? null : parsed;
+                            }
+                            return null;
+                        };
+
+                        const timestamps = [];
+                        
+                        // 收集所有可能的过期时间点
+                        const possibleSources = [jsonData];
+                        if (jsonData.tokens) possibleSources.push(jsonData.tokens);
+                        if (jsonData.credentials) possibleSources.push(jsonData.credentials);
+                        if (jsonData.auth) possibleSources.push(jsonData.auth);
+                        
+                        possibleSources.forEach(src => {
+                            if (!src || typeof src !== 'object') return;
+                            
+                            ['expiry_date', 'expiresAt', 'expires_at', 'expiry'].forEach(key => {
+                                const ts = getTimestamp(src[key]);
+                                if (ts) {
+                                    // 启发式转换秒到毫秒
+                                    timestamps.push(ts < 10000000000 ? ts * 1000 : ts);
+                                }
+                            });
+                            
+                            // 收集基于相对时间计算的时间点
+                            const relExpiresIn = Number(src.expires_in || src.expiresIn);
+                            const relIssuedAt = getTimestamp(src.issued_at || src.issuedAt);
+                            if (!isNaN(relExpiresIn) && relIssuedAt) {
+                                const issuedMS = relIssuedAt < 10000000000 ? relIssuedAt * 1000 : relIssuedAt;
+                                timestamps.push(issuedMS + relExpiresIn * 1000);
+                            }
+                        });
+                        
+                        if (timestamps.length > 0) {
+                            // 取最大的时间点作为过期时间（最宽松策略）
+                            expiresAtTS = Math.max(...timestamps);
+                            expiresAt = new Date(expiresAtTS).toISOString();
+                        }
+                        
+                        if (jsonData.base_url || jsonData.endpoint) {
+                            const baseUrl = (jsonData.base_url || jsonData.endpoint).toLowerCase();
+                            if (baseUrl.includes('openai.com')) {
+                                oauthProvider = 'openai';
+                            } else if (baseUrl.includes('anthropic.com')) {
+                                oauthProvider = 'claude';
+                            } else if (baseUrl.includes('googleapis.com')) {
+                                oauthProvider = 'gemini';
+                            }
                         }
                     }
                 } catch (jsonErr) {
@@ -182,6 +232,8 @@ async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
             provider: oauthProvider,
             extension: ext,
             modified: stats.mtime.toISOString(),
+            expiresAt: expiresAt,
+            expiresIn: expiresAtTS ? Math.floor((expiresAtTS - Date.now()) / 1000) : null,
             isValid: isValid,
             errorMessage: errorMessage,
             isUsed: isPathUsed(relativePath, filename, usedPaths),

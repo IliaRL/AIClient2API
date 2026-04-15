@@ -117,7 +117,8 @@ export class GrokConverter extends BaseConverter {
                 seen_images: new Set(), // 用于去重已输出的图片
                 pending_text_buffer: "", // 用于处理流式输出中被截断的 URL
                 usageAcc: null, // 流式过程中最后一次解析到的上游用量（末包常为合成 isDone 无用量）
-                usageEstimatePayload: null // grok-core 注入的 prompt/tools 文本，用于本地估算
+                usageEstimatePayload: null, // grok-core 注入的 prompt/tools 文本，用于本地估算
+                streamIncludeUsage: false // OpenAI stream_options.include_usage 兼容
             });
         }
         return this.requestStates.get(requestId);
@@ -819,6 +820,9 @@ export class GrokConverter extends BaseConverter {
         if (est && !state.usageEstimatePayload) {
             state.usageEstimatePayload = est;
         }
+        if (est?.includeUsage === true) {
+            state.streamIncludeUsage = true;
+        }
 
         const chunks = [];
 
@@ -899,6 +903,18 @@ export class GrokConverter extends BaseConverter {
                         delta: { content: finalContent || null },
                         finish_reason: "stop"
                     }]
+                });
+            }
+
+            if (state.streamIncludeUsage) {
+                chunks.push({
+                    id: responseId,
+                    object: "chat.completion.chunk",
+                    created: Math.floor(Date.now() / 1000),
+                    model: model,
+                    system_fingerprint: state.fingerprint,
+                    choices: [],
+                    usage: terminalUsage
                 });
             }
 

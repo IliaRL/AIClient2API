@@ -277,6 +277,13 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
         return await uploadConfigApi.handleDeleteConfigFile(req, res, filePath);
     }
 
+    // Force expire specific configuration file
+    const forceExpireConfigMatch = pathParam.match(/^\/api\/upload-configs\/force-expire\/(.+)$/);
+    if (method === 'POST' && forceExpireConfigMatch) {
+        const filePath = decodeURIComponent(forceExpireConfigMatch[1]);
+        return await uploadConfigApi.handleForceExpireConfig(req, res, filePath, currentConfig, providerPoolManager);
+    }
+
     // Download all configs as zip
     if (method === 'GET' && pathParam === '/api/upload-configs/download-all') {
         return await uploadConfigApi.handleDownloadAllConfigs(req, res);

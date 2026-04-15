@@ -679,6 +679,31 @@ body {
     color: var(--danger-text);
 }
 
+.expiration-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.expiration-tag.healthy {
+    background: var(--success-bg-light);
+    color: var(--success-text);
+}
+
+.expiration-tag.warning {
+    background: var(--warning-bg);
+    color: var(--warning-text);
+}
+
+.expiration-tag.expired {
+    background: var(--danger-bg-light);
+    color: var(--danger-color);
+}
+
 .status-success { color: var(--success-color); }
 .status-error { color: var(--danger-color); }
 

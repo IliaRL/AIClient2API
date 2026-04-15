@@ -139,17 +139,6 @@ export const PROVIDER_MODELS = {
         'grok-imagine-1.0-edit',
         'grok-imagine-1.0-fast',
         'grok-imagine-1.0-fast-edit',
-        'grok-4.1-mini-nsfw',
-        'grok-4.1-thinking-nsfw',
-        'grok-4.20-nsfw',
-        'grok-4.20-auto-nsfw',
-        'grok-4.20-fast-nsfw',
-        'grok-4.20-expert-nsfw',
-        'grok-4.20-heavy-nsfw',
-        'grok-imagine-1.0-nsfw',
-        'grok-imagine-1.0-edit-nsfw',
-        'grok-imagine-1.0-fast-nsfw',
-        'grok-imagine-1.0-fast-edit-nsfw'
     ]
 };
 

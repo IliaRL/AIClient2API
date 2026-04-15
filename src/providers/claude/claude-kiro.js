@@ -620,16 +620,21 @@ async loadCredentials() {
             logger.warn(`[Kiro Auth] Error loading credentials from directory ${dirPath}: ${error.message}`);
         }
 
-        // Apply loaded credentials
-        this.accessToken = this.accessToken || mergedCredentials.accessToken;
-        this.refreshToken = this.refreshToken || mergedCredentials.refreshToken;
-        this.clientId = this.clientId || mergedCredentials.clientId;
-        this.clientSecret = this.clientSecret || mergedCredentials.clientSecret;
-        this.authMethod = this.authMethod || mergedCredentials.authMethod;
-        this.expiresAt = this.expiresAt || mergedCredentials.expiresAt;
-        this.profileArn = this.profileArn || mergedCredentials.profileArn;
-        this.region = this.region || mergedCredentials.region;
-        this.idcRegion = this.idcRegion || mergedCredentials.idcRegion;
+        // Apply loaded credentials. Force-refresh paths must not keep stale in-memory tokens.
+        const applyCredential = (field) => {
+            if (mergedCredentials[field] !== undefined && mergedCredentials[field] !== null) {
+                this[field] = mergedCredentials[field];
+            }
+        };
+        applyCredential('accessToken');
+        applyCredential('refreshToken');
+        applyCredential('clientId');
+        applyCredential('clientSecret');
+        applyCredential('authMethod');
+        applyCredential('expiresAt');
+        applyCredential('profileArn');
+        applyCredential('region');
+        applyCredential('idcRegion');
 
         if (!this.region) {
             logger.warn('[Kiro Auth] Region not found in credentials. Using default region us-east-1 for URLs.');

@@ -47,6 +47,14 @@ function normalizeUsageCandidate(candidate) {
     if (!candidate || typeof candidate !== 'object') {
         return null;
     }
+    if (Array.isArray(candidate)) {
+        return candidate.reduce((usage, item) => mergeUsage(usage, normalizeUsageCandidate(item)), {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            cachedTokens: 0
+        });
+    }
 
     const usage = candidate.usage || candidate.message?.usage || candidate.usageMetadata || candidate.response?.usage || null;
     const reasoningTokens = toNumber(

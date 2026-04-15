@@ -234,6 +234,16 @@ function normalizeUsageCandidate(candidate) {
     if (!candidate || typeof candidate !== 'object') {
         return null;
     }
+    if (Array.isArray(candidate)) {
+        const usage = candidate.reduce((merged, item) => mergeUsage(merged, normalizeUsageCandidate(item)), {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            cachedTokens: 0
+        });
+        const hasUsage = usage.promptTokens > 0 || usage.completionTokens > 0 || usage.totalTokens > 0 || usage.cachedTokens > 0;
+        return hasUsage ? usage : null;
+    }
 
     const usage = candidate.usage || candidate.message?.usage || candidate.usageMetadata || candidate.response?.usage || null;
     const reasoningTokens = toNumber(
