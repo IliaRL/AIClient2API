@@ -59,8 +59,38 @@ const MODEL_CONTEXT_TOKENS = {
     "claude-haiku-4-5-20251001": 200000,
 };
 
-function getContextTokensForModel(model) {
-    return MODEL_CONTEXT_TOKENS[model] || KIRO_CONSTANTS.TOTAL_CONTEXT_TOKENS;
+function normalizeContextLength(value) {
+    if (value === undefined || value === null || value === '') {
+        return null;
+    }
+
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
+}
+
+function findCustomModelConfigForModel(model, config = {}) {
+    const targetModel = typeof model === 'string'
+        ? model.replace(/^[^:]+:/, '')
+        : '';
+    if (!targetModel) {
+        return null;
+    }
+
+    const customModels = Array.isArray(config?.customModels) ? config.customModels : [];
+    return customModels.find(({ id, alias, actualModel } = {}) =>
+        id === targetModel || alias === targetModel || actualModel === targetModel
+    ) || null;
+}
+
+function getContextTokensForModel(model, config = {}, fallbackModel = null) {
+    const customModelConfig = findCustomModelConfigForModel(model, config) ||
+        findCustomModelConfigForModel(fallbackModel, config);
+    const configuredModelContextLength = normalizeContextLength(customModelConfig?.contextLength);
+    if (configuredModelContextLength !== null) {
+        return configuredModelContextLength;
+    }
+
+    return MODEL_CONTEXT_TOKENS[model] || MODEL_CONTEXT_TOKENS[fallbackModel] || KIRO_CONSTANTS.TOTAL_CONTEXT_TOKENS;
 }
 // 从 provider-models.js 获取支持的模型列表
 const KIRO_MODELS = getProviderModels(MODEL_PROVIDER.KIRO_API);
@@ -2646,7 +2676,7 @@ async saveCredentialsToFile(filePath, newData) {
             // 总 token = TOTAL_CONTEXT_TOKENS * contextUsagePercentage / 100
             // input token = 总 token - output token
             if (contextUsagePercentage !== null && contextUsagePercentage > 0) {
-                const contextTokens = getContextTokensForModel(finalModel);
+                const contextTokens = getContextTokensForModel(model, this.config, finalModel);
                 const totalTokens = Math.round(contextTokens * contextUsagePercentage / 100);
                 inputTokens = Math.max(0, totalTokens - outputTokens);
                 logger.info(`[Kiro] Token calculation from contextUsagePercentage: total=${totalTokens}, output=${outputTokens}, input=${inputTokens}`);

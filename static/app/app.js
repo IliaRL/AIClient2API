@@ -88,6 +88,10 @@ import {
     initTutorialManager
 } from './tutorial-manager.js';
 
+import {
+    CustomModelsManager
+} from './custom-models-manager.js';
+
 /**
  * 加载初始数据
  */
@@ -95,7 +99,9 @@ function loadInitialData() {
     loadSystemInfo();
     loadProviders();
     loadConfiguration();
-    // showToast('数据已刷新', 'success');
+    if (window.customModelsManager) {
+        window.customModelsManager.load();
+    }
 }
 
 /**
@@ -125,6 +131,10 @@ function initApp() {
     initImageZoom(); // 初始化图片放大功能
     initPluginManager(); // 初始化插件管理功能
     initTutorialManager(); // 初始化教程管理功能
+    
+    // 初始化自定义模型管理
+    window.customModelsManager = new CustomModelsManager();
+    
     initMobileMenu(); // 初始化移动端菜单
     loadInitialData();
     

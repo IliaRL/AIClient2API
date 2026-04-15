@@ -77,6 +77,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         LOGIN_MIN_INTERVAL: 5000, // 两次尝试之间的最小间隔（毫秒），默认1秒
         PROVIDER_POOLS_FILE_PATH: null, // 新增号池配置文件路径
         MAX_ERROR_COUNT: 10, // 提供商最大错误次数
+        CUSTOM_MODELS_FILE_PATH: null, // 自定义模型配置文件路径
         SYSTEM_PROMPT_REPLACEMENTS: [], // 系统提示词内容替换规则，例如: [{"old": "AI", "new": "Bot"}, {"old": "OpenAI", "new": "Gemini"}]
         SCHEDULED_HEALTH_CHECK: {
             enabled: false,
@@ -129,6 +130,7 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         { flag: '--cron-near-minutes',    configKey: 'CRON_NEAR_MINUTES',      type: 'int' },
         { flag: '--cron-refresh-token',   configKey: 'CRON_REFRESH_TOKEN',     type: 'bool' },
         { flag: '--provider-pools-file',  configKey: 'PROVIDER_POOLS_FILE_PATH', type: 'string' },
+        { flag: '--custom-models-file',   configKey: 'CUSTOM_MODELS_FILE_PATH', type: 'string' },
         { flag: '--max-error-count',      configKey: 'MAX_ERROR_COUNT',        type: 'int' },
         { flag: '--login-max-attempts',   configKey: 'LOGIN_MAX_ATTEMPTS',     type: 'int' },
         { flag: '--login-lockout-duration', configKey: 'LOGIN_LOCKOUT_DURATION', type: 'int' },
@@ -199,6 +201,23 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         }
     } else {
         currentConfig.providerPools = {};
+    }
+
+    // 加载自定义模型配置
+    if (!currentConfig.CUSTOM_MODELS_FILE_PATH) {
+        currentConfig.CUSTOM_MODELS_FILE_PATH = 'configs/custom_models.json';
+    }
+    try {
+        if (fs.existsSync(currentConfig.CUSTOM_MODELS_FILE_PATH)) {
+            const customModelsData = fs.readFileSync(currentConfig.CUSTOM_MODELS_FILE_PATH, 'utf8');
+            currentConfig.customModels = JSON.parse(customModelsData);
+            logger.info(`[Config] Loaded custom models from ${currentConfig.CUSTOM_MODELS_FILE_PATH}`);
+        } else {
+            currentConfig.customModels = [];
+        }
+    } catch (error) {
+        logger.error(`[Config Error] Failed to load custom models from ${currentConfig.CUSTOM_MODELS_FILE_PATH}: ${error.message}`);
+        currentConfig.customModels = [];
     }
 
     // Set PROMPT_LOG_FILENAME based on the determined config

@@ -5,11 +5,39 @@ import { MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
 import { convertData } from '../convert/convert.js';
 import {
     getConfiguredSupportedModels,
+    getCustomModelListProvider,
     getProviderModels,
     normalizeModelIds
 } from './provider-models.js';
 import { broadcastEvent } from '../ui-modules/event-broadcast.js';
 import { ENDPOINT_TYPE } from '../utils/common.js';
+
+function getCustomModelAliasesForProvider(config, providerType) {
+    const customModels = Array.isArray(config?.customModels) ? config.customModels : [];
+    return new Set(
+        customModels
+            .filter(model => {
+                const listProvider = getCustomModelListProvider(model);
+                return model?.alias &&
+                    model.alias !== model.id &&
+                    listProvider &&
+                    (listProvider === providerType || providerType.startsWith(listProvider + '-'));
+            })
+            .map(model => model.alias)
+    );
+}
+
+function getCustomModelIdsForProvider(config, providerType) {
+    const customModels = Array.isArray(config?.customModels) ? config.customModels : [];
+    return customModels
+        .filter(model => {
+            const listProvider = getCustomModelListProvider(model);
+            return model?.id &&
+                listProvider &&
+                (listProvider === providerType || providerType.startsWith(listProvider + '-'));
+        })
+        .map(model => model.id);
+}
 
 /**
  * Manages a pool of API service providers, handling their health and selection.
@@ -1308,17 +1336,20 @@ export class ProviderPoolManager {
 
         for (const providerType of allProviderTypes) {
             if (this.providerStatus[providerType]) {
-                let models = getProviderModels(providerType);
+                const customAliases = getCustomModelAliasesForProvider(this.globalConfig, providerType);
+                const customModelIds = getCustomModelIdsForProvider(this.globalConfig, providerType);
                 const configuredSupportedModels = normalizeModelIds(
                     this.providerStatus[providerType].flatMap(providerStatus =>
                         getConfiguredSupportedModels(providerType, providerStatus.config)
                     )
                 );
+                let models = configuredSupportedModels.length > 0
+                    ? normalizeModelIds([...configuredSupportedModels, ...customModelIds])
+                    : normalizeModelIds([
+                        ...getProviderModels(providerType).filter(model => !customAliases.has(model)),
+                        ...customModelIds
+                    ]);
 
-                if (configuredSupportedModels.length > 0) {
-                    models = configuredSupportedModels;
-                }
-                
                 // 如果硬编码的模型列表为空，或者该类型的提供商在号池中没有配置节点，尝试从服务获取
                 // 只有在非号池模式，或者号池中有节点时才尝试获取，避免无节点时读取全局默认配置
                 if (models.length === 0 && (!this.providerStatus[providerType] || this.providerStatus[providerType].length > 0)) {
