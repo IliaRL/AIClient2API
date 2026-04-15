@@ -166,7 +166,7 @@ export async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
                         possibleSources.forEach(src => {
                             if (!src || typeof src !== 'object') return;
                             
-                            ['expiry_date', 'expiresAt', 'expires_at', 'expiry'].forEach(key => {
+                            ['expiry_date', 'expiresAt', 'expires_at', 'expiry', 'expired'].forEach(key => {
                                 const ts = getTimestamp(src[key]);
                                 if (ts) {
                                     // 启发式转换秒到毫秒
