@@ -81,7 +81,7 @@
 
 ## 🚀 项目概览
 
-`AIClient2API` 是一个突破客户端限制的 API 代理服务，将 Gemini、Antigravity、Codex, Grok、Kiro 等原本仅限客户端内使用的免费大模型，转换为可供任何应用调用的标准 OpenAI 兼容接口。基于 Node.js 构建，支持 OpenAI、Claude、Gemini 三大协议的智能互转，让 Cherry-Studio、NextChat、Cline 等工具能够免费大量使用 Claude Opus 4.5、Gemini 3.0 Pro、Qwen3 Coder Plus 等高级模型。项目采用策略模式和适配器模式的模块化架构，内置账号池管理、智能轮询、自动故障转移和健康检查机制，确保 99.9% 的服务可用性。
+`AIClient2API` 是一个突破客户端限制的 API 代理服务，将 Gemini、Antigravity、Codex, Grok、Kiro 等原本仅限客户端内使用的免费大模型，转换为可供任何应用调用的标准 OpenAI 兼容接口。基于 Node.js 构建，支持 OpenAI、Claude、Gemini 三大协议的智能互转，让 Cherry-Studio、NextChat、Cline 等工具能够免费大量使用 Claude Opus 4.5、Gemini 3.0 Pro 等高级模型。项目采用策略模式和适配器模式的模块化架构，内置账号池管理、智能轮询、自动故障转移和健康检查机制，确保 99.9% 的服务可用性。
 
 > [!NOTE]
 > **🎉 重要里程碑**
@@ -105,7 +105,6 @@
 > - **2025.11.11** - 新增 Web UI 管理控制台，支持实时配置管理和健康状态监控
 > - **2025.11.06** - 新增对 Gemini 3 预览版的支持，增强模型兼容性和性能优化
 > - **2025.10.18** - Kiro 开放注册，新用户赠送 500 额度，已完整支持 Claude Sonnet 4.5
-> - **2025.09.01** - 集成 Qwen Code CLI，新增 `qwen3-coder-plus` 模型支持
 > - **2025.08.29** - 发布账号池管理功能，支持多账号轮询、智能故障转移和自动降级策略
 >   - 配置方式：在 `configs/config.json` 中添加 `PROVIDER_POOLS_FILE_PATH` 参数
 >   - 参考配置：[provider_pools.json](./configs/provider_pools.json.example)
@@ -126,7 +125,7 @@
 ### 🚀 突破限制，提升效率
 *   **绕过官方限制**：利用 OAuth 授权机制，有效突破 Gemini, Antigravity 等服务的免费 API 速率和配额限制
 *   **TLS 指纹绕过**：内置 TLS Sidecar (Go uTLS) 模拟浏览器特征，有效绕过 Grok 等服务的 Cloudflare 403 封锁
-*   **免费高级模型**：通过 Kiro API 模式免费使用 Claude Opus 4.5，通过 Qwen OAuth 模式使用 Qwen3 Coder Plus，降低使用成本
+*   **免费高级模型**：通过 Kiro API 模式免费使用 Claude Opus 4.5，降低使用成本
 *   **账号池智能调度**：支持多账号轮询、自动故障转移和配置降级，确保 99.9% 服务可用性
 
 ### 🛡️ 安全可控，数据透明
@@ -259,7 +258,7 @@ docker compose up -d
 
 **📊 仪表盘**：系统概览、交互式路由示例、客户端配置指南
 
-**⚙️ 配置管理**：实时参数修改，支持所有提供商（Gemini、Antigravity、OpenAI、Claude、Kiro、Qwen），包含高级设置和文件上传
+**⚙️ 配置管理**：实时参数修改，支持所有提供商（Gemini、Antigravity、OpenAI、Claude、Kiro），包含高级设置和文件上传
 
 **🔗 提供商池**：监控活动连接、提供商健康统计、启用/禁用管理
 
@@ -279,7 +278,6 @@ docker compose up -d
 *   **Grok 3 / Grok 4** - xAI 旗舰模型，现已通过 Grok Cookie/SSO 支持，支持思考模型、图片生成及视频生成
 *   **Claude 4.5 Opus** - Anthropic 史上最强模型，现已通过 Kiro, Antigravity 支持
 *   **Gemini 3 Pro** - Google 下一代架构预览版，现已通过 Gemini, Antigravity 支持
-*   **Qwen3 Coder Plus** - 阿里通义千问最新代码专用模型，现已通过Qwen Code 支持
 *   **Kimi K2 / MiniMax M2** - 国内顶级旗舰模型同步支持，现已通过自定义OpenAI，Claude 支持
 
 ---
@@ -293,8 +291,8 @@ docker compose up -d
 
 #### 🌐 Web UI 快捷授权 (推荐)
 在 Web UI 管理界面中，您可以极速完成授权配置：
-1. **生成授权**：在 **“提供商池”** 页面或**“配置管理”** 页面，点击对应提供商（如 Gemini, Qwen）右上角的 **“生成授权”** 按钮。
-2. **扫码/登录**：系统将弹出授权对话框，您可以点击 **“在浏览器中打开”** 进行登录验证。对于 Qwen，只需完成网页登录；对于 Gemini，Antigravity 需完成 Google 账号授权。
+1. **生成授权**：在 **“提供商池”** 页面或**“配置管理”** 页面，点击对应提供商（如 Gemini）右上角的 **“生成授权”** 按钮。
+2. **扫码/登录**：系统将弹出授权对话框，您可以点击 **“在浏览器中打开”** 进行登录验证。对于 Gemini，Antigravity 需完成 Google 账号授权。
 3. **自动保存**：授权成功后，系统会自动获取凭据并保存至 `configs/` 对应目录下，您可以在 **“配置文件”** 页面看到新生成的凭据。
 4. **可视化管理**：您可以随时在 Web UI 中上传、删除凭据，或通过 **“快速关联”** 功能将已有的凭据文件一键绑定到提供商。
 
@@ -307,16 +305,6 @@ docker compose up -d
 1. **个人账号**：个人账号需要单独授权，已关闭申请渠道。
 2. **Pro会员**：Antigravity 暂时对 Pro 会员开放，需要先购买 Pro 会员。
 3. **组织账号**：组织账号需要单独授权，联系管理员获取授权。
-
-#### Qwen Code OAuth 配置
-1. **首次授权**：配置Qwen服务后，系统会自动在浏览器中打开授权页面
-2. **推荐参数**：使用官方默认参数以获得最佳效果
-   ```json
-   {
-     "temperature": 0,
-     "top_p": 1
-   }
-   ```
 
 #### Kiro API 配置
 1. **环境准备**：[下载并安装 Kiro 客户端](https://kiro.dev/pricing/)
@@ -398,7 +386,6 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
 |------|---------|------|
 | **Gemini** | `~/.gemini/oauth_creds.json` | OAuth 认证凭据 |
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro 认证令牌 |
-| **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth 凭据 |
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth 凭据 (支持 Claude 4.5 Opus) |
 | **Codex** | `~/.codex/oauth_creds.json` | Codex OAuth 凭据 |
 

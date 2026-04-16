@@ -82,7 +82,7 @@
 
 ## 🚀 Overview
 
-`AIClient2API` is an API proxy service that breaks through client limitations, converting free large models originally restricted to client use only (such as Gemini, Antigravity, Codex, Grok, Kiro) into standard OpenAI-compatible interfaces that can be called by any application. Built on Node.js, it supports intelligent conversion between OpenAI, Claude, and Gemini protocols, enabling tools like Cherry-Studio, NextChat, and Cline to freely use advanced models such as Claude Opus 4.5, Gemini 3.0 Pro, and Qwen3 Coder Plus at scale. The project adopts a modular architecture based on strategy and adapter patterns, with built-in account pool management, intelligent polling, automatic failover, and health check mechanisms, ensuring 99.9% service availability.
+`AIClient2API` is an API proxy service that breaks through client limitations, converting free large models originally restricted to client use only (such as Gemini, Antigravity, Codex, Grok, Kiro) into standard OpenAI-compatible interfaces that can be called by any application. Built on Node.js, it supports intelligent conversion between OpenAI, Claude, and Gemini protocols, enabling tools like Cherry-Studio, NextChat, and Cline to freely use advanced models such as Claude Opus 4.5 and Gemini 3.0 Pro at scale. The project adopts a modular architecture based on strategy and adapter patterns, with built-in account pool management, intelligent polling, automatic failover, and health check mechanisms, ensuring 99.9% service availability.
 
 > [!NOTE]
 > **🎉 Important Milestone**
@@ -106,7 +106,6 @@
 > - **2025.11.11** - Added Web UI management console, supporting real-time configuration management and health status monitoring
 > - **2025.11.06** - Added support for Gemini 3 Preview, enhanced model compatibility and performance optimization
 > - **2025.10.18** - Kiro open registration, new accounts get 500 credits, full support for Claude Sonnet 4.5
-> - **2025.09.01** - Integrated Qwen Code CLI, added `qwen3-coder-plus` model support
 > - **2025.08.29** - Released account pool management feature, supporting multi-account polling, intelligent failover, and automatic degradation strategies
 >   - Configuration: Add `PROVIDER_POOLS_FILE_PATH` parameter in `configs/config.json`
 >   - Reference configuration: [provider_pools.json](./configs/provider_pools.json.example)
@@ -128,7 +127,7 @@
 ### 🚀 Break Through Limitations, Improve Efficiency
 *   **Bypass Official Restrictions**: Utilize OAuth authorization mechanism to effectively break through rate and quota limits of services like Gemini, Antigravity
 *   **TLS Fingerprint Bypass**: Built-in TLS Sidecar (Go uTLS) to simulate browser features, effectively bypassing Cloudflare 403 blocks for services like Grok
-*   **Free Advanced Models**: Use Claude Opus 4.5 for free via Kiro API mode, use Qwen3 Coder Plus via Qwen OAuth mode, reducing usage costs
+*   **Free Advanced Models**: Use Claude Opus 4.5 for free via Kiro API mode, reducing usage costs
 *   **Intelligent Account Pool Scheduling**: Support multi-account polling, automatic failover, and configuration degradation, ensuring 99.9% service availability
 
 ### 🛡️ Secure and Controllable, Data Transparent
@@ -261,7 +260,7 @@ A functional Web management interface, including:
 
 **📊 Dashboard**: System overview, interactive routing examples, client configuration guide
 
-**⚙️ Configuration**: Real-time parameter modification, supporting all providers (Gemini, Antigravity, OpenAI, Claude, Kiro, Qwen), including advanced settings and file uploads
+**⚙️ Configuration**: Real-time parameter modification, supporting all providers (Gemini, Antigravity, OpenAI, Claude, Kiro), including advanced settings and file uploads
 
 **🔗 Provider Pools**: Monitor active connections, provider health statistics, enable/disable management
 
@@ -281,7 +280,6 @@ Seamlessly support the following latest large models, just configure the corresp
 *   **Grok 3 / Grok 4** - xAI's flagship models, now supported via Grok Cookie/SSO, supporting thinking models, image generation, and video generation
 *   **Claude 4.5 Opus** - Anthropic's strongest model ever, now supported via Kiro, Antigravity
 *   **Gemini 3 Pro** - Google's next-generation architecture preview, now supported via Gemini, Antigravity
-*   **Qwen3 Coder Plus** - Alibaba Tongyi Qianwen's latest code-specific model, now supported via Qwen Code
 *   **Kimi K2 / MiniMax M2** - Synchronized support for top domestic flagship models, now supported via custom OpenAI, Claude
 
 ---
@@ -295,8 +293,8 @@ Seamlessly support the following latest large models, just configure the corresp
 
 #### 🌐 Web UI Quick Authorization (Recommended)
 In the Web UI management interface, you can complete authorization configuration rapidly:
-1. **Generate Authorization**: On the **"Provider Pools"** page or **"Configuration"** page, click the **"Generate Authorization"** button in the upper right corner of the corresponding provider (e.g., Gemini, Qwen).
-2. **Scan/Login**: An authorization dialog will pop up, you can click **"Open in Browser"** for login verification. For Qwen, just complete the web login; for Gemini and Antigravity, complete the Google account authorization.
+1. **Generate Authorization**: On the **"Provider Pools"** page or **"Configuration"** page, click the **"Generate Authorization"** button in the upper right corner of the corresponding provider (e.g., Gemini).
+2. **Scan/Login**: An authorization dialog will pop up, you can click **"Open in Browser"** for login verification. For Gemini and Antigravity, complete the Google account authorization.
 3. **Auto-Save**: After successful authorization, the system will automatically obtain credentials and save them to the corresponding directory in `configs/`. You can see the newly generated credentials on the **"Config Files"** page.
 4. **Visual Management**: You can upload or delete credentials at any time in the Web UI, or use the **"Quick Associate"** function to bind existing credential files to providers with one click.
 
@@ -309,16 +307,6 @@ In the Web UI management interface, you can complete authorization configuration
 1. **Personal Account**: Personal accounts require separate authorization, application channels have been closed.
 2. **Pro Member**: Antigravity is temporarily open to Pro members, you need to purchase a Pro membership first.
 3. **Organization Account**: Organization accounts require separate authorization, contact the administrator to obtain authorization.
-
-#### Qwen Code OAuth Configuration
-1. **First Authorization**: After configuring the Qwen service, the system will automatically open the authorization page in the browser
-2. **Recommended Parameters**: Use official default parameters for best results
-   ```json
-   {
-     "temperature": 0,
-     "top_p": 1
-   }
-   ```
 
 #### Kiro API Configuration
 1. **Environment Preparation**: [Download and install Kiro client](https://kiro.dev/pricing/)
@@ -400,7 +388,6 @@ Default storage locations for authorization credential files of each service:
 |------|---------|------|
 | **Gemini** | `~/.gemini/oauth_creds.json` | OAuth authentication credentials |
 | **Kiro** | `~/.aws/sso/cache/kiro-auth-token.json` | Kiro authentication token |
-| **Qwen** | `~/.qwen/oauth_creds.json` | Qwen OAuth credentials |
 | **Antigravity** | `~/.antigravity/oauth_creds.json` | Antigravity OAuth credentials (supports Claude 4.5 Opus) |
 | **Codex** | `~/.codex/oauth_creds.json` | Codex OAuth credentials |
 
