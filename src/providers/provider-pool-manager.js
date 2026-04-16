@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { getServiceAdapter, getRegisteredProviders } from './adapter.js';
+import { getServiceAdapter, getRegisteredProviders, invalidateServiceAdapter } from './adapter.js';
 import logger from '../utils/logger.js';
 import { MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
 import { convertData } from '../convert/convert.js';
@@ -156,8 +156,8 @@ export class ProviderPoolManager {
                 }
                 
                 // logger.info(`Checking node ${providerStatus.uuid} (${providerType}) expiry date... configPath: ${configPath}`);
-                // 排除不健康和禁用的节点
-                if (!config.isHealthy || config.isDisabled) continue;
+                // 排除禁用的节点（不健康节点也应允许尝试刷新以恢复健康）
+                if (config.isDisabled) continue;
 
                 if (configPath && fs.existsSync(configPath)) {
                     try {
@@ -1809,6 +1809,8 @@ export class ProviderPoolManager {
             // 更新 provider 的 UUID
             provider.uuid = newUuid;
             provider.config.uuid = newUuid;
+            invalidateServiceAdapter(providerType, oldUuid);
+            invalidateServiceAdapter(providerType, newUuid);
             
             // 同时更新 providerPools 中的原始数据
             const poolArray = this.providerPools[providerType];

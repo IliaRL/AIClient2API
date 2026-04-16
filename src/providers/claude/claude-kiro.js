@@ -591,7 +591,7 @@ async loadCredentials() {
         }
 
         // 从文件加载
-        const targetFilePath = this.credsFilePath || path.join(this.credPath, KIRO_AUTH_TOKEN_FILE);
+        const targetFilePath = tokenFilePath;
         const dirPath = path.dirname(targetFilePath);
         const targetFileName = path.basename(targetFilePath);
 
