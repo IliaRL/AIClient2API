@@ -701,6 +701,25 @@ Or modify the port configuration in `configs/config.json` to use a different por
 - **Check Request Frequency**: Some providers have strict request frequency limits; reduce request frequency and retry
 - **View Provider Documentation**: Visit the official documentation of the corresponding provider to understand specific access restrictions and requirements
 
+### 14. Why should I enable "OAuth Token Auto-Refresh"?
+
+**Problem Description**: Unsure if token auto-refresh is necessary.
+
+**Solution**:
+OAuth tokens (e.g., Gemini, Antigravity, Codex) typically have a limited lifespan (e.g., 1 hour).
+- **With it enabled**: The system automatically checks and refreshes tokens before they expire in the background. This ensures 24/7 stable API service and avoids `401 Unauthorized` or `403 Forbidden` errors due to expired tokens.
+- **Without it**: Once a token expires, the system cannot automatically obtain a new one, causing API requests to fail until you manually re-authorize.
+
+### 15. What is the impact of not enabling "Preload Model Providers" on token maintenance?
+
+**Problem Description**: Confusion about the "Preload Model Providers" configuration and its relation to token refresh.
+
+**Solution**:
+The system only performs auto-refresh tasks for providers that are **loaded into the active pool**.
+- **Impact**: If a provider is not checked as a "Preload Model Provider" in the configuration, it won't be initialized when the system starts. Since it's not in the pool, the background refresh task will **not** process its token.
+- **Consequence**: If you don't use that provider for a long time, its token will expire silently. When you eventually call it via a specific route, the request will fail due to the expired token.
+- **Recommendation**: Always check providers you intend to use frequently and need to keep active in the "Preload Model Providers" list.
+
 </details>
 
 ---

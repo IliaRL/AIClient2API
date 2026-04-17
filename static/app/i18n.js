@@ -785,6 +785,10 @@ const translations = {
         'guide.faq.a6': 'A: 这表示对应类型的提供商都不可用。请在"提供商池"页面检查提供商健康状态，确认 OAuth 凭据未过期，或配置 Fallback 链实现自动切换到备用提供商。',
         'guide.faq.q7': 'Q: 请求返回 403 Forbidden 错误怎么办？',
         'guide.faq.a7': 'A: 403 表示访问被拒绝。首先检查"提供商池"页面中节点状态，如果节点健康检查正常，可以忽略此报错。其他可能原因包括：账号权限不足、API Key 权限受限、地区访问限制、凭据已失效等。',
+        'guide.faq.q8': 'Q: 为什么要开启“启用 OAuth 令牌自动刷新”？',
+        'guide.faq.a8': 'A: OAuth 令牌通常有有效期（如 1 小时）。开启后，系统会在后台自动刷新即将过期的令牌，确保 24/7 稳定服务，避免因令牌过期导致的请求失败。',
+        'guide.faq.q9': 'Q: “预加载模型提供商”未开启对 Token 保持有什么影响？',
+        'guide.faq.a9': 'A: 系统仅会对已预加载的提供商执行自动刷新。如果某提供商未预加载，其 Token 将不会在后台自动刷新，长时间不使用可能导致 Token 过期。建议将常用提供商加入预加载列表。',
 
         // Guide - Flow
         'guide.flow.title': '操作流程图',
@@ -1735,6 +1739,10 @@ const translations = {
         'guide.faq.a6': 'A: This means all providers of the corresponding type are unavailable. Check provider health status in "Provider Pools" page, confirm OAuth credentials are not expired, or configure Fallback chain for automatic switching to backup providers.',
         'guide.faq.q7': 'Q: What to do if request returns 403 Forbidden error?',
         'guide.faq.a7': 'A: 403 means access denied. First check node status in "Provider Pools" page. If node health check is normal, you can ignore this error. Other possible causes include: insufficient account permissions, limited API Key permissions, regional access restrictions, expired credentials, etc.',
+        'guide.faq.q8': 'Q: Why should I enable "OAuth Token Auto-Refresh"?',
+        'guide.faq.a8': 'A: OAuth tokens usually have an expiration (e.g., 1 hour). When enabled, the system automatically refreshes tokens in the background, ensuring 24/7 stable service and avoiding request failures due to expired tokens.',
+        'guide.faq.q9': 'Q: What is the impact of not enabling "Preload Model Providers" on token maintenance?',
+        'guide.faq.a9': 'A: The system only performs auto-refresh for pre-initialized providers. If a provider is not pre-initialized, its token will not be automatically refreshed in the background, which may lead to expiration if not used for a long time. It is recommended to add frequently used providers to the pre-initialized list.',
 
         // Guide - Flow
         'guide.flow.title': 'Operation Flowchart',
