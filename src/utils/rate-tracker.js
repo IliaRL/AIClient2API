@@ -12,6 +12,16 @@ export class RateTracker {
         this.buckets = Array.from({ length: windowSeconds }, () => ({ count: 0, total: 0 }));
         this.lastUpdateTime = Math.floor(Date.now() / 1000);
         this.firstRecordTime = 0; // 记录第一次收到记录的时间，用于计算初期的准确速率
+        this.maxQps = 0; // 峰值 QPS
+        this.maxTps = 0; // 峰值 TPS
+    }
+
+    /**
+     * 重置峰值
+     */
+    resetPeaks() {
+        this.maxQps = 0;
+        this.maxTps = 0;
     }
 
     /**
@@ -56,7 +66,7 @@ export class RateTracker {
         
         // 如果从未有记录，直接返回 0
         if (this.firstRecordTime === 0) {
-            return { qps: 0, tps: 0 };
+            return { qps: 0, tps: 0, maxQps: 0, maxTps: 0 };
         }
 
         this._advance(nowSeconds);
@@ -72,9 +82,18 @@ export class RateTracker {
         const elapsed = Math.max(1, nowSeconds - this.firstRecordTime + 1);
         const divisor = Math.min(elapsed, this.windowSeconds);
 
+        const qps = Number((totalCount / divisor).toFixed(2));
+        const tps = Number((totalTokens / divisor).toFixed(2));
+
+        // 更新峰值
+        if (qps > this.maxQps) this.maxQps = qps;
+        if (tps > this.maxTps) this.maxTps = tps;
+
         return {
-            qps: Number((totalCount / divisor).toFixed(2)),
-            tps: Number((totalTokens / divisor).toFixed(2))
+            qps,
+            tps,
+            maxQps: this.maxQps,
+            maxTps: this.maxTps
         };
     }
 }
@@ -128,6 +147,16 @@ export class RateManager {
     }
 
     /**
+     * 重置所有追踪器的峰值
+     */
+    resetPeaks() {
+        this.globalTracker.resetPeaks();
+        for (const tracker of this.trackers.values()) {
+            tracker.resetPeaks();
+        }
+    }
+
+    /**
      * 获取全局统计
      */
     getGlobalStats() {
@@ -139,7 +168,7 @@ export class RateManager {
      */
     getStats(key) {
         if (!key || !this.trackers.has(key)) {
-            return { qps: 0, tps: 0 };
+            return { qps: 0, tps: 0, maxQps: 0, maxTps: 0 };
         }
         return this.trackers.get(key).getStats();
     }

@@ -420,7 +420,7 @@
                     <span id="statToday">0</span>
                     <span class="dim"> / <span id="statLimit">0</span></span>
                 </div>
-                <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">当前 QPS: <span id="statQps" style="font-weight:700;color:var(--primary-color)">0.00</span></div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">QPS: <span id="statQps" style="font-weight:700;color:var(--primary-color)">0.00</span> (峰值: <span id="statMaxQps">0.00</span>)</div>
             </div>
             <div class="stat-card green">
                 <div class="label">剩余额度</div>
@@ -435,7 +435,7 @@
             <div class="stat-card green">
                 <div class="label">今日 Tokens</div>
                 <div class="value" id="statTodayTokens">0</div>
-                <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">当前 TPS: <span id="statTps" style="font-weight:700;color:var(--primary-color)">0.00</span></div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">TPS: <span id="statTps" style="font-weight:700;color:var(--primary-color)">0.00</span> (峰值: <span id="statMaxTps">0.00</span>)</div>
             </div>
             <div class="stat-card cyan">
                 <div class="label">今日缓存 Tokens</div>
@@ -650,7 +650,9 @@
             
             // 速率统计
             document.getElementById('statQps').textContent = (data.usage?.qps || 0).toFixed(2);
+            document.getElementById('statMaxQps').textContent = (data.usage?.maxQps || 0).toFixed(2);
             document.getElementById('statTps').textContent = (data.usage?.tps || 0).toFixed(2);
+            document.getElementById('statMaxTps').textContent = (data.usage?.maxTps || 0).toFixed(2);
             
             // 最后使用时间
             if (data.lastUsedAt) {

@@ -656,6 +656,8 @@ export async function getStats() {
         totalCachedTokens,
         qps: globalRates.qps,
         tps: globalRates.tps,
+        maxQps: globalRates.maxQps,
+        maxTps: globalRates.maxTps,
         usageHistory: aggregatedHistory
     };
 }

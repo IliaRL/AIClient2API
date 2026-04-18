@@ -783,7 +783,7 @@
       <article class="card green">
         <div class="card-label">总请求数</div>
         <div class="card-value" id="totalRequests">0</div>
-        <div class="note">实时 QPS: <span id="currentQps" style="font-weight:700;color:var(--primary-color)">0.00</span></div>
+        <div class="note">QPS: <span id="currentQps" style="font-weight:700;color:var(--primary-color)">0.00</span> (峰值: <span id="maxQps">0.00</span>)</div>
       </article>
       <article class="card blue"><div class="card-label">输入 Token</div><div class="card-value" id="promptTokens">0</div><div class="note">输入 token 的累计值</div></article>
       <article class="card cyan"><div class="card-label">缓存 Token</div><div class="card-value" id="cachedTokens">0</div><div class="note">缓存命中的累计值</div></article>
@@ -791,7 +791,7 @@
       <article class="card orange">
         <div class="card-label">总 Token</div>
         <div class="card-value" id="totalTokens">0</div>
-        <div class="note">实时 TPS: <span id="currentTps" style="font-weight:700;color:var(--primary-color)">0.00</span> | <span id="updatedAt">等待数据</span></div>
+        <div class="note">TPS: <span id="currentTps" style="font-weight:700;color:var(--primary-color)">0.00</span> (峰值: <span id="maxTps">0.00</span>) | <span id="updatedAt">等待数据</span></div>
       </article>
     </section>
     
@@ -1006,7 +1006,9 @@
       el('completionTokens').textContent = fmtToken(s.completionTokens);
       el('totalTokens').textContent = fmtToken(s.totalTokens);
       el('currentQps').textContent = (s.qps || 0).toFixed(2);
+      el('maxQps').textContent = (s.maxQps || 0).toFixed(2);
       el('currentTps').textContent = (s.tps || 0).toFixed(2);
+      el('maxTps').textContent = (s.maxTps || 0).toFixed(2);
       el('updatedAt').textContent = data.updatedAt ? `更新于 ${new Date(data.updatedAt).toLocaleString('zh-CN')}` : '尚未写入'
     }
 
