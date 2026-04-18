@@ -456,8 +456,10 @@ export async function handlePotluckUserApiRoutes(method, path, req, res) {
                         cachedTokens: keyData.todayCachedTokens || 0,
                         qps: keyData.qps || 0,
                         tps: keyData.tps || 0,
+                        rpm: keyData.rpm || 0,
                         maxQps: keyData.maxQps || 0,
-                        maxTps: keyData.maxTps || 0
+                        maxTps: keyData.maxTps || 0,
+                        maxRpm: keyData.maxRpm || 0
                     },
                     total: keyData.totalUsage,
                     tokens: {

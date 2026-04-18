@@ -628,7 +628,7 @@
             <div class="stat-card pink">
                 <div class="label">今日总调用</div>
                 <div class="value" id="todayUsage">0</div>
-                <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">QPS: <span id="currentQps" style="font-weight:700;color:var(--primary-color)">0.00</span> (峰值: <span id="maxQps">0.00</span>)</div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">QPS: <span id="currentQps" style="font-weight:700;color:var(--primary-color)">0.00</span> (峰值: <span id="maxQps">0.00</span>) | RPM: <span id="currentRpm" style="font-weight:700;color:var(--primary-color)">0.00</span> (峰值: <span id="maxRpm">0.00</span>)</div>
             </div>
             <div class="stat-card cyan">
                 <div class="label">累计调用</div>
@@ -891,6 +891,8 @@
             document.getElementById('totalCachedTokens').textContent = formatTokenCompact(stats.totalCachedTokens || 0);
             document.getElementById('currentQps').textContent = (stats.qps || 0).toFixed(2);
             document.getElementById('maxQps').textContent = (stats.maxQps || 0).toFixed(2);
+            document.getElementById('currentRpm').textContent = (stats.rpm || 0).toFixed(2);
+            document.getElementById('maxRpm').textContent = (stats.maxRpm || 0).toFixed(2);
             document.getElementById('currentTps').textContent = (stats.tps || 0).toFixed(2);
             document.getElementById('maxTps').textContent = (stats.maxTps || 0).toFixed(2);
             

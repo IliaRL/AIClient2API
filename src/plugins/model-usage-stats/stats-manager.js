@@ -457,22 +457,28 @@ export async function getStats() {
     const globalRates = rateManager.getGlobalStats();
     stats.summary.qps = globalRates.qps;
     stats.summary.tps = globalRates.tps;
+    stats.summary.rpm = globalRates.rpm;
     stats.summary.maxQps = globalRates.maxQps;
     stats.summary.maxTps = globalRates.maxTps;
+    stats.summary.maxRpm = globalRates.maxRpm;
 
     for (const [provider, providerStore] of Object.entries(stats.providers || {})) {
         const pRates = rateManager.getStats(`provider:${provider}`);
         providerStore.summary.qps = pRates.qps;
         providerStore.summary.tps = pRates.tps;
+        providerStore.summary.rpm = pRates.rpm;
         providerStore.summary.maxQps = pRates.maxQps;
         providerStore.summary.maxTps = pRates.maxTps;
+        providerStore.summary.maxRpm = pRates.maxRpm;
 
         for (const [model, modelStore] of Object.entries(providerStore.models || {})) {
             const mRates = rateManager.getStats(`model:${model}`);
             modelStore.qps = mRates.qps;
             modelStore.tps = mRates.tps;
+            modelStore.rpm = mRates.rpm;
             modelStore.maxQps = mRates.maxQps;
             modelStore.maxTps = mRates.maxTps;
+            modelStore.maxRpm = mRates.maxRpm;
         }
     }
 

@@ -14,6 +14,7 @@ export class RateTracker {
         this.firstRecordTime = 0; // 记录第一次收到记录的时间，用于计算初期的准确速率
         this.maxQps = 0; // 峰值 QPS
         this.maxTps = 0; // 峰值 TPS
+        this.maxRpm = 0; // 峰值 RPM
     }
 
     /**
@@ -22,6 +23,7 @@ export class RateTracker {
     resetPeaks() {
         this.maxQps = 0;
         this.maxTps = 0;
+        this.maxRpm = 0;
     }
 
     /**
@@ -66,7 +68,7 @@ export class RateTracker {
         
         // 如果从未有记录，直接返回 0
         if (this.firstRecordTime === 0) {
-            return { qps: 0, tps: 0, maxQps: 0, maxTps: 0 };
+            return { qps: 0, tps: 0, rpm: 0, maxQps: 0, maxTps: 0, maxRpm: 0 };
         }
 
         this._advance(nowSeconds);
@@ -84,16 +86,20 @@ export class RateTracker {
 
         const qps = Number((totalCount / divisor).toFixed(2));
         const tps = Number((totalTokens / divisor).toFixed(2));
+        const rpm = Number((totalCount * (60 / divisor)).toFixed(2));
 
         // 更新峰值
         if (qps > this.maxQps) this.maxQps = qps;
         if (tps > this.maxTps) this.maxTps = tps;
+        if (rpm > this.maxRpm) this.maxRpm = rpm;
 
         return {
             qps,
             tps,
+            rpm,
             maxQps: this.maxQps,
-            maxTps: this.maxTps
+            maxTps: this.maxTps,
+            maxRpm: this.maxRpm
         };
     }
 }
@@ -168,7 +174,7 @@ export class RateManager {
      */
     getStats(key) {
         if (!key || !this.trackers.has(key)) {
-            return { qps: 0, tps: 0, maxQps: 0, maxTps: 0 };
+            return { qps: 0, tps: 0, rpm: 0, maxQps: 0, maxTps: 0, maxRpm: 0 };
         }
         return this.trackers.get(key).getStats();
     }

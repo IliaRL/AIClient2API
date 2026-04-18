@@ -346,6 +346,8 @@ export async function listKeys() {
             ...updated,
             qps: rates.qps,
             tps: rates.tps,
+            rpm: rates.rpm,
+            maxRpm: rates.maxRpm,
             maskedKey: `${keyId.substring(0, 12)}...${keyId.substring(keyId.length - 4)}`
         });
     }
@@ -364,7 +366,9 @@ export async function getKey(keyId) {
     return {
         ...updated,
         qps: rates.qps,
-        tps: rates.tps
+        tps: rates.tps,
+        rpm: rates.rpm,
+        maxRpm: rates.maxRpm
     };
 }
 
@@ -656,8 +660,10 @@ export async function getStats() {
         totalCachedTokens,
         qps: globalRates.qps,
         tps: globalRates.tps,
+        rpm: globalRates.rpm,
         maxQps: globalRates.maxQps,
         maxTps: globalRates.maxTps,
+        maxRpm: globalRates.maxRpm,
         usageHistory: aggregatedHistory
     };
 }
