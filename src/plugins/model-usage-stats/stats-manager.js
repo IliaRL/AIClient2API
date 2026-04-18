@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import logger from '../../utils/logger.js';
+import { RateManager } from '../../utils/rate-tracker.js';
 
 const STATS_STORE_FILE = path.join(process.cwd(), 'configs', 'model-usage-stats.json');
 const DEFAULT_CONFIG = {
@@ -17,6 +18,7 @@ let currentPersistInterval = DEFAULT_CONFIG.persistInterval;
 let mutationVersion = 0;
 let persistPromise = null;
 
+const rateManager = new RateManager(60); // 使用 60 秒滑动窗口，更平滑
 const pendingRequests = new Map();
 
 function getTraceRequestId(requestId) {
@@ -421,6 +423,10 @@ export async function finalizeRequest({ requestId, model, provider, fromProvider
     applyUsage(ensureProviderStore(normalizedProvider).summary, usage, timestamp);
     applyUsage(ensureModelStore(normalizedProvider, normalizedModel), usage, timestamp);
 
+    // 记录速率统计
+    rateManager.record(`provider:${normalizedProvider}`, usage.totalTokens);
+    rateManager.record(`model:${normalizedModel}`, usage.totalTokens);
+
     // 记录每日统计
     const dateKey = timestamp.split('T')[0];
     if (!statsStore.daily[dateKey]) {
@@ -436,13 +442,33 @@ export async function finalizeRequest({ requestId, model, provider, fromProvider
 
 export async function getStats() {
     ensureLoaded();
-    return JSON.parse(JSON.stringify(statsStore));
+    const stats = JSON.parse(JSON.stringify(statsStore));
+    
+    // 注入速率统计
+    const globalRates = rateManager.getGlobalStats();
+    stats.summary.qps = globalRates.qps;
+    stats.summary.tps = globalRates.tps;
+
+    for (const [provider, providerStore] of Object.entries(stats.providers || {})) {
+        const pRates = rateManager.getStats(`provider:${provider}`);
+        providerStore.summary.qps = pRates.qps;
+        providerStore.summary.tps = pRates.tps;
+
+        for (const [model, modelStore] of Object.entries(providerStore.models || {})) {
+            const mRates = rateManager.getStats(`model:${model}`);
+            modelStore.qps = mRates.qps;
+            modelStore.tps = mRates.tps;
+        }
+    }
+
+    return stats;
 }
 
 export async function resetStats() {
     ensureLoaded();
     statsStore = createDefaultStore();
     pendingRequests.clear();
+    rateManager.clear(); // 同时重置速率统计
     markDirty();
     await persistIfDirty();
     logger.warn('[Model Usage Stats] Stats store reset');
@@ -469,6 +495,7 @@ export async function resetTokenStats() {
     }
 
     pendingRequests.clear();
+    rateManager.clear(); // 同时重置速率统计
     markDirty();
     await persistIfDirty();
     logger.warn('[Model Usage Stats] Token stats reset');

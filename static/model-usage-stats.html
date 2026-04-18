@@ -780,11 +780,19 @@
       </aside>
     </section>
     <section class="stats">
-      <article class="card green"><div class="card-label">总请求数</div><div class="card-value" id="totalRequests">0</div><div class="note">累计成功落库的模型调用次数</div></article>
+      <article class="card green">
+        <div class="card-label">总请求数</div>
+        <div class="card-value" id="totalRequests">0</div>
+        <div class="note">实时 QPS: <span id="currentQps" style="font-weight:700;color:var(--primary-color)">0.00</span></div>
+      </article>
       <article class="card blue"><div class="card-label">输入 Token</div><div class="card-value" id="promptTokens">0</div><div class="note">输入 token 的累计值</div></article>
       <article class="card cyan"><div class="card-label">缓存 Token</div><div class="card-value" id="cachedTokens">0</div><div class="note">缓存命中的累计值</div></article>
       <article class="card indigo"><div class="card-label">输出 Token</div><div class="card-value" id="completionTokens">0</div><div class="note">输出 token 的累计值</div></article>
-      <article class="card orange"><div class="card-label">总 Token</div><div class="card-value" id="totalTokens">0</div><div class="note" id="updatedAt">等待数据</div></article>
+      <article class="card orange">
+        <div class="card-label">总 Token</div>
+        <div class="card-value" id="totalTokens">0</div>
+        <div class="note">实时 TPS: <span id="currentTps" style="font-weight:700;color:var(--primary-color)">0.00</span> | <span id="updatedAt">等待数据</span></div>
+      </article>
     </section>
     
     <section class="split" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
@@ -833,7 +841,7 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Provider</th><th>Model</th><th>请求数</th><th>Prompt</th><th>Cached</th><th>Completion</th><th>Total</th><th>最近使用</th></tr></thead>
+          <thead><tr><th>Provider</th><th>Model</th><th>请求数 / QPS</th><th>TPS</th><th>Prompt</th><th>Cached</th><th>Completion</th><th>Total</th><th>最近使用</th></tr></thead>
           <tbody id="tableBody"></tbody>
         </table>
       </div>
@@ -997,6 +1005,8 @@
       el('cachedTokens').textContent = fmtToken(s.cachedTokens);
       el('completionTokens').textContent = fmtToken(s.completionTokens);
       el('totalTokens').textContent = fmtToken(s.totalTokens);
+      el('currentQps').textContent = (s.qps || 0).toFixed(2);
+      el('currentTps').textContent = (s.tps || 0).toFixed(2);
       el('updatedAt').textContent = data.updatedAt ? `更新于 ${new Date(data.updatedAt).toLocaleString('zh-CN')}` : '尚未写入'
     }
 
@@ -1016,7 +1026,7 @@
         const s = p.data.summary || {};
         const node = document.createElement('article');
         node.className = 'provider';
-        node.innerHTML = `<div class="provider-head"><div><div class="provider-name">${p.name}</div><div class="provider-sub">包含 ${fmt(p.count)} 个模型</div></div><span class="provider-badge"><i class="fas fa-bolt"></i>${fmt(s.requestCount)} 次调用</span></div><div class="mini"><div class="mini-box"><div class="mini-label">总 Token</div><div class="mini-value">${fmtToken(s.totalTokens)}</div></div><div class="mini-box"><div class="mini-label">输入</div><div class="mini-value">${fmtToken(s.promptTokens)}</div></div><div class="mini-box"><div class="mini-label">缓存</div><div class="mini-value">${fmtToken(s.cachedTokens)}</div></div><div class="mini-box"><div class="mini-label">输出</div><div class="mini-value">${fmtToken(s.completionTokens)}</div></div><div class="mini-box"><div class="mini-label">最近使用</div><div class="mini-value" style="font-size:14px">${rel(s.lastUsedAt)}</div></div></div>`;
+        node.innerHTML = `<div class="provider-head"><div><div class="provider-name">${p.name}</div><div class="provider-sub">包含 ${fmt(p.count)} 个模型</div></div><span class="provider-badge"><i class="fas fa-bolt"></i>${fmt(s.requestCount)} 次调用</span></div><div class="mini"><div class="mini-box"><div class="mini-label">总 Token</div><div class="mini-value">${fmtToken(s.totalTokens)}</div></div><div class="mini-box"><div class="mini-label">输入</div><div class="mini-value">${fmtToken(s.promptTokens)}</div></div><div class="mini-box"><div class="mini-label">输出</div><div class="mini-value">${fmtToken(s.completionTokens)}</div></div><div class="mini-box"><div class="mini-label">QPS / TPS</div><div class="mini-value">${(s.qps || 0).toFixed(2)} / ${(s.tps || 0).toFixed(2)}</div></div><div class="mini-box"><div class="mini-label">最近使用</div><div class="mini-value" style="font-size:14px">${rel(s.lastUsedAt)}</div></div></div>`;
         box.appendChild(node)
       })
     }
@@ -1048,7 +1058,7 @@
       }
       list.forEach(r => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><span class="tag"><i class="fas fa-server"></i>${r.provider}</span></td><td>${r.model}</td><td class="mono">${fmt(r.requestCount)}</td><td class="mono">${fmtToken(r.promptTokens)}</td><td class="mono">${fmtToken(r.cachedTokens)}</td><td class="mono">${fmtToken(r.completionTokens)}</td><td class="mono">${fmtToken(r.totalTokens)}</td><td>${rel(r.lastUsedAt)}</td>`;
+        tr.innerHTML = `<td><span class="tag"><i class="fas fa-server"></i>${r.provider}</span></td><td>${r.model}</td><td class="mono">${fmt(r.requestCount)}<div style="font-size:11px;color:var(--primary-color)">QPS: ${(r.qps || 0).toFixed(2)}</div></td><td class="mono" style="color:var(--primary-color)">${(r.tps || 0).toFixed(2)}</td><td class="mono">${fmtToken(r.promptTokens)}</td><td class="mono">${fmtToken(r.cachedTokens)}</td><td class="mono">${fmtToken(r.completionTokens)}</td><td class="mono">${fmtToken(r.totalTokens)}</td><td>${rel(r.lastUsedAt)}</td>`;
         tbody.appendChild(tr)
       })
     }

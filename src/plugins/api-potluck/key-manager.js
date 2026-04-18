@@ -8,6 +8,7 @@ import logger from '../../utils/logger.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { RateManager } from '../../utils/rate-tracker.js';
 
 // 配置文件路径
 const KEYS_STORE_FILE = path.join(process.cwd(), 'configs', 'api-potluck-keys.json');
@@ -46,6 +47,8 @@ let isDirty = false;
 let isWriting = false;
 let persistTimer = null;
 let currentPersistInterval = DEFAULT_CONFIG.persistInterval;
+
+const rateManager = new RateManager(60);
 
 function createUsageBucket() {
     return {
@@ -315,11 +318,13 @@ export async function createKey(name = '', dailyLimit = null) {
         totalCachedTokens: 0,
         lastResetDate: today,
         lastUsedAt: null,
-        enabled: true
+        enabled: true,
+        usageHistory: {}
     };
 
     keyStore.keys[apiKey] = keyData;
     markDirty();
+
     await persistIfDirty(); // 创建操作立即持久化
 
     logger.info(`[API Potluck] Created key: ${apiKey.substring(0, 12)}...`);
@@ -334,8 +339,11 @@ export async function listKeys() {
     const keys = [];
     for (const [keyId, keyData] of Object.entries(keyStore.keys)) {
         const updated = checkAndResetDailyCount({ ...keyData });
+        const rates = rateManager.getStats(`key:${keyId}`);
         keys.push({
             ...updated,
+            qps: rates.qps,
+            tps: rates.tps,
             maskedKey: `${keyId.substring(0, 12)}...${keyId.substring(keyId.length - 4)}`
         });
     }
@@ -349,7 +357,13 @@ export async function getKey(keyId) {
     ensureLoaded();
     const keyData = keyStore.keys[keyId];
     if (!keyData) return null;
-    return checkAndResetDailyCount({ ...keyData });
+    const updated = checkAndResetDailyCount({ ...keyData });
+    const rates = rateManager.getStats(`key:${keyId}`);
+    return {
+        ...updated,
+        qps: rates.qps,
+        tps: rates.tps
+    };
 }
 
 /**
@@ -359,6 +373,10 @@ export async function deleteKey(keyId) {
     ensureLoaded();
     if (!keyStore.keys[keyId]) return false;
     delete keyStore.keys[keyId];
+    
+    // 清理速率追踪器，防止内存泄漏
+    rateManager.remove(`key:${keyId}`);
+
     markDirty();
     await persistIfDirty(); // 删除操作立即持久化
     logger.info(`[API Potluck] Deleted key: ${keyId.substring(0, 12)}...`);
@@ -412,6 +430,9 @@ export async function resetKeyTokenStats(keyId) {
     keyData.totalCachedTokens = 0;
     resetUsageHistoryTokens(keyData.usageHistory);
 
+    // 重置该 Key 的速率追踪器
+    rateManager.remove(`key:${keyId}`);
+
     markDirty();
     await persistIfDirty();
     logger.info(`[API Potluck] Reset token stats for key: ${keyId.substring(0, 12)}...`);
@@ -438,7 +459,11 @@ export async function resetAllTokenStats() {
         updated++;
     }
 
+    // 重置所有 Key 的速率追踪器
+    rateManager.clear();
+
     if (updated > 0) {
+
         markDirty();
         await persistIfDirty();
     }
@@ -494,6 +519,9 @@ export async function regenerateKey(oldKeyId) {
     delete keyStore.keys[oldKeyId];
     keyStore.keys[newKeyId] = newKeyData;
     
+    // 清理旧 Key 的速率追踪器
+    rateManager.remove(`key:${oldKeyId}`);
+
     markDirty();
     await persistIfDirty(); // 立即持久化
     
@@ -580,6 +608,9 @@ export async function incrementUsage(apiKey, provider = 'unknown', model = 'unkn
     addUsage(userHistory.providers[pName], { requestCount: 1, ...usage });
     addUsage(userHistory.models[mName], { requestCount: 1, ...usage });
 
+    // 记录速率统计
+    rateManager.record(`key:${apiKey}`, usage.totalTokens);
+
     // 清理该 Key 的过期历史 (保留 100 天以支持 3 个月日历)
     const userDates = Object.keys(keyData.usageHistory).sort();
     if (userDates.length > 100) {
@@ -647,6 +678,7 @@ export async function getStats() {
         }
     }
 
+    const globalRates = rateManager.getGlobalStats();
     return {
         totalKeys: keys.length,
         enabledKeys,
@@ -661,6 +693,8 @@ export async function getStats() {
         totalCompletionTokens,
         totalTokens,
         totalCachedTokens,
+        qps: globalRates.qps,
+        tps: globalRates.tps,
         usageHistory: aggregatedHistory
     };
 }
