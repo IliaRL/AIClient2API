@@ -275,13 +275,15 @@ const apiPotluckPlugin = {
                 try {
                     const usage = getPendingUsageForHookContext(hookContext);
 
-                    // 传入提供商和模型信息
+                    // 传入提供商和模型信息，以及请求 ID 用于防重
                     await incrementUsage(
                         hookContext.potluckApiKey, 
                         hookContext.toProvider, 
                         hookContext.model,
-                        usage
+                        usage,
+                        trackedRequestIds[0] || null
                     );
+
                 } catch (e) {
                     // 静默失败，不影响主流程
                     logger.error('[API Potluck Plugin] Failed to record usage:', e.message);

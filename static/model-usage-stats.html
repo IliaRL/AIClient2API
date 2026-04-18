@@ -841,7 +841,7 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Provider</th><th>Model</th><th>请求数 / QPS</th><th>TPS</th><th>Prompt</th><th>Cached</th><th>Completion</th><th>Total</th><th>最近使用</th></tr></thead>
+          <thead><tr><th>Provider</th><th>Model</th><th>请求数</th><th>Prompt</th><th>Cached</th><th>Completion</th><th>Total</th><th>最近使用</th></tr></thead>
           <tbody id="tableBody"></tbody>
         </table>
       </div>
@@ -1058,7 +1058,7 @@
       }
       list.forEach(r => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><span class="tag"><i class="fas fa-server"></i>${r.provider}</span></td><td>${r.model}</td><td class="mono">${fmt(r.requestCount)}<div style="font-size:11px;color:var(--primary-color)">QPS: ${(r.qps || 0).toFixed(2)}</div></td><td class="mono" style="color:var(--primary-color)">${(r.tps || 0).toFixed(2)}</td><td class="mono">${fmtToken(r.promptTokens)}</td><td class="mono">${fmtToken(r.cachedTokens)}</td><td class="mono">${fmtToken(r.completionTokens)}</td><td class="mono">${fmtToken(r.totalTokens)}</td><td>${rel(r.lastUsedAt)}</td>`;
+        tr.innerHTML = `<td><span class="tag"><i class="fas fa-server"></i>${r.provider}</span></td><td>${r.model}</td><td class="mono">${fmt(r.requestCount)}</td><td class="mono">${fmtToken(r.promptTokens)}</td><td class="mono">${fmtToken(r.cachedTokens)}</td><td class="mono">${fmtToken(r.completionTokens)}</td><td class="mono">${fmtToken(r.totalTokens)}</td><td>${rel(r.lastUsedAt)}</td>`;
         tbody.appendChild(tr)
       })
     }

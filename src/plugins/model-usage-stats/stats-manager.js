@@ -402,6 +402,14 @@ export async function finalizeRequest({ requestId, model, provider, fromProvider
     }
 
     const state = getPendingRequest(requestId, { model, provider, fromProvider, isStream });
+    
+    // 防重逻辑：如果该请求已经处理过速率统计，则直接删除并返回
+    if (state.rateRecorded) {
+        pendingRequests.delete(requestId);
+        return true;
+    }
+    state.rateRecorded = true;
+
     pendingRequests.delete(requestId);
 
     if (!state.hasResponse) {
@@ -412,6 +420,7 @@ export async function finalizeRequest({ requestId, model, provider, fromProvider
     const timestamp = new Date().toISOString();
     const normalizedProvider = state.provider || provider || 'unknown';
     const normalizedModel = state.model || model || 'unknown';
+    
     const usage = {
         promptTokens: state.usage.promptTokens,
         completionTokens: state.usage.completionTokens,
