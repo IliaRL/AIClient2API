@@ -56,7 +56,10 @@ function createUsageBucket() {
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
-        cachedTokens: 0
+        cachedTokens: 0,
+        maxQps: 0,
+        maxRpm: 0,
+        maxTps: 0
     };
 }
 
@@ -80,7 +83,10 @@ function normalizeUsageBucket(bucket) {
         promptTokens: toNumber(bucket?.promptTokens),
         completionTokens: toNumber(bucket?.completionTokens),
         totalTokens: toNumber(bucket?.totalTokens),
-        cachedTokens: toNumber(bucket?.cachedTokens)
+        cachedTokens: toNumber(bucket?.cachedTokens),
+        maxQps: toNumber(bucket?.maxQps),
+        maxRpm: toNumber(bucket?.maxRpm),
+        maxTps: toNumber(bucket?.maxTps)
     };
 }
 
@@ -141,6 +147,15 @@ function addUsage(target, usage = {}) {
     target.completionTokens += toNumber(usage.completionTokens);
     target.totalTokens += toNumber(usage.totalTokens);
     target.cachedTokens += toNumber(usage.cachedTokens);
+    
+    // 聚合峰值：使用累加还是最大值取决于上下文。
+    // 在汇总多个 Key 的历史数据时，累加可能更能代表系统总峰值（假设可能同时发生）
+    // 但更准确的是记录全局 RateTracker 的峰值。
+    // 这里简单处理：如果 usage 中有峰值，则取最大值或累加。
+    // 鉴于这是日历展示，我们取最大值以展示该日达到的最高单项或汇总峰值。
+    target.maxQps = Math.max(target.maxQps || 0, toNumber(usage.maxQps));
+    target.maxRpm = Math.max(target.maxRpm || 0, toNumber(usage.maxRpm));
+    target.maxTps = Math.max(target.maxTps || 0, toNumber(usage.maxTps));
 }
 
 function resetUsageBucketTokens(bucket) {
@@ -149,6 +164,9 @@ function resetUsageBucketTokens(bucket) {
     bucket.completionTokens = 0;
     bucket.totalTokens = 0;
     bucket.cachedTokens = 0;
+    bucket.maxQps = 0;
+    bucket.maxRpm = 0;
+    bucket.maxTps = 0;
 }
 
 function resetUsageHistoryTokens(usageHistory) {
@@ -347,7 +365,9 @@ export async function listKeys() {
             qps: rates.qps,
             tps: rates.tps,
             rpm: rates.rpm,
-            maxRpm: rates.maxRpm,
+            maxQps: Math.max(updated.maxQps || 0, rates.maxQps),
+            maxTps: Math.max(updated.maxTps || 0, rates.maxTps),
+            maxRpm: Math.max(updated.maxRpm || 0, rates.maxRpm),
             maskedKey: `${keyId.substring(0, 12)}...${keyId.substring(keyId.length - 4)}`
         });
     }
@@ -368,7 +388,9 @@ export async function getKey(keyId) {
         qps: rates.qps,
         tps: rates.tps,
         rpm: rates.rpm,
-        maxRpm: rates.maxRpm
+        maxQps: Math.max(updated.maxQps || 0, rates.maxQps),
+        maxTps: Math.max(updated.maxTps || 0, rates.maxTps),
+        maxRpm: Math.max(updated.maxRpm || 0, rates.maxRpm)
     };
 }
 
@@ -547,6 +569,13 @@ export async function incrementUsage(apiKey, pName = 'unknown', mName = 'unknown
         rateManager.record(`key:${apiKey}`, usage.totalTokens);
     }
 
+    const rates = rateManager.getGlobalStats();
+    const updatePeaks = (target) => {
+        target.maxQps = Math.max(target.maxQps || 0, rates.qps);
+        target.maxRpm = Math.max(target.maxRpm || 0, rates.rpm);
+        target.maxTps = Math.max(target.maxTps || 0, rates.tps);
+    };
+
     // 更新每日和历史统计
     const today = getTodayDateString();
     if (!keyData.usageHistory) keyData.usageHistory = {};
@@ -556,12 +585,15 @@ export async function incrementUsage(apiKey, pName = 'unknown', mName = 'unknown
     
     const dayHistory = keyData.usageHistory[today];
     addUsage(dayHistory.summary, usage);
+    updatePeaks(dayHistory.summary);
     
     if (!dayHistory.providers[pName]) dayHistory.providers[pName] = createUsageBucket();
     addUsage(dayHistory.providers[pName], usage);
+    updatePeaks(dayHistory.providers[pName]);
     
     if (!dayHistory.models[mName]) dayHistory.models[mName] = createUsageBucket();
     addUsage(dayHistory.models[mName], usage);
+    updatePeaks(dayHistory.models[mName]);
 
     // 更新今日和累计总量 (统一处理默认调用次数)
     const rCount = usage.requestCount !== undefined ? toNumber(usage.requestCount) : 1;
@@ -575,6 +607,12 @@ export async function incrementUsage(apiKey, pName = 'unknown', mName = 'unknown
     keyData.totalCompletionTokens += toNumber(usage.completionTokens);
     keyData.totalTokens += toNumber(usage.totalTokens);
     keyData.totalCachedTokens += toNumber(usage.cachedTokens);
+
+    // 同时也给 keyData 注入实时峰值（如果需要持久化）
+    if (!keyData.maxQps) keyData.maxQps = 0;
+    if (!keyData.maxRpm) keyData.maxRpm = 0;
+    if (!keyData.maxTps) keyData.maxTps = 0;
+    updatePeaks(keyData);
 
     // 清理该 Key 的过期历史 (保留 100 天以支持 3 个月日历)
     const userDates = Object.keys(keyData.usageHistory).sort();

@@ -273,7 +273,7 @@
       z-index: 1000;
       display: none;
       box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-      white-space: nowrap;
+      white-space: pre-line;
       line-height: 1.4;
     }
 
@@ -1108,9 +1108,9 @@
         day.className = 'calendar-day';
         day.dataset.level = level;
 
-        const tipText = `${dateKey}: ${fmt(requests)} 次请求, ${fmtToken(tokens)} Token`;
+        const tipText = `${dateKey}: ${fmt(requests)} 次请求, ${fmtToken(tokens)} Token${data.maxQps ? `\n峰值: ${data.maxQps.toFixed(2)} QPS / ${data.maxRpm.toFixed(0)} RPM / ${data.maxTps.toFixed(2)} TPS` : ''}`;
         day.onmouseenter = (e) => {
-          tooltip.textContent = tipText;
+          tooltip.innerText = tipText;
           tooltip.style.display = 'block';
           const rect = day.getBoundingClientRect();
           tooltip.style.left = `${rect.left + rect.width / 2 - tooltip.offsetWidth / 2}px`;

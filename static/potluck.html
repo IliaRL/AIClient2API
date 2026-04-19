@@ -589,7 +589,7 @@
         [data-theme="dark"] .level-2, [data-theme="dark"] .calendar-day[data-level="2"] { background: #006d32; }
         [data-theme="dark"] .level-3, [data-theme="dark"] .calendar-day[data-level="3"] { background: #26a641; }
         [data-theme="dark"] .level-4, [data-theme="dark"] .calendar-day[data-level="4"] { background: #39d353; }
-        .calendar-tooltip { position: fixed; padding: 6px 10px; background: rgba(0,0,0,0.9); color: #fff; font-size: 11px; border-radius: 4px; pointer-events: none; z-index: 1000; display: none; box-shadow: 0 3px 10px rgba(0,0,0,0.3); white-space: nowrap; line-height: 1.4; }
+        .calendar-tooltip { position: fixed; padding: 6px 10px; background: rgba(0,0,0,0.9); color: #fff; font-size: 11px; border-radius: 4px; pointer-events: none; z-index: 1000; display: none; box-shadow: 0 3px 10px rgba(0,0,0,0.3); white-space: pre-line; line-height: 1.4; }
     </style>
 </head>
 <body>
@@ -918,7 +918,10 @@
             Object.entries(usageHistory).forEach(([date, data]) => {
                 dailyData[date] = {
                     totalTokens: data.summary?.totalTokens || 0,
-                    requestCount: data.summary?.requestCount || 0
+                    requestCount: data.summary?.requestCount || 0,
+                    maxQps: data.summary?.maxQps || 0,
+                    maxRpm: data.summary?.maxRpm || 0,
+                    maxTps: data.summary?.maxTps || 0
                 };
             });
             
@@ -951,9 +954,9 @@
                 day.className = 'calendar-day';
                 day.dataset.level = level;
                 
-                const tipText = `${dateKey}: ${formatNumber(requests)} 次请求, ${formatTokenCompact(tokens)} Tokens`;
+                const tipText = `${dateKey}: ${formatNumber(requests)} 次请求, ${formatTokenCompact(tokens)} Tokens${entry.maxQps ? `\n峰值: ${entry.maxQps.toFixed(2)} QPS / ${entry.maxRpm.toFixed(0)} RPM / ${entry.maxTps.toFixed(2)} TPS` : ''}`;
                 day.onmouseenter = (e) => {
-                    tooltip.textContent = tipText;
+                    tooltip.innerText = tipText;
                     tooltip.style.display = 'block';
                     const rect = day.getBoundingClientRect();
                     tooltip.style.left = `${rect.left + rect.width / 2 - tooltip.offsetWidth / 2}px`;
@@ -1167,6 +1170,16 @@
                             <div class="value ${valueClass}">${key.todayUsage}/${key.dailyLimit}</div>
                             <div class="value muted">${formatTokenCompact(key.todayTotalTokens || 0)} Tokens ${key.todayCachedTokens ? `(含 ${formatTokenCompact(key.todayCachedTokens)} 缓存)` : ''}</div>
                             <div class="progress-bar"><div class="fill ${progressClass}" style="width:${Math.min(usagePercent, 100)}%"></div></div>
+                        </div>
+                        <div class="key-stat">
+                            <div class="label">当前速率</div>
+                            <div class="value">${(key.qps || 0).toFixed(2)} QPS</div>
+                            <div class="value muted">峰值: ${(key.maxQps || 0).toFixed(2)} QPS</div>
+                        </div>
+                        <div class="key-stat">
+                            <div class="label">流量/速率</div>
+                            <div class="value">${(key.rpm || 0).toFixed(0)} RPM</div>
+                            <div class="value muted">${(key.tps || 0).toFixed(1)} TPS / 峰值: ${(key.maxTps || 0).toFixed(1)}</div>
                         </div>
                         <div class="key-stat">
                             <div class="label">累计</div>

@@ -352,7 +352,7 @@
         [data-theme="dark"] .level-2, [data-theme="dark"] .calendar-day[data-level="2"] { background: #006d32; }
         [data-theme="dark"] .level-3, [data-theme="dark"] .calendar-day[data-level="3"] { background: #26a641; }
         [data-theme="dark"] .level-4, [data-theme="dark"] .calendar-day[data-level="4"] { background: #39d353; }
-        .calendar-tooltip { position: fixed; padding: 6px 10px; background: rgba(0,0,0,0.9); color: #fff; font-size: 11px; border-radius: 4px; pointer-events: none; z-index: 1000; display: none; box-shadow: 0 3px 10px rgba(0,0,0,0.3); white-space: nowrap; line-height: 1.4; }
+        .calendar-tooltip { position: fixed; padding: 6px 10px; background: rgba(0,0,0,0.9); color: #fff; font-size: 11px; border-radius: 4px; pointer-events: none; z-index: 1000; display: none; box-shadow: 0 3px 10px rgba(0,0,0,0.3); white-space: pre-line; line-height: 1.4; }
 
     </style>
 </head>
@@ -686,7 +686,10 @@
             Object.entries(usageHistory).forEach(([date, data]) => {
                 dailyData[date] = {
                     totalTokens: data.summary?.totalTokens || 0,
-                    requestCount: data.summary?.requestCount || 0
+                    requestCount: data.summary?.requestCount || 0,
+                    maxQps: data.summary?.maxQps || 0,
+                    maxRpm: data.summary?.maxRpm || 0,
+                    maxTps: data.summary?.maxTps || 0
                 };
             });
             
@@ -719,9 +722,9 @@
                 day.className = 'calendar-day';
                 day.dataset.level = level;
                 
-                const tipText = `${dateKey}: ${formatNumber(requests)} 次请求, ${formatTokenCompact(tokens)} Tokens`;
+                const tipText = `${dateKey}: ${formatNumber(requests)} 次请求, ${formatTokenCompact(tokens)} Tokens${entry.maxQps ? `\n峰值: ${entry.maxQps.toFixed(2)} QPS / ${entry.maxRpm.toFixed(0)} RPM / ${entry.maxTps.toFixed(2)} TPS` : ''}`;
                 day.onmouseenter = (e) => {
-                    tooltip.textContent = tipText;
+                    tooltip.innerText = tipText;
                     tooltip.style.display = 'block';
                     const rect = day.getBoundingClientRect();
                     tooltip.style.left = `${rect.left + rect.width / 2 - tooltip.offsetWidth / 2}px`;
