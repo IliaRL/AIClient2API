@@ -189,6 +189,43 @@ function appendCustomModelsToModelList(clientModelList, customEntries, providerT
         };
     }
 
+    if (listEndpointType === ENDPOINT_TYPE.OPENAI_MODEL_LIST) {
+        const models = Array.isArray(clientModelList?.data) ? clientModelList.data : [];
+
+        entries.forEach(entry => {
+            const existingModel = models.find(model => model?.id === entry.id);
+            if (existingModel) {
+                // 更新现有模型的元数据
+                if (entry.config.name) existingModel.display_name = entry.config.name;
+                if (entry.config.description) existingModel.description = entry.config.description;
+                if (hasMetadataValue(entry.config.contextLength)) existingModel.context_length = entry.config.contextLength;
+                if (hasMetadataValue(entry.config.maxTokens)) existingModel.max_tokens = entry.config.maxTokens;
+                return;
+            }
+
+            // 添加新模型
+            const modelResponse = {
+                id: entry.id,
+                object: 'model',
+                created: Math.floor(Date.now() / 1000),
+                owned_by: entry.provider || providerType || 'custom',
+                display_name: entry.config.name || entry.id
+            };
+
+            if (entry.config.description) modelResponse.description = entry.config.description;
+            if (hasMetadataValue(entry.config.contextLength)) modelResponse.context_length = entry.config.contextLength;
+            if (hasMetadataValue(entry.config.maxTokens)) modelResponse.max_tokens = entry.config.maxTokens;
+
+            models.push(modelResponse);
+        });
+
+        return {
+            ...clientModelList,
+            object: 'list',
+            data: models
+        };
+    }
+
     return clientModelList;
 }
 
@@ -1154,7 +1191,9 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     }
 
     // 1. Convert request body from client format to backend format, if necessary.
-    let processedRequestBody = originalRequestBody;
+    // 使用浅拷贝以避免直接变异 originalRequestBody，保持原始数据的纯净性以供后续钩子使用
+    let processedRequestBody = { ...originalRequestBody };
+
     // 将 _monitorRequestId 注入到 requestBody 中，以便在 service 内部访问
     if (CONFIG._monitorRequestId) {
         processedRequestBody._monitorRequestId = CONFIG._monitorRequestId;
@@ -1168,7 +1207,15 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     // fs.writeFile('originalRequestBody'+Date.now()+'.json', JSON.stringify(originalRequestBody));
     if (getProtocolPrefix(fromProvider) !== getProtocolPrefix(toProvider)) {
         logger.info(`[Request Convert] Converting request from ${fromProvider} to ${toProvider}`);
-        processedRequestBody = convertData(originalRequestBody, 'request', fromProvider, toProvider);
+        const preConvertBody = processedRequestBody;
+        processedRequestBody = convertData(preConvertBody, 'request', fromProvider, toProvider);
+
+        // 保持以 _ 开头的内部属性（如 _monitorRequestId, _requestBaseUrl）
+        Object.keys(preConvertBody).forEach(key => {
+            if (key.startsWith('_') && processedRequestBody[key] === undefined) {
+                processedRequestBody[key] = preConvertBody[key];
+            }
+        });
     } else {
         logger.info(`[Request Convert] Request format matches backend provider. No conversion needed.`);
     }
