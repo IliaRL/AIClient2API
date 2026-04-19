@@ -9,23 +9,22 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { RateManager } from '../../utils/rate-tracker.js';
+import { getBeijingDateString } from '../../utils/common.js';
 
 // 配置文件路径
 const KEYS_STORE_FILE = path.join(process.cwd(), 'configs', 'api-potluck-keys.json');
+
 const KEY_PREFIX = 'maki_';
 
-// 默认配置
 const DEFAULT_CONFIG = {
-    defaultDailyLimit: 500,
-    persistInterval: 5000
+    persistInterval: 5000,
+    defaultDailyLimit: 500
 };
 
-// 配置获取函数（由外部注入）
 let configGetter = null;
 
 /**
- * 设置配置获取函数
- * @param {Function} getter - 返回配置对象的函数
+ * 设置配置获取器
  */
 export function setConfigGetter(getter) {
     configGetter = getter;
@@ -41,7 +40,14 @@ function getConfig() {
     return DEFAULT_CONFIG;
 }
 
-// 内存缓存
+/**
+ * 获取今日日期字符串
+ */
+function getTodayDateString() {
+    return getBeijingDateString();
+}
+
+// 插件状态
 let keyStore = null;
 let isDirty = false;
 let isWriting = false;
@@ -281,14 +287,6 @@ function generateApiKey() {
     } while (keyStore.keys[apiKey]);
     
     return apiKey;
-}
-
-/**
- * 获取今天的日期字符串 (YYYY-MM-DD)
- */
-function getTodayDateString() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 /**
@@ -607,6 +605,7 @@ export async function incrementUsage(apiKey, pName = 'unknown', mName = 'unknown
     keyData.totalCompletionTokens += toNumber(usage.completionTokens);
     keyData.totalTokens += toNumber(usage.totalTokens);
     keyData.totalCachedTokens += toNumber(usage.cachedTokens);
+    keyData.lastUsedAt = new Date().toISOString();
 
     // 同时也给 keyData 注入实时峰值（如果需要持久化）
     if (!keyData.maxQps) keyData.maxQps = 0;

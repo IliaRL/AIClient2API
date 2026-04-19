@@ -703,7 +703,9 @@
                 date.setDate(startDate.getDate() + i);
                 if (date > now) break;
                 
-                const dateKey = date.toISOString().split('T')[0];
+                // 统一使用北京时间 (UTC+8) 生成 key，与后端保持一致
+                const utc8Date = new Date(date.getTime() + (8 * 60 * 60 * 1000));
+                const dateKey = utc8Date.toISOString().split('T')[0];
                 const entry = dailyData[dateKey] || { totalTokens: 0, requestCount: 0 };
                 const tokens = entry.totalTokens;
                 const requests = entry.requestCount;

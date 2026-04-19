@@ -9,6 +9,19 @@ import { ProviderStrategyFactory } from './provider-strategies.js';
 import { getPluginManager } from '../core/plugin-manager.js';
 import { MODEL_PROTOCOL_PREFIX, MODEL_PROVIDER } from './constants.js';
 
+// ==================== 时间与时区 ====================
+
+/**
+ * 获取北京时间 (UTC+8) 的日期字符串 (YYYY-MM-DD)
+ * @returns {string} - YYYY-MM-DD 格式的日期字符串
+ */
+export function getBeijingDateString() {
+    const now = new Date();
+    // 强制增加 8 小时偏移来模拟 UTC+8
+    const utc8Time = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    return utc8Time.toISOString().split('T')[0];
+}
+
 // ==================== 网络错误处理 ====================
 
 /**

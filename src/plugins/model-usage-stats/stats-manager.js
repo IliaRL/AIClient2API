@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import logger from '../../utils/logger.js';
 import { RateManager } from '../../utils/rate-tracker.js';
+import { getBeijingDateString } from '../../utils/common.js';
 
 const STATS_STORE_FILE = path.join(process.cwd(), 'configs', 'model-usage-stats.json');
 const DEFAULT_CONFIG = {
@@ -426,7 +427,9 @@ export async function finalizeRequest({ requestId, model, provider, fromProvider
         return false;
     }
 
-    const timestamp = new Date().toISOString();
+    const now = new Date();
+    const timestamp = now.toISOString();
+    const dateKey = getBeijingDateString();
     const normalizedProvider = state.provider || provider || 'unknown';
     const normalizedModel = state.model || model || 'unknown';
     
@@ -458,8 +461,6 @@ export async function finalizeRequest({ requestId, model, provider, fromProvider
     updatePeaks(ensureProviderStore(normalizedProvider).summary);
     updatePeaks(ensureModelStore(normalizedProvider, normalizedModel));
 
-    // 记录每日统计
-    const dateKey = timestamp.split('T')[0];
     if (!statsStore.daily[dateKey]) {
         statsStore.daily[dateKey] = createEmptyUsage();
     }
