@@ -259,12 +259,19 @@
         /* Key 统计 */
         .key-stats {
             display: flex;
-            gap: 24px;
+            gap: 20px;
             flex-wrap: wrap;
+            flex: 3;
+            align-items: flex-start;
         }
         .key-stat {
-            text-align: center;
-            min-width: 70px;
+            flex: 1;
+            min-width: 140px;
+            padding: 4px 8px;
+            border-left: 2px solid var(--border-color);
+        }
+        .key-stat:first-child {
+            border-left: none;
         }
         .key-stat .label {
             font-size: 11px;
@@ -506,6 +513,8 @@
             .key-stat {
                 min-width: unset;
                 text-align: center;
+                border-left: none;
+                padding: 4px;
             }
             .key-actions {
                 display: grid;
@@ -714,6 +723,8 @@
                             <option value="usage-asc">今日用量 ↑</option>
                             <option value="total-desc">累计用量 ↓</option>
                             <option value="lastUsed-desc">最近使用 ↓</option>
+                            <option value="qps-desc">QPS 速率 ↓</option>
+                            <option value="rpm-desc">RPM 频率 ↓</option>
                             <option value="created-desc">创建时间 ↓</option>
                         </select>
                     </div>
@@ -1097,6 +1108,8 @@
                 else if (field === 'usage') { va = a.todayUsage; vb = b.todayUsage; }
                 else if (field === 'total') { va = a.totalUsage; vb = b.totalUsage; }
                 else if (field === 'lastUsed') { va = a.lastUsedAt || ''; vb = b.lastUsedAt || ''; }
+                else if (field === 'qps') { va = a.qps || 0; vb = b.qps || 0; }
+                else if (field === 'rpm') { va = a.rpm || 0; vb = b.rpm || 0; }
                 else if (field === 'created') { va = a.createdAt || ''; vb = b.createdAt || ''; }
                 if (va < vb) return order === 'asc' ? -1 : 1;
                 if (va > vb) return order === 'asc' ? 1 : -1;
@@ -1172,19 +1185,19 @@
                             <div class="progress-bar"><div class="fill ${progressClass}" style="width:${Math.min(usagePercent, 100)}%"></div></div>
                         </div>
                         <div class="key-stat">
-                            <div class="label">当前速率</div>
-                            <div class="value">${(key.qps || 0).toFixed(2)} QPS</div>
-                            <div class="value muted">峰值: ${(key.maxQps || 0).toFixed(2)} QPS</div>
-                        </div>
-                        <div class="key-stat">
-                            <div class="label">流量/速率</div>
-                            <div class="value">${(key.rpm || 0).toFixed(0)} RPM</div>
-                            <div class="value muted">${(key.tps || 0).toFixed(1)} TPS / 峰值: ${(key.maxTps || 0).toFixed(1)}</div>
-                        </div>
-                        <div class="key-stat">
-                            <div class="label">累计</div>
-                            <div class="value">${key.totalUsage}</div>
+                            <div class="label">累计数据</div>
+                            <div class="value">${key.totalUsage} 次请求</div>
                             <div class="value muted">${formatTokenCompact(key.totalTokens || 0)} Tokens ${key.totalCachedTokens ? `(含 ${formatTokenCompact(key.totalCachedTokens)} 缓存)` : ''}</div>
+                        </div>
+                        <div class="key-stat">
+                            <div class="label">请求频率</div>
+                            <div class="value">${(key.qps || 0).toFixed(2)} QPS / ${(key.rpm || 0).toFixed(0)} RPM</div>
+                            <div class="value muted">峰值: ${(key.maxQps || 0).toFixed(2)} QPS / ${(key.maxRpm || 0).toFixed(0)} RPM</div>
+                        </div>
+                        <div class="key-stat">
+                            <div class="label">Token 速率</div>
+                            <div class="value">${(key.tps || 0).toFixed(1)} TPS</div>
+                            <div class="value muted">峰值: ${(key.maxTps || 0).toFixed(1)} TPS</div>
                         </div>
                         <div class="key-stat">
                             <div class="label">最后调用</div>
