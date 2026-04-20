@@ -63,7 +63,7 @@
       </a>
     </td>
     <td width="75%" align="left" valign="middle">
-      感谢 VisionCoder 对本项目的支持。VisionCoder 开发平台 是一个可靠高效的 API 中继服务提供商，提供 Claude Code、Codex、Gemini 等主流 AI 模型，帮助开发者和团队更轻松地集成 AI 功能，提升工作效率。VisionCoder 还为我们的用户提供 <a href="https://visioncoder.com"><strong>Token Plan</strong></a> 限时活动：购买 1 个月，赠送 1 个月。
+      感谢 VisionCoder 对本项目的支持。VisionCoder 开发平台 是一个可靠高效的 API 中继服务提供商，提供 Claude Code、Codex、Gemini 等主流 AI 模型，帮助开发者和团队更轻松地集成 AI 功能，提升工作效率。VisionCoder 还为我们的用户提供 <a href="https://visioncoder.com">Token Plan</a> 限时活动：<strong>购买 1 个月，赠送 1 个月</strong>。
     </td>
   </tr>
   <tr>

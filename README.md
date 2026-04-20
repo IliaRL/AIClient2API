@@ -64,7 +64,7 @@
       </a>
     </td>
     <td width="75%" align="left" valign="middle">
-      Thanks to VisionCoder for supporting this project. VisionCoder Developer Platform is a reliable and efficient API relay service provider, offering access to mainstream AI models such as Claude Code, Codex, and Gemini. It helps developers and teams integrate AI capabilities more easily and improve productivity. VisionCoder is also offering our users a limited-time <a href="https://visioncoder.com"><strong>Token Plan</strong></a> promotion: buy 1 month and get 1 month free.
+      Thanks to VisionCoder for supporting this project. VisionCoder Developer Platform is a reliable and efficient API relay service provider, offering access to mainstream AI models such as Claude Code, Codex, and Gemini. It helps developers and teams integrate AI capabilities more easily and improve productivity. VisionCoder is also offering our users a limited-time <a href="https://visioncoder.com">Token Plan</a> promotion: <strong>buy 1 month and get 1 month free</strong>.
     </td>
   </tr>
   <tr>

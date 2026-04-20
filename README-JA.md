@@ -64,7 +64,7 @@
       </a>
     </td>
     <td width="75%" align="left" valign="middle">
-      VisionCoder による本プロジェクトへのスポンサーに感謝します！VisionCoder 開発プラットフォームは信頼性が高く効率的な API 中継サービスプロバイダーであり、Claude Code、Codex、Gemini などの主要な AI モデルへのアクセスを提供しています。開発者やチームが AI 機能をより簡単に統合し、生産性を向上させるのを支援します。VisionCoder は本ソフトウェアのユーザー向けに期間限定の <a href="https://visioncoder.com"><strong>Token Plan</strong></a> 特典を提供しています：1ヶ月の購入で1ヶ月分を無料で進呈。
+      VisionCoder による本プロジェクトへのスポンサーに感謝します！VisionCoder 開発プラットフォームは信頼性が高く効率的な API 中継サービスプロバイダーであり、Claude Code、Codex、Gemini などの主要な AI モデルへのアクセスを提供しています。開発者やチームが AI 機能をより簡単に統合し、生産性を向上させるのを支援します。VisionCoder は本ソフトウェアのユーザー向けに期間限定の <a href="https://visioncoder.com">Token Plan</a> 特典を提供しています：<strong>1ヶ月の購入で1ヶ月分を無料で進呈</strong>。
     </td>
   </tr>
   <tr>
