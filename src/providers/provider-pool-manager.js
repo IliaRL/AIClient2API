@@ -2,7 +2,9 @@ import * as fs from 'fs';
 import { getServiceAdapter, getRegisteredProviders, invalidateServiceAdapter } from './adapter.js';
 import logger from '../utils/logger.js';
 import { MODEL_PROVIDER, getProtocolPrefix } from '../utils/common.js';
+import { withFileLock, atomicWriteFile } from '../utils/file-lock.js';
 import { convertData } from '../convert/convert.js';
+
 import {
     getConfiguredSupportedModels,
     getCustomModelListProvider,
@@ -2229,56 +2231,68 @@ export class ProviderPoolManager {
      * @private
      */
     async _flushPendingSaves() {
-        const typesToSave = Array.from(this.pendingSaves);
-        if (typesToSave.length === 0) return;
-        
-        this.pendingSaves.clear();
-        this.saveTimer = null;
-        
-        try {
-            const filePath = this.globalConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
-            let currentPools = {};
-            
-            // 一次性读取文件
-            try {
-                const fileContent = await fs.promises.readFile(filePath, 'utf8');
-                currentPools = JSON.parse(fileContent);
-            } catch (readError) {
-                if (readError.code === 'ENOENT') {
-                    this._log('info', 'configs/provider_pools.json does not exist, creating new file.');
-                } else {
-                    throw readError;
-                }
-            }
-
-            // 更新所有待保存的 providerType
-            for (const providerType of typesToSave) {
-                if (this.providerStatus[providerType]) {
-                    currentPools[providerType] = this.providerStatus[providerType].map(p => {
-                        // Convert Date objects to ISOString if they exist
-                        const config = { ...p.config };
-                        if (config.lastUsed instanceof Date) {
-                            config.lastUsed = config.lastUsed.toISOString();
-                        }
-                        if (config.lastErrorTime instanceof Date) {
-                            config.lastErrorTime = config.lastErrorTime.toISOString();
-                        }
-                        if (config.lastHealthCheckTime instanceof Date) {
-                            config.lastHealthCheckTime = config.lastHealthCheckTime.toISOString();
-                        }
-                        return config;
-                    });
-                } else {
-                    this._log('warn', `Attempted to save unknown providerType: ${providerType}`);
-                }
-            }
-            
-            // 一次性写入文件
-            await fs.promises.writeFile(filePath, JSON.stringify(currentPools, null, 2), 'utf8');
-            this._log('info', `configs/provider_pools.json updated successfully for types: ${typesToSave.join(', ')}`);
-        } catch (error) {
-            this._log('error', `Failed to write provider_pools.json: ${error.message}`);
+        // 立即置空定时器，防止重叠调用
+        if (this.saveTimer) {
+            clearTimeout(this.saveTimer);
+            this.saveTimer = null;
         }
+
+        const filePath = this.globalConfig.PROVIDER_POOLS_FILE_PATH || 'configs/provider_pools.json';
+        
+        // 使用文件锁确保并发安全
+        await withFileLock(filePath, async (checkValidity) => {
+            // 原子化提取待保存任务并清空，防止在异步循环期间丢失新更新
+            const typesToSave = Array.from(this.pendingSaves);
+            if (typesToSave.length === 0) return;
+            this.pendingSaves.clear();
+
+            try {
+                let currentPools = {};
+
+                // 采用“读取-合并-写入”策略，保留可能存在的未知字段
+                try {
+                    const fileContent = await fs.promises.readFile(filePath, 'utf8');
+                    currentPools = JSON.parse(fileContent);
+                } catch (readError) {
+                    if (readError.code === 'ENOENT') {
+                        this._log('info', 'configs/provider_pools.json does not exist, creating new file.');
+                    } else {
+                        throw readError;
+                    }
+                }
+
+                // 检查锁是否依然有效
+                checkValidity();
+
+                // 更新所有待保存的 providerType
+                for (const providerType of typesToSave) {
+                    if (this.providerStatus[providerType]) {
+                        currentPools[providerType] = this.providerStatus[providerType].map(p => {
+                            const config = { ...p.config };
+                            if (config.lastUsed instanceof Date) {
+                                config.lastUsed = config.lastUsed.toISOString();
+                            }
+                            if (config.lastErrorTime instanceof Date) {
+                                config.lastErrorTime = config.lastErrorTime.toISOString();
+                            }
+                            if (config.lastHealthCheckTime instanceof Date) {
+                                config.lastHealthCheckTime = config.lastHealthCheckTime.toISOString();
+                            }
+                            return config;
+                        });
+                    } else {
+                        this._log('warn', `Attempted to save unknown providerType: ${providerType}`);
+                    }
+                }
+
+                // 一次性写入文件（使用原子化写入）
+                await atomicWriteFile(filePath, JSON.stringify(currentPools, null, 2), 'utf8');
+
+                this._log('info', `configs/provider_pools.json updated successfully for types: ${typesToSave.join(', ')}`);
+            } catch (error) {
+                this._log('error', `Failed to write provider_pools.json: ${error.message}`);
+            }
+        });
     }
 
 }

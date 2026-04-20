@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import logger from '../utils/logger.js';
 import { getRequestBody } from '../utils/common.js';
 import { broadcastEvent } from './event-broadcast.js';
 import { CONFIG } from '../core/config-manager.js';
+import { withFileLock, atomicWriteFile } from '../utils/file-lock.js';
 
 function syncRuntimeCustomModels(currentConfig, customModels) {
     const normalizedCustomModels = Array.isArray(customModels) ? customModels : [];
@@ -39,6 +40,16 @@ export async function handleGetCustomModels(req, res, currentConfig) {
 export async function handleAddCustomModel(req, res, currentConfig) {
     try {
         const body = await getRequestBody(req);
+        const filePath = CONFIG.CUSTOM_MODELS_FILE_PATH || 'configs/custom_models.json';
+        return await withFileLock(filePath, () => _handleAddCustomModel(req, res, currentConfig, body));
+    } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'File operation failed: ' + err.message } }));
+        return true;
+    }
+}
+async function _handleAddCustomModel(req, res, currentConfig, body) {
+    try {
         const newModel = body;
 
         if (!newModel.id) {
@@ -69,7 +80,7 @@ export async function handleAddCustomModel(req, res, currentConfig) {
         customModels.push(newModel);
 
         // Save to file
-        writeFileSync(filePath, JSON.stringify(customModels, null, 2), 'utf-8');
+        await atomicWriteFile(filePath, JSON.stringify(customModels, null, 2), 'utf-8');
         syncRuntimeCustomModels(currentConfig, customModels);
         
         logger.info(`[UI API] Added custom model: ${newModel.id}`);
@@ -97,6 +108,16 @@ export async function handleAddCustomModel(req, res, currentConfig) {
 export async function handleUpdateCustomModel(req, res, currentConfig, modelId) {
     try {
         const body = await getRequestBody(req);
+        const filePath = CONFIG.CUSTOM_MODELS_FILE_PATH || 'configs/custom_models.json';
+        return await withFileLock(filePath, () => _handleUpdateCustomModel(req, res, currentConfig, modelId, body));
+    } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'File operation failed: ' + err.message } }));
+        return true;
+    }
+}
+async function _handleUpdateCustomModel(req, res, currentConfig, modelId, body) {
+    try {
         const updatedModel = body;
 
         const filePath = currentConfig.CUSTOM_MODELS_FILE_PATH || 'configs/custom_models.json';
@@ -130,7 +151,7 @@ export async function handleUpdateCustomModel(req, res, currentConfig, modelId) 
         customModels[index] = { ...customModels[index], ...updatedModel };
 
         // Save to file
-        writeFileSync(filePath, JSON.stringify(customModels, null, 2), 'utf-8');
+        await atomicWriteFile(filePath, JSON.stringify(customModels, null, 2), 'utf-8');
         syncRuntimeCustomModels(currentConfig, customModels);
         
         logger.info(`[UI API] Updated custom model: ${modelId}`);
@@ -157,6 +178,16 @@ export async function handleUpdateCustomModel(req, res, currentConfig, modelId) 
  */
 export async function handleDeleteCustomModel(req, res, currentConfig, modelId) {
     try {
+        const filePath = CONFIG.CUSTOM_MODELS_FILE_PATH || 'configs/custom_models.json';
+        return await withFileLock(filePath, () => _handleDeleteCustomModel(req, res, currentConfig, modelId));
+    } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'File operation failed: ' + err.message } }));
+        return true;
+    }
+}
+async function _handleDeleteCustomModel(req, res, currentConfig, modelId) {
+    try {
         const filePath = currentConfig.CUSTOM_MODELS_FILE_PATH || 'configs/custom_models.json';
         let customModels = [];
 
@@ -179,7 +210,7 @@ export async function handleDeleteCustomModel(req, res, currentConfig, modelId) 
         const deletedModel = customModels.splice(index, 1)[0];
 
         // Save to file
-        writeFileSync(filePath, JSON.stringify(customModels, null, 2), 'utf-8');
+        await atomicWriteFile(filePath, JSON.stringify(customModels, null, 2), 'utf-8');
         syncRuntimeCustomModels(currentConfig, customModels);
         
         logger.info(`[UI API] Deleted custom model: ${modelId}`);

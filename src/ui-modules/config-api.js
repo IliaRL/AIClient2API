@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -9,36 +9,39 @@ import { initApiService } from '../services/service-manager.js';
 import { getRequestBody } from '../utils/common.js';
 import { broadcastEvent } from '../ui-modules/event-broadcast.js';
 import { HEALTH_CHECK, PASSWORD, NETWORK, RETRY } from '../utils/constants.js';
+import { withFileLock, atomicWriteFile } from '../utils/file-lock.js';
 
 /**
  * 重载配置文件
- * 动态导入config-manager并重新初始化配置
- * @returns {Promise<Object>} 返回重载后的配置对象
  */
 export async function reloadConfig(providerPoolManager) {
     try {
-        // Import config manager dynamically
-        const { initializeConfig } = await import('../core/config-manager.js');
-        
-        // Reload main config
-        const newConfig = await initializeConfig(process.argv.slice(2), 'configs/config.json');
-        // Update provider pool manager if available
-        if (providerPoolManager) {
-            providerPoolManager.providerPools = newConfig.providerPools;
-            providerPoolManager.initializeProviderStatus();
-        }
-        
-        // Update global CONFIG
-        Object.assign(CONFIG, newConfig);
-        logger.info('[UI API] Configuration reloaded:');
+        const configPath = 'configs/config.json';
+        // 使用文件锁进行重载，防止在写入期间读取
+        return await withFileLock(configPath, async () => {
+            // Import config manager dynamically
+            const { initializeConfig } = await import('../core/config-manager.js');
 
-        // Update initApiService - 清空并重新初始化服务实例
-        Object.keys(serviceInstances).forEach(key => delete serviceInstances[key]);
-        initApiService(CONFIG);
-        
-        logger.info('[UI API] Configuration reloaded successfully');
-        
-        return newConfig;
+            // Reload main config
+            const newConfig = await initializeConfig(process.argv.slice(2), configPath);
+            // Update provider pool manager if available
+            if (providerPoolManager) {
+                providerPoolManager.providerPools = newConfig.providerPools;
+                providerPoolManager.initializeProviderStatus();
+            }
+
+            // Update global CONFIG
+            Object.assign(CONFIG, newConfig);
+            logger.info('[UI API] Configuration reloaded:');
+
+            // Update initApiService - 清空并重新初始化服务实例
+            Object.keys(serviceInstances).forEach(key => delete serviceInstances[key]);
+            initApiService(CONFIG);
+
+            logger.info('[UI API] Configuration reloaded successfully');
+
+            return newConfig;
+        });
     } catch (error) {
         logger.error('[UI API] Failed to reload configuration:', error);
         throw error;
@@ -112,6 +115,16 @@ export async function handleGetConfig(req, res, currentConfig) {
 export async function handleUpdateConfig(req, res, currentConfig) {
     try {
         const body = await getRequestBody(req);
+        const configPath = 'configs/config.json';
+        return await withFileLock(configPath, () => _handleUpdateConfig(req, res, currentConfig, body));
+    } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'File operation failed: ' + err.message } }));
+        return true;
+    }
+}
+async function _handleUpdateConfig(req, res, currentConfig, body) {
+    try {
         const newConfig = body;
 
         // Update config values in memory（含类型校验）
@@ -266,7 +279,7 @@ export async function handleUpdateConfig(req, res, currentConfig) {
             const promptPath = currentConfig.SYSTEM_PROMPT_FILE_PATH || 'configs/input_system_prompt.txt';
             try {
                 const relativePath = path.relative(process.cwd(), promptPath);
-                writeFileSync(promptPath, newConfig.systemPrompt, 'utf-8');
+                await atomicWriteFile(promptPath, newConfig.systemPrompt, 'utf-8');
 
                 // 广播更新事件
                 broadcastEvent('config_update', {
@@ -326,7 +339,7 @@ export async function handleUpdateConfig(req, res, currentConfig) {
                 SCHEDULED_HEALTH_CHECK: currentConfig.SCHEDULED_HEALTH_CHECK
             };
 
-            writeFileSync(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
+            await atomicWriteFile(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
             logger.info('[UI API] Configuration saved to configs/config.json');
             
             // 广播更新事件
@@ -414,22 +427,22 @@ export async function handleUpdateAdminPassword(req, res) {
 
         if (!password || password.trim() === '') {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ 
-                error: { 
+            res.end(JSON.stringify({
+                error: {
                     message: 'Password cannot be empty',
                     messageCode: 'common.passwordEmpty'
-                } 
+                }
             }));
             return true;
         }
 
         if (password.trim().length < PASSWORD.MIN_LENGTH) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ 
-                error: { 
+            res.end(JSON.stringify({
+                error: {
                     message: `Password must be at least ${PASSWORD.MIN_LENGTH} characters`,
                     messageCode: 'common.passwordTooShort'
-                } 
+                }
             }));
             return true;
         }
@@ -444,8 +457,12 @@ export async function handleUpdateAdminPassword(req, res) {
         const stored = `pbkdf2:${salt}:${hash}`;
 
         const pwdFilePath = path.join(process.cwd(), 'configs', 'pwd');
-        await fs.writeFile(pwdFilePath, stored, 'utf-8');
-        
+
+        // 使用文件锁和原子化写入
+        await withFileLock(pwdFilePath, async () => {
+            await atomicWriteFile(pwdFilePath, stored, 'utf-8');
+        });
+
         logger.info('[UI API] Admin password updated successfully');
 
         res.writeHead(200, { 'Content-Type': 'application/json' });

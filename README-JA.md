@@ -2,7 +2,7 @@
 
 <img src="src/img/logo-mid.webp" alt="logo"  style="width: 128px; height: 128px;margin-bottom: 3px;">
 
-# AIClient-2-API 🚀
+# AIClient-2-API（A2）🚀
 
 **複数のクライアント専用大規模言語モデルAPI（Gemini CLI、Antigravity、Codex, Grok、Kiro ...）を模擬リクエストし、ローカルのOpenAI互換インターフェースに統一的にラッピングする強力なプロキシ。**
 
