@@ -2,7 +2,7 @@ import { existsSync } from 'fs';
 import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { addToUsedPaths, isPathUsed, pathsEqual } from '../utils/provider-utils.js';
+import { addToUsedPaths, isPathUsed, pathsEqual, detectProviderFromPath } from '../utils/provider-utils.js';
 
 /**
  * 扫描和分析配置文件
@@ -53,7 +53,7 @@ export async function scanConfigFiles(currentConfig, providerPoolManager) {
 
     try {
         // 扫描configs目录下的所有子目录和文件
-        const configsFiles = await scanOAuthDirectory(configsPath, usedPaths, currentConfig);
+        const configsFiles = await scanOAuthDirectory(configsPath, usedPaths, currentConfig, providerPools);
         configFiles.push(...configsFiles);
     } catch (error) {
         logger.warn(`[Config Scanner] Failed to scan configs directory:`, error.message);
@@ -68,7 +68,7 @@ export async function scanConfigFiles(currentConfig, providerPoolManager) {
  * @param {Set} usedPaths - Set of paths currently in use
  * @returns {Promise<Object|null>} OAuth file information object
  */
-export async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
+export async function analyzeOAuthFile(filePath, usedPaths, currentConfig, providerPools) {
     try {
         const stats = await fs.stat(filePath);
         const ext = path.extname(filePath).toLowerCase();
@@ -83,16 +83,28 @@ export async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
         let oauthProvider = 'unknown';
         let expiresAt = null;
         let expiresAtTS = null;
-        let usageInfo = getFileUsageInfo(relativePath, filename, usedPaths, currentConfig);
+        let usageInfo = getFileUsageInfo(relativePath, filename, usedPaths, currentConfig, providerPools);
         
-        // 从路径预检测提供商
+        // 从路径检测提供商
         const normalizedPath = relativePath.replace(/\\/g, '/').toLowerCase();
-        if (normalizedPath.includes('/kiro/')) oauthProvider = 'kiro';
-        else if (normalizedPath.includes('/gemini/')) oauthProvider = 'gemini';
-        else if (normalizedPath.includes('/qwen/')) oauthProvider = 'qwen';
-        else if (normalizedPath.includes('/antigravity/')) oauthProvider = 'antigravity';
-        else if (normalizedPath.includes('/codex/')) oauthProvider = 'codex';
-        else if (normalizedPath.includes('/iflow/')) oauthProvider = 'iflow';
+        const providerMapping = detectProviderFromPath(normalizedPath);
+        if (providerMapping) {
+            const type = providerMapping.providerType;
+            if (type.includes('kiro')) oauthProvider = 'kiro';
+            else if (type.includes('gemini')) oauthProvider = 'gemini';
+            else if (type.includes('qwen')) oauthProvider = 'qwen';
+            else if (type.includes('antigravity')) oauthProvider = 'antigravity';
+            else if (type.includes('codex')) oauthProvider = 'codex';
+            else if (type.includes('iflow')) oauthProvider = 'iflow';
+        } else {
+            // 兜底逻辑
+            if (normalizedPath.includes('/kiro/') || normalizedPath.includes('kiro-auth-token')) oauthProvider = 'kiro';
+            else if (normalizedPath.includes('/gemini/') || normalizedPath.includes('/.gemini/')) oauthProvider = 'gemini';
+            else if (normalizedPath.includes('/qwen/')) oauthProvider = 'qwen';
+            else if (normalizedPath.includes('/antigravity/') || normalizedPath.includes('/.antigravity/')) oauthProvider = 'antigravity';
+            else if (normalizedPath.includes('/codex/') || normalizedPath.includes('/.codex/')) oauthProvider = 'codex';
+            else if (normalizedPath.includes('/iflow/')) oauthProvider = 'iflow';
+        }
 
         try {
             content = await fs.readFile(filePath, 'utf8');
@@ -254,7 +266,7 @@ export async function analyzeOAuthFile(filePath, usedPaths, currentConfig) {
  * @param {Object} currentConfig - Current configuration
  * @returns {Object} Usage information object
  */
-function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
+function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig, providerPools) {
     const usageInfo = {
         isUsed: false,
         usageType: null,
@@ -326,9 +338,10 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
     }
 
     // 检查提供商池中的使用情况
-    if (currentConfig.providerPools) {
+    const poolsToUse = providerPools || currentConfig.providerPools;
+    if (poolsToUse) {
         // 使用 flatMap 将双重循环优化为单层循环 O(n)
-        const allProviders = Object.entries(currentConfig.providerPools).flatMap(
+        const allProviders = Object.entries(poolsToUse).flatMap(
             ([providerType, providers]) =>
                 providers.map((provider, index) => ({ provider, providerType, index }))
         );
@@ -454,7 +467,7 @@ function getFileUsageInfo(relativePath, fileName, usedPaths, currentConfig) {
  * @param {Object} currentConfig - Current configuration
  * @returns {Promise<Array>} Array of OAuth configuration file objects
  */
-async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
+async function scanOAuthDirectory(dirPath, usedPaths, currentConfig, providerPools) {
     const oauthFiles = [];
     
     try {
@@ -467,7 +480,7 @@ async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
                 const ext = path.extname(file.name).toLowerCase();
                 // 只关注OAuth相关的文件类型
                 if (['.json', '.oauth', '.creds', '.key', '.pem', '.txt'].includes(ext)) {
-                    const fileInfo = await analyzeOAuthFile(fullPath, usedPaths, currentConfig);
+                    const fileInfo = await analyzeOAuthFile(fullPath, usedPaths, currentConfig, providerPools);
                     if (fileInfo) {
                         oauthFiles.push(fileInfo);
                     }
@@ -477,7 +490,7 @@ async function scanOAuthDirectory(dirPath, usedPaths, currentConfig) {
                 const relativePath = path.relative(process.cwd(), fullPath);
                 // 最大深度4层，以支持 configs/kiro/{subfolder}/file.json 这样的结构
                 if (relativePath.split(path.sep).length < 4) {
-                    const subFiles = await scanOAuthDirectory(fullPath, usedPaths, currentConfig);
+                    const subFiles = await scanOAuthDirectory(fullPath, usedPaths, currentConfig, providerPools);
                     oauthFiles.push(...subFiles);
                 }
             }

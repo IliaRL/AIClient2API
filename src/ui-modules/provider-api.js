@@ -835,31 +835,45 @@ async function _handleResetProviderHealth(req, res, currentConfig, providerPoolM
         
         let resetCount = 0;
         let totalCount = 0;
+        let providerPools = {};
 
+        // 1. 首先加载完整的提供商池数据
+        if (existsSync(filePath)) {
+            try {
+                const fileContent = readFileSync(filePath, 'utf-8');
+                providerPools = JSON.parse(fileContent);
+            } catch (readError) {
+                logger.warn('[UI API] Failed to read provider pools during reset:', readError.message);
+                // 如果读取失败且管理器也不存在，才返回错误
+                if (!providerPoolManager) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: { message: 'Failed to read provider pools' } }));
+                    return true;
+                }
+            }
+        }
+
+        // 2. 执行重置逻辑
         if (providerPoolManager && providerPoolManager.providerStatus[providerType]) {
-            // 如果管理器存在，优先使用管理器的方法直接重置内存和触发保存
+            // 如果管理器存在，优先使用管理器的方法
             const pool = providerPoolManager.providerStatus[providerType];
             totalCount = pool.length;
             
             pool.forEach(ps => {
-                if (!ps.config.isHealthy) resetCount++;
+                if (!ps.config.isHealthy || ps.config.needsRefresh || (ps.config.errorCount && ps.config.errorCount > 0)) {
+                    resetCount++;
+                }
             });
             
+            // 重置内存状态
             providerPoolManager.resetAllHealthInType(providerType);
-        } else {
-            // 回退逻辑：手动操作文件
-            let providerPools = {};
-            if (existsSync(filePath)) {
-                try {
-                    const fileContent = readFileSync(filePath, 'utf-8');
-                    providerPools = JSON.parse(fileContent);
-                } catch (readError) {
-                    res.writeHead(404, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: { message: 'Provider pools file not found' } }));
-                    return true;
-                }
+            
+            // 从管理器获取最新的完整的池数据用于持久化
+            if (providerPoolManager.providerPools) {
+                providerPools = providerPoolManager.providerPools;
             }
-
+        } else {
+            // 如果管理器中没有，则只重置文件中的数据
             const providers = providerPools[providerType] || [];
             if (providers.length === 0) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -869,7 +883,9 @@ async function _handleResetProviderHealth(req, res, currentConfig, providerPoolM
 
             totalCount = providers.length;
             providers.forEach(provider => {
-                if (!provider.isHealthy) resetCount++;
+                if (!provider.isHealthy || provider.needsRefresh || (provider.errorCount && provider.errorCount > 0)) {
+                    resetCount++;
+                }
                 provider.isHealthy = true;
                 provider.errorCount = 0;
                 provider.refreshCount = 0;
@@ -877,11 +893,17 @@ async function _handleResetProviderHealth(req, res, currentConfig, providerPoolM
                 provider.lastErrorTime = null;
                 provider.lastErrorMessage = null;
             });
-
-            await atomicWriteFile(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
         }
 
-        logger.info(`[UI API] Reset health status for ${resetCount} providers in ${providerType}`);
+        // 3. 立即保存到文件，不依赖管理器的防抖保存，确保“重置”操作的即时性
+        await atomicWriteFile(filePath, JSON.stringify(providerPools, null, 2), 'utf-8');
+        
+        // 4. 同步更新 currentConfig 引用
+        if (currentConfig) {
+            currentConfig.providerPools = providerPools;
+        }
+
+        logger.info(`[UI API] Reset health status for type ${providerType}: ${resetCount}/${totalCount} nodes reset`);
 
         // 广播更新事件
         broadcastEvent('config_update', {
@@ -889,6 +911,7 @@ async function _handleResetProviderHealth(req, res, currentConfig, providerPoolM
             filePath: filePath,
             providerType,
             resetCount,
+            totalCount,
             timestamp: new Date().toISOString()
         });
 
@@ -896,11 +919,13 @@ async function _handleResetProviderHealth(req, res, currentConfig, providerPoolM
         res.end(JSON.stringify({
             success: true,
             message: `Successfully reset health status for ${resetCount} providers`,
-            resetCount,
-            totalCount
+            resetCount: resetCount,
+            totalCount: totalCount,
+            providerType: providerType
         }));
         return true;
     } catch (error) {
+        logger.error('[UI API] Reset health status failed:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: { message: error.message } }));
         return true;
@@ -1373,7 +1398,7 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
                 continue;
             }
 
-            const { providerType, credPathKey, defaultCheckModel, displayName } = providerMapping;
+            const { providerType, credPathKey, defaultCheckModel, displayName, urlKeys } = providerMapping;
 
             // Ensure provider type array exists
             if (!providerPools[providerType]) {
@@ -1406,7 +1431,8 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
                 credPathKey,
                 credPath: formatSystemPath(currentFilePath),
                 defaultCheckModel,
-                needsProjectId: providerMapping.needsProjectId
+                needsProjectId: providerMapping.needsProjectId,
+                urlKeys: urlKeys
             });
 
             providerPools[providerType].push(newProvider);
@@ -1433,7 +1459,19 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
 
         // Update provider pool manager if available
         if (providerPoolManager) {
-            providerPoolManager.resetAllHealthInType(providerType);
+            // 重要：更新管理器的内存池数据，确保后续扫描能立即看到变化
+            providerPoolManager.providerPools = providerPools;
+            providerPoolManager.initializeProviderStatus(true);
+
+            const uniqueTypes = [...new Set(linkedProviders.map(lp => lp.providerType))];
+            for (const type of uniqueTypes) {
+                providerPoolManager.resetAllHealthInType(type);
+            }
+        }
+
+        // 更新当前配置引用
+        if (currentConfig) {
+            currentConfig.providerPools = providerPools;
         }
 
             // Broadcast update events
@@ -1457,7 +1495,7 @@ export async function handleQuickLinkProvider(req, res, currentConfig, providerP
         const failCount = results.filter(r => !r.success).length;
         const message = successCount > 0
             ? `Successfully linked ${successCount} config file(s)${failCount > 0 ? `, ${failCount} failed` : ''}`
-            : `Failed to link all ${failCount} config file(s)`;
+            : `Failed to link all ${failCount} config file(s)${failCount === 1 && results[0].error ? `: ${results[0].error}` : ''}`;
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
