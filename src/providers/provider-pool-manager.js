@@ -741,6 +741,16 @@ export class ProviderPoolManager {
             
             const pool = this.providerPools[providerType];
             
+            // 如果是同步配置，主动使该类型下所有已有的服务适配器失效，确保代理等设置能即时生效
+            if (syncFromConfig) {
+                this._log('info', `Syncing config for type ${providerType}, invalidating existing service adapters to apply new proxy settings.`);
+                pool.forEach(config => {
+                    if (config.uuid) {
+                        invalidateServiceAdapter(providerType, config.uuid);
+                    }
+                });
+            }
+            
             pool.forEach((providerConfig) => {
                 try {
                     // 尝试从旧状态中恢复活跃请求计数和队列，避免重载配置时重置并发限制
@@ -751,9 +761,15 @@ export class ProviderPoolManager {
                     providerConfig.isDisabled = providerConfig.isDisabled !== undefined ? providerConfig.isDisabled : false;
                     
                     // --- V3: 统计数据管理 ---
-                    if (isColdStart || syncFromConfig) {
-                        // 冷启动或强制同步：使用传入配置中的统计数据
-                        // 如果传入配置中没有，则初始化为默认值
+                    if (isColdStart && !syncFromConfig) {
+                        // 冷启动：清空所有统计数据，确保重启后计数重置
+                        providerConfig.lastUsed = null;
+                        providerConfig.usageCount = 0;
+                        providerConfig.errorCount = 0;
+                        providerConfig.lastErrorTime = null;
+                        providerConfig.lastErrorMessage = null;
+                    } else if (syncFromConfig) {
+                        // 强制同步：从配置中恢复统计数据
                         providerConfig.lastUsed = providerConfig.lastUsed || null;
                         providerConfig.usageCount = providerConfig.usageCount || 0;
                         providerConfig.errorCount = providerConfig.errorCount || 0;
