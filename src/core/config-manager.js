@@ -21,14 +21,29 @@ function normalizeConfiguredProviders(config) {
         if (!trimmed) {
             return;
         }
+
+        // 1. 优先尝试精确匹配基础类型
         const matched = ALL_MODEL_PROVIDERS.find((provider) => provider.toLowerCase() === trimmed.toLowerCase());
-        if (!matched) {
-            logger.warn(`[Config Warning] Unknown model provider '${trimmed}'. This entry will be ignored.`);
+        if (matched) {
+            if (!dedupedProviders.includes(matched)) {
+                dedupedProviders.push(matched);
+            }
             return;
         }
-        if (!dedupedProviders.includes(matched)) {
-            dedupedProviders.push(matched);
+
+        // 2. 尝试前缀匹配 (支持带后缀的自定义分组，例如 openai-custom-1)
+        const prefixMatch = ALL_MODEL_PROVIDERS.find((provider) => 
+            provider !== 'auto' && trimmed.toLowerCase().startsWith(provider.toLowerCase() + '-')
+        );
+        
+        if (prefixMatch) {
+            if (!dedupedProviders.includes(trimmed)) {
+                dedupedProviders.push(trimmed);
+            }
+            return;
         }
+
+        logger.warn(`[Config Warning] Unknown model provider '${trimmed}'. This entry will be ignored.`);
     };
 
     const rawValue = config.MODEL_PROVIDER;
