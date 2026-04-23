@@ -89,6 +89,7 @@
             <div class="access-panel-header">
                 <h3><i class="fas fa-route"></i> <span data-i18n="access.quickStart.title">快速说明</span></h3>
             </div>
+            <p class="access-panel-subtitle" data-i18n="access.quickStart.subtitle">适合第一次给客户端发接入信息时按顺序操作，先拿 Key，再选路由，最后复制成片段。</p>
             <div class="access-hint-list">
                 <div class="access-hint-card">
                     <strong data-i18n="access.quickStart.step1Title">1. 先复制 Key</strong>
@@ -103,6 +104,17 @@
                     <p data-i18n="access.quickStart.step3Desc">下面每一行都给了 OpenAI / Claude 两种协议端点，点按钮即可复制。</p>
                 </div>
             </div>
+            <div class="access-quick-actions">
+                <button type="button" class="btn btn-outline btn-sm access-jump-btn" data-section="config">
+                    <i class="fas fa-sliders-h"></i>
+                    <span data-i18n="access.quickStart.gotoConfig">去配置管理</span>
+                </button>
+                <button type="button" class="btn btn-outline btn-sm access-jump-btn" data-section="providers">
+                    <i class="fas fa-server"></i>
+                    <span data-i18n="access.quickStart.gotoProviders">去提供商池管理</span>
+                </button>
+            </div>
+            <p class="access-panel-note" data-i18n="access.quickStart.note">如果这里还没有已配置节点，可以先去配置管理和提供商池管理补配置，再回来复制片段。</p>
         </section>
     </div>
 
@@ -110,16 +122,28 @@
         <div class="access-panel-header">
             <h3><i class="fas fa-window-restore"></i> <span data-i18n="access.snippets.title">客户端配置片段</span></h3>
         </div>
+        <p class="access-panel-subtitle" data-i18n="access.snippets.subtitle">这些片段更偏向“现成可复制的说明文本”，方便贴给客户端或运维同学，不等同于各客户端官方导入文件。</p>
         <div class="access-snippet-toolbar">
             <div class="access-snippet-provider">
                 <label for="accessSnippetProvider" data-i18n="access.snippets.provider">用于生成片段的供应商</label>
                 <select id="accessSnippetProvider" class="form-control"></select>
             </div>
+            <div class="access-snippet-format" aria-label="片段格式">
+                <span class="access-snippet-format-label" data-i18n="access.snippets.format">片段格式</span>
+                <div class="access-segmented-control" role="tablist" aria-label="Snippet Format">
+                    <button type="button" class="access-format-btn active" data-format="markdown">Markdown</button>
+                    <button type="button" class="access-format-btn" data-format="env">ENV</button>
+                    <button type="button" class="access-format-btn" data-format="json">JSON</button>
+                </div>
+            </div>
         </div>
         <div class="access-snippet-grid">
             <article class="access-snippet-card">
                 <div class="access-snippet-head">
-                    <h4><i class="fas fa-gem"></i> Cherry Studio</h4>
+                    <div>
+                        <h4><i class="fas fa-gem"></i> Cherry Studio</h4>
+                        <p class="access-snippet-desc" data-i18n="access.snippets.cherryDesc">适合手动新建 OpenAI 兼容供应商时直接照着填。</p>
+                    </div>
                     <button type="button" class="btn btn-secondary btn-sm access-snippet-copy-btn" data-target="accessCherrySnippet">
                         <i class="fas fa-copy"></i>
                         <span data-i18n="access.actions.copySnippet">复制片段</span>
@@ -129,7 +153,10 @@
             </article>
             <article class="access-snippet-card">
                 <div class="access-snippet-head">
-                    <h4><i class="fas fa-comment-alt"></i> NextChat</h4>
+                    <div>
+                        <h4><i class="fas fa-comment-alt"></i> NextChat</h4>
+                        <p class="access-snippet-desc" data-i18n="access.snippets.nextchatDesc">适合环境变量、自定义 OpenAI 接入或发给部署同学。</p>
+                    </div>
                     <button type="button" class="btn btn-secondary btn-sm access-snippet-copy-btn" data-target="accessNextChatSnippet">
                         <i class="fas fa-copy"></i>
                         <span data-i18n="access.actions.copySnippet">复制片段</span>
@@ -139,7 +166,10 @@
             </article>
             <article class="access-snippet-card">
                 <div class="access-snippet-head">
-                    <h4><i class="fas fa-terminal"></i> Cline</h4>
+                    <div>
+                        <h4><i class="fas fa-terminal"></i> Cline</h4>
+                        <p class="access-snippet-desc" data-i18n="access.snippets.clineDesc">适合新建 OpenAI Provider profile 时直接参考。</p>
+                    </div>
                     <button type="button" class="btn btn-secondary btn-sm access-snippet-copy-btn" data-target="accessClineSnippet">
                         <i class="fas fa-copy"></i>
                         <span data-i18n="access.actions.copySnippet">复制片段</span>

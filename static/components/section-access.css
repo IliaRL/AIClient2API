@@ -47,6 +47,20 @@
     font-size: 1.1rem;
 }
 
+.access-panel-subtitle {
+    margin: 0 0 1rem;
+    color: var(--text-secondary);
+    max-width: 72ch;
+    line-height: 1.6;
+}
+
+.access-panel-note {
+    margin: 0.85rem 0 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
 .access-field-group {
     margin-bottom: 1.25rem;
 }
@@ -91,6 +105,48 @@
     font-size: 0.875rem;
 }
 
+.access-snippet-format {
+    display: grid;
+    gap: 0.5rem;
+    justify-items: end;
+}
+
+.access-snippet-format-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.access-segmented-control {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.access-format-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.access-format-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.access-format-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
 .access-snippet-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -118,6 +174,13 @@
     font-size: 1rem;
 }
 
+.access-snippet-desc {
+    margin: 0.35rem 0 0;
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    line-height: 1.5;
+}
+
 .access-snippet-card pre {
     margin: 0;
     padding: 1rem;
@@ -125,7 +188,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     overflow-x: auto;
-    min-height: 210px;
+    min-height: 230px;
 }
 
 .access-snippet-card code {
@@ -152,6 +215,13 @@
 .access-hint-list {
     display: grid;
     gap: 0.875rem;
+}
+
+.access-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
 }
 
 .access-hint-card {
@@ -347,6 +417,16 @@
 
     .access-endpoint-row {
         grid-template-columns: 1fr;
+    }
+
+    .access-snippet-format,
+    .access-segmented-control {
+        justify-items: stretch;
+        justify-content: stretch;
+    }
+
+    .access-format-btn {
+        width: 100%;
     }
 
     .access-panel-header {

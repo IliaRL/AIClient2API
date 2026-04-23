@@ -3,6 +3,7 @@ import { getAvailableRoutes } from './routing-examples.js';
 import { t } from './i18n.js';
 
 let latestAccessData = null;
+let latestSnippetFormat = 'markdown';
 
 const recommendedModelMap = {
     'gemini-cli-oauth': 'gemini-3-flash-preview',
@@ -20,6 +21,22 @@ const recommendedModelMap = {
 
 function getElement(id) {
     return document.getElementById(id);
+}
+
+function normalizeSnippetFormat(format) {
+    return ['markdown', 'env', 'json'].includes(format) ? format : 'markdown';
+}
+
+function getSelectedSnippetFormat() {
+    const activeButton = document.querySelector('.access-format-btn.active');
+    return normalizeSnippetFormat(activeButton?.dataset.format || latestSnippetFormat);
+}
+
+function setSelectedSnippetFormat(format) {
+    latestSnippetFormat = normalizeSnippetFormat(format);
+    document.querySelectorAll('.access-format-btn').forEach(button => {
+        button.classList.toggle('active', button.dataset.format === latestSnippetFormat);
+    });
 }
 
 function buildProviderConfigMap(supportedProviders) {
@@ -91,6 +108,21 @@ function getRecommendedModel(providerId) {
     }
 
     return 'gpt-4o';
+}
+
+function toPrettyJson(value) {
+    return JSON.stringify(value, null, 2);
+}
+
+function buildMarkdownSnippet(title, entries) {
+    return [
+        `# ${title}`,
+        ...entries.map(([label, value]) => `- ${label}: ${value}`)
+    ].join('\n');
+}
+
+function buildEnvSnippet(entries) {
+    return entries.map(([key, value]) => `${key}=${value}`).join('\n');
 }
 
 function renderDefaultProviders(defaultProviders, configMap) {
@@ -253,35 +285,100 @@ function renderSnippetProviderOptions(data, configMap) {
     }
 }
 
-function buildCherryStudioSnippet(providerName, baseUrl, apiKey, model) {
-    return [
-        '[Cherry Studio]',
-        'Provider: OpenAI Compatible',
-        `Name: AIClient2API (${providerName})`,
-        `Base URL: ${baseUrl}`,
-        `API Key: ${apiKey || t('access.empty.key')}`,
-        `Model: ${model}`
-    ].join('\n');
+function buildCherryStudioSnippet(providerName, baseUrl, apiKey, model, format) {
+    const resolvedApiKey = apiKey || 'YOUR_API_KEY';
+
+    if (format === 'json') {
+        return toPrettyJson({
+            client: 'Cherry Studio',
+            providerType: 'OpenAI Compatible',
+            name: `AIClient2API (${providerName})`,
+            baseUrl,
+            apiKey: resolvedApiKey,
+            model
+        });
+    }
+
+    if (format === 'env') {
+        return buildEnvSnippet([
+            ['CHERRY_STUDIO_PROVIDER_TYPE', 'OpenAI Compatible'],
+            ['CHERRY_STUDIO_NAME', `AIClient2API (${providerName})`],
+            ['CHERRY_STUDIO_BASE_URL', baseUrl],
+            ['CHERRY_STUDIO_API_KEY', resolvedApiKey],
+            ['CHERRY_STUDIO_MODEL', model]
+        ]);
+    }
+
+    return buildMarkdownSnippet('Cherry Studio', [
+        ['Provider Type', 'OpenAI Compatible'],
+        ['Display Name', `AIClient2API (${providerName})`],
+        ['Base URL', baseUrl],
+        ['API Key', resolvedApiKey],
+        ['Model', model]
+    ]);
 }
 
-function buildNextChatSnippet(baseUrl, apiKey, model) {
-    return [
-        '# NextChat',
-        `OPENAI_API_KEY=${apiKey || 'YOUR_API_KEY'}`,
-        `OPENAI_BASE_URL=${baseUrl}`,
-        `CUSTOM_MODELS=${model}`
-    ].join('\n');
+function buildNextChatSnippet(baseUrl, apiKey, model, format) {
+    const resolvedApiKey = apiKey || 'YOUR_API_KEY';
+
+    if (format === 'json') {
+        return toPrettyJson({
+            client: 'NextChat',
+            openAIApiKey: resolvedApiKey,
+            openAIBaseUrl: baseUrl,
+            customModels: model,
+            defaultModel: model
+        });
+    }
+
+    if (format === 'env') {
+        return buildEnvSnippet([
+            ['NEXTCHAT_OPENAI_API_KEY', resolvedApiKey],
+            ['NEXTCHAT_OPENAI_BASE_URL', baseUrl],
+            ['NEXTCHAT_CUSTOM_MODELS', model],
+            ['NEXTCHAT_DEFAULT_MODEL', model]
+        ]);
+    }
+
+    return buildMarkdownSnippet('NextChat', [
+        ['API Key', resolvedApiKey],
+        ['Base URL', baseUrl],
+        ['Custom Models', model],
+        ['Default Model', model]
+    ]);
 }
 
-function buildClineSnippet(providerName, baseUrl, apiKey, model) {
-    return [
-        '[Cline]',
-        'API Provider: OpenAI Compatible',
-        `Profile Name: AIClient2API (${providerName})`,
-        `Base URL: ${baseUrl}`,
-        `API Key: ${apiKey || 'YOUR_API_KEY'}`,
-        `Model ID: ${model}`
-    ].join('\n');
+function buildClineSnippet(providerName, baseUrl, apiKey, model, format) {
+    const resolvedApiKey = apiKey || 'YOUR_API_KEY';
+
+    if (format === 'json') {
+        return toPrettyJson({
+            client: 'Cline',
+            apiProvider: 'OpenAI Compatible',
+            profileName: `AIClient2API (${providerName})`,
+            baseUrl,
+            apiKey: resolvedApiKey,
+            modelId: model
+        });
+    }
+
+    if (format === 'env') {
+        return buildEnvSnippet([
+            ['CLINE_API_PROVIDER', 'OpenAI Compatible'],
+            ['CLINE_PROFILE_NAME', `AIClient2API (${providerName})`],
+            ['CLINE_BASE_URL', baseUrl],
+            ['CLINE_API_KEY', resolvedApiKey],
+            ['CLINE_MODEL_ID', model]
+        ]);
+    }
+
+    return buildMarkdownSnippet('Cline', [
+        ['API Provider', 'OpenAI Compatible'],
+        ['Profile Name', `AIClient2API (${providerName})`],
+        ['Base URL', baseUrl],
+        ['API Key', resolvedApiKey],
+        ['Model ID', model]
+    ]);
 }
 
 function renderClientSnippets(data, configMap) {
@@ -295,6 +392,7 @@ function renderClientSnippets(data, configMap) {
     }
 
     const providerId = select.value;
+    const format = getSelectedSnippetFormat();
     const provider = data.providers.find(item => item.id === providerId) || data.providers[0];
     if (!provider) {
         cherryNode.textContent = t('access.empty.providers');
@@ -310,9 +408,9 @@ function renderClientSnippets(data, configMap) {
     const model = getRecommendedModel(provider.id);
     const apiKey = data.apiKey || '';
 
-    cherryNode.textContent = buildCherryStudioSnippet(providerName, baseUrl, apiKey, model);
-    nextChatNode.textContent = buildNextChatSnippet(baseUrl, apiKey, model);
-    clineNode.textContent = buildClineSnippet(providerName, baseUrl, apiKey, model);
+    cherryNode.textContent = buildCherryStudioSnippet(providerName, baseUrl, apiKey, model, format);
+    nextChatNode.textContent = buildNextChatSnippet(baseUrl, apiKey, model, format);
+    clineNode.textContent = buildClineSnippet(providerName, baseUrl, apiKey, model, format);
 }
 
 async function copyFromButton(button) {
@@ -330,10 +428,21 @@ async function copyFromButton(button) {
     }
 }
 
+function navigateToSection(sectionId) {
+    const navItem = document.querySelector(`.nav-item[data-section="${sectionId}"]`);
+    if (navItem) {
+        navItem.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        return;
+    }
+
+    window.location.hash = `#${sectionId}`;
+}
+
 function renderAccessPage(data) {
     const configMap = buildProviderConfigMap(data.supportedProviders || []);
     const visibleProviders = getVisibleProviders(data.providers || []);
 
+    setSelectedSnippetFormat(getSelectedSnippetFormat());
     updateStats(data);
     updateFields(data);
     renderDefaultProviders(data.defaultProviders || [], configMap);
@@ -442,6 +551,22 @@ export function initAccessManager() {
 
     if (!document.body.dataset.accessCopyBound) {
         document.body.addEventListener('click', async event => {
+            const jumpButton = event.target.closest('.access-jump-btn');
+            if (jumpButton) {
+                navigateToSection(jumpButton.dataset.section);
+                return;
+            }
+
+            const formatButton = event.target.closest('.access-format-btn');
+            if (formatButton) {
+                setSelectedSnippetFormat(formatButton.dataset.format);
+                if (latestAccessData) {
+                    const configMap = buildProviderConfigMap(latestAccessData.supportedProviders || []);
+                    renderClientSnippets(latestAccessData, configMap);
+                }
+                return;
+            }
+
             const endpointButton = event.target.closest('.access-copy-btn');
             if (endpointButton) {
                 await copyFromButton(endpointButton);
