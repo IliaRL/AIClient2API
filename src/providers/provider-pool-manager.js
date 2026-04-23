@@ -488,20 +488,22 @@ export class ProviderPoolManager {
                     refreshOperation = serviceAdapter.refreshToken();
                 }
                 const refreshResult = await this._awaitRefreshWithTimeout(refreshOperation, providerType, providerStatus.uuid);
-                
-                // 处理返回 false 的情况（部分适配器可能不抛出异常而是返回 false）
-                if (refreshResult === false) {
-                    throw new Error('Refresh operation returned false');
-                }
 
                 const duration = Date.now() - startTime;
-                this._log('info', `Token refresh successful for node ${providerStatus.uuid} (Duration: ${duration}ms)`);
                 
-                // 刷新成功，统一重置状态
+                // 只有在真正执行了刷新操作时，才更新 lastRefreshTime
+                // 这可以防止 heartbeat 的 no-op 刷新误更新时间，导致后续真正的刷新被 markProviderNeedRefresh 拦截（30秒保护）
+                if (refreshResult === true) {
+                    this._log('info', `Token refresh successful for node ${providerStatus.uuid} (Duration: ${duration}ms)`);
+                    config.lastRefreshTime = Date.now(); // 记录最后实际刷新成功时间
+                } else {
+                    this._log('info', `Token refresh no-op for node ${providerStatus.uuid} (Already valid)`);
+                }
+                
+                // 刷新流程结束（无论是否真正刷新），重置状态
                 config.needsRefresh = false;
                 config.refreshCount = 0;
-                config.errorCount = 0; // 刷新成功也重置错误计数
-                config.lastRefreshTime = Date.now(); // 记录最后刷新成功时间
+                config.errorCount = 0; // 成功/无操作也重置错误计数
                 
                 this._debouncedSave(providerType);
             } else {

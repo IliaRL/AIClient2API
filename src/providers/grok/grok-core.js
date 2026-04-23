@@ -339,6 +339,7 @@ export class GrokApiService {
             if (poolManager && this.uuid) {
                 poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM, this.uuid);
             }
+            return true;
         } catch (error) {
             logger.error('[Grok] Failed to initialize authentication:', error);
             throw new Error(`Failed to refreshToken.`);
