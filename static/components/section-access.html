@@ -1,0 +1,120 @@
+<link rel="stylesheet" href="components/section-access.css">
+<section id="access" class="section" aria-labelledby="access-title">
+    <div class="access-header">
+        <div>
+            <h2 id="access-title" data-i18n="access.title">快速接入</h2>
+            <p class="access-subtitle" data-i18n="access.subtitle">把对外分发 Key、基础地址和供应商路由集中到一个页面里，方便直接复制给客户端。</p>
+        </div>
+        <button id="refreshAccessInfo" class="btn btn-outline btn-sm" type="button">
+            <i class="fas fa-sync-alt"></i>
+            <span data-i18n="common.refresh">刷新</span>
+        </button>
+    </div>
+
+    <div class="stats-grid access-stats">
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-key"></i></div>
+            <div class="stat-info">
+                <h3 id="accessApiKeyStatus">--</h3>
+                <p data-i18n="access.stats.key">对外 Key</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-layer-group"></i></div>
+            <div class="stat-info">
+                <h3 id="accessDefaultProvidersCount">0</h3>
+                <p data-i18n="access.stats.defaultProviders">默认供应商</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
+            <div class="stat-info">
+                <h3 id="accessProviderGroupsCount">0</h3>
+                <p data-i18n="access.stats.providerGroups">供应商分组</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-server"></i></div>
+            <div class="stat-info">
+                <h3 id="accessTotalNodesCount">0</h3>
+                <p data-i18n="access.stats.totalNodes">节点总数</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="access-grid">
+        <section class="access-panel">
+            <div class="access-panel-header">
+                <h3><i class="fas fa-plug"></i> <span data-i18n="access.connection.title">接入信息</span></h3>
+            </div>
+
+            <div class="access-field-group">
+                <label for="accessApiKeyField" data-i18n="access.connection.apiKey">当前对外分发 Key</label>
+                <div class="access-copy-row">
+                    <div class="password-input-wrapper">
+                        <div class="input-with-toggle">
+                            <input type="password" id="accessApiKeyField" class="form-control" readonly>
+                            <button type="button" class="password-toggle" id="toggleAccessApiKey" aria-label="显示/隐藏密码">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="copyAccessApiKey">
+                        <i class="fas fa-copy"></i>
+                        <span data-i18n="access.actions.copyKey">复制 Key</span>
+                    </button>
+                </div>
+                <small class="form-text" data-i18n="access.connection.apiKeyHelp">这是客户端调用 `/v1/chat/completions` 或 `/v1/messages` 时要带的认证 Key。</small>
+            </div>
+
+            <div class="access-field-group">
+                <label for="accessBaseUrlField" data-i18n="access.connection.baseUrl">当前管理台访问地址</label>
+                <div class="access-copy-row">
+                    <input type="text" id="accessBaseUrlField" class="form-control" readonly>
+                    <button type="button" class="btn btn-secondary btn-sm" id="copyAccessBaseUrl">
+                        <i class="fas fa-copy"></i>
+                        <span data-i18n="access.actions.copyBaseUrl">复制地址</span>
+                    </button>
+                </div>
+                <small class="form-text" data-i18n="access.connection.baseUrlHelp">通常把这个地址加上供应商路径后，直接发给客户端即可。</small>
+            </div>
+
+            <div class="access-field-group">
+                <label data-i18n="access.connection.defaultProviders">当前默认供应商</label>
+                <div id="accessDefaultProviders" class="access-chip-list"></div>
+            </div>
+        </section>
+
+        <section class="access-panel">
+            <div class="access-panel-header">
+                <h3><i class="fas fa-route"></i> <span data-i18n="access.quickStart.title">快速说明</span></h3>
+            </div>
+            <div class="access-hint-list">
+                <div class="access-hint-card">
+                    <strong data-i18n="access.quickStart.step1Title">1. 先复制 Key</strong>
+                    <p data-i18n="access.quickStart.step1Desc">把上面的对外 Key 发给客户端，客户端请求头里带 `Authorization: Bearer KEY`。</p>
+                </div>
+                <div class="access-hint-card">
+                    <strong data-i18n="access.quickStart.step2Title">2. 再选供应商路由</strong>
+                    <p data-i18n="access.quickStart.step2Desc">不同供应商对应不同路径，例如 `openai-codex-oauth`、`gemini-cli-oauth`。</p>
+                </div>
+                <div class="access-hint-card">
+                    <strong data-i18n="access.quickStart.step3Title">3. 直接复制端点</strong>
+                    <p data-i18n="access.quickStart.step3Desc">下面每一行都给了 OpenAI / Claude 两种协议端点，点按钮即可复制。</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <section class="access-panel access-panel-full">
+        <div class="access-panel-header">
+            <h3><i class="fas fa-table"></i> <span data-i18n="access.providers.title">供应商与调用端点</span></h3>
+        </div>
+        <div id="accessProvidersTable" class="access-provider-list">
+            <div class="status-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span data-i18n="common.loading">加载中...</span>
+            </div>
+        </div>
+    </section>
+</section>

@@ -557,6 +557,10 @@ async function saveConfiguration() {
         
         await window.apiClient.post('/reload-config');
         showToast(t('common.success'), t('common.configSaved'), 'success');
+
+        if (window.loadAccessInfo) {
+            await window.loadAccessInfo();
+        }
         
         // 检查当前是否在提供商池管理页面，如果是则刷新数据
         const providersSection = document.getElementById('providers');

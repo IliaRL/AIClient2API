@@ -12,6 +12,7 @@ import * as systemApi from '../ui-modules/system-api.js';
 import * as updateApi from '../ui-modules/update-api.js';
 import * as oauthApi from '../ui-modules/oauth-api.js';
 import * as customModelsApi from '../ui-modules/custom-models-api.js';
+import * as accessApi from '../ui-modules/access-api.js';
 import * as eventBroadcast from '../ui-modules/event-broadcast.js';
 
 // Re-export from event-broadcast module
@@ -97,6 +98,11 @@ export async function handleUIApiRequests(method, pathParam, req, res, currentCo
     // Get configuration
     if (method === 'GET' && pathParam === '/api/config') {
         return await configApi.handleGetConfig(req, res, currentConfig);
+    }
+
+    // Get access overview information for the simplified connection page
+    if (method === 'GET' && pathParam === '/api/access-info') {
+        return await accessApi.handleGetAccessInfo(req, res, currentConfig, providerPoolManager);
     }
 
     // Update configuration

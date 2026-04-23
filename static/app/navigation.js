@@ -40,6 +40,10 @@ function initNavigation() {
 
             // 滚动到顶部
             scrollToTop();
+
+            if (sectionId === 'access' && typeof window.loadAccessInfo === 'function') {
+                window.loadAccessInfo();
+            }
         });
     });
 }
@@ -77,6 +81,10 @@ function switchToSection(sectionId) {
 
     // 滚动到顶部
     scrollToTop();
+
+    if (sectionId === 'access' && typeof window.loadAccessInfo === 'function') {
+        window.loadAccessInfo();
+    }
 }
 
 /**
