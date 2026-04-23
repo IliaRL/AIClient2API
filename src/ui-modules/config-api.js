@@ -11,6 +11,12 @@ import { broadcastEvent } from '../ui-modules/event-broadcast.js';
 import { HEALTH_CHECK, PASSWORD, NETWORK, RETRY } from '../utils/constants.js';
 import { withFileLock, atomicWriteFile } from '../utils/file-lock.js';
 
+function parseBooleanConfig(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') return value.toLowerCase() === 'true';
+    return Boolean(value);
+}
+
 /**
  * 重载配置文件
  */
@@ -75,6 +81,10 @@ export async function handleGetConfig(req, res, currentConfig) {
         REQUEST_MAX_RETRIES: currentConfig.REQUEST_MAX_RETRIES,
         REQUEST_BASE_DELAY: currentConfig.REQUEST_BASE_DELAY,
         CREDENTIAL_SWITCH_MAX_RETRIES: currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES,
+        RATE_LIMIT_COOLDOWN_ENABLED: currentConfig.RATE_LIMIT_COOLDOWN_ENABLED,
+        RATE_LIMIT_COOLDOWN_MS: currentConfig.RATE_LIMIT_COOLDOWN_MS,
+        RATE_LIMIT_COOLDOWN_JITTER_MS: currentConfig.RATE_LIMIT_COOLDOWN_JITTER_MS,
+        RATE_LIMIT_COOLDOWN_MAX_MS: currentConfig.RATE_LIMIT_COOLDOWN_MAX_MS,
         CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
         CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
         LOGIN_EXPIRY: currentConfig.LOGIN_EXPIRY,
@@ -180,6 +190,19 @@ async function _handleUpdateConfig(req, res, currentConfig, body) {
         }
         if (newConfig.REQUEST_BASE_DELAY !== undefined) currentConfig.REQUEST_BASE_DELAY = newConfig.REQUEST_BASE_DELAY;
         if (newConfig.CREDENTIAL_SWITCH_MAX_RETRIES !== undefined) currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES = newConfig.CREDENTIAL_SWITCH_MAX_RETRIES;
+        if (newConfig.RATE_LIMIT_COOLDOWN_ENABLED !== undefined) currentConfig.RATE_LIMIT_COOLDOWN_ENABLED = parseBooleanConfig(newConfig.RATE_LIMIT_COOLDOWN_ENABLED);
+        if (newConfig.RATE_LIMIT_COOLDOWN_MS !== undefined) {
+            const v = Number(newConfig.RATE_LIMIT_COOLDOWN_MS);
+            if (Number.isInteger(v) && v >= 0) currentConfig.RATE_LIMIT_COOLDOWN_MS = v;
+        }
+        if (newConfig.RATE_LIMIT_COOLDOWN_JITTER_MS !== undefined) {
+            const v = Number(newConfig.RATE_LIMIT_COOLDOWN_JITTER_MS);
+            if (Number.isInteger(v) && v >= 0) currentConfig.RATE_LIMIT_COOLDOWN_JITTER_MS = v;
+        }
+        if (newConfig.RATE_LIMIT_COOLDOWN_MAX_MS !== undefined) {
+            const v = Number(newConfig.RATE_LIMIT_COOLDOWN_MAX_MS);
+            if (Number.isInteger(v) && v >= 0) currentConfig.RATE_LIMIT_COOLDOWN_MAX_MS = v;
+        }
         if (newConfig.CRON_NEAR_MINUTES !== undefined) currentConfig.CRON_NEAR_MINUTES = newConfig.CRON_NEAR_MINUTES;
         if (newConfig.CRON_REFRESH_TOKEN !== undefined) currentConfig.CRON_REFRESH_TOKEN = newConfig.CRON_REFRESH_TOKEN;
         if (newConfig.LOGIN_EXPIRY !== undefined) currentConfig.LOGIN_EXPIRY = newConfig.LOGIN_EXPIRY;
@@ -313,6 +336,10 @@ async function _handleUpdateConfig(req, res, currentConfig, body) {
                 REQUEST_MAX_RETRIES: currentConfig.REQUEST_MAX_RETRIES,
                 REQUEST_BASE_DELAY: currentConfig.REQUEST_BASE_DELAY,
                 CREDENTIAL_SWITCH_MAX_RETRIES: currentConfig.CREDENTIAL_SWITCH_MAX_RETRIES,
+                RATE_LIMIT_COOLDOWN_ENABLED: currentConfig.RATE_LIMIT_COOLDOWN_ENABLED,
+                RATE_LIMIT_COOLDOWN_MS: currentConfig.RATE_LIMIT_COOLDOWN_MS,
+                RATE_LIMIT_COOLDOWN_JITTER_MS: currentConfig.RATE_LIMIT_COOLDOWN_JITTER_MS,
+                RATE_LIMIT_COOLDOWN_MAX_MS: currentConfig.RATE_LIMIT_COOLDOWN_MAX_MS,
                 CRON_NEAR_MINUTES: currentConfig.CRON_NEAR_MINUTES,
                 CRON_REFRESH_TOKEN: currentConfig.CRON_REFRESH_TOKEN,
                 LOGIN_EXPIRY: currentConfig.LOGIN_EXPIRY,
