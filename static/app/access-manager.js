@@ -2,6 +2,22 @@ import { getProviderConfigs, copyToClipboard, showToast, escapeHtml } from './ut
 import { getAvailableRoutes } from './routing-examples.js';
 import { t } from './i18n.js';
 
+let latestAccessData = null;
+
+const recommendedModelMap = {
+    'gemini-cli-oauth': 'gemini-3-flash-preview',
+    'gemini-antigravity': 'gemini-3-flash-preview',
+    'claude-custom': 'claude-sonnet-4-6',
+    'claude-kiro-oauth': 'claude-sonnet-4-6',
+    'openai-custom': 'gpt-4o',
+    'openai-qwen-oauth': 'qwen3-coder-plus',
+    'openai-iflow': 'qwen3-max',
+    'openai-codex-oauth': 'gpt-5',
+    'grok-custom': 'grok-4.1-mini',
+    'openaiResponses-custom': 'gpt-4o',
+    'forward-api': 'gpt-4o'
+};
+
 function getElement(id) {
     return document.getElementById(id);
 }
@@ -39,6 +55,44 @@ function getFullEndpoint(path) {
     return `${getOriginBaseUrl()}${path}`;
 }
 
+function getClientBaseUrl(path) {
+    if (!path) {
+        return getOriginBaseUrl();
+    }
+
+    const normalizedPath = path
+        .replace(/\/v1\/chat\/completions$/, '/v1')
+        .replace(/\/v1\/messages$/, '/v1')
+        .replace(/\/v1\/responses$/, '/v1');
+
+    return `${getOriginBaseUrl()}${normalizedPath}`;
+}
+
+function getConfiguredProviders(providers) {
+    return providers.filter(provider => provider.totalNodes > 0);
+}
+
+function getVisibleProviders(providers) {
+    const configuredOnly = getElement('accessConfiguredOnly')?.checked !== false;
+    if (!configuredOnly) {
+        return providers;
+    }
+    return getConfiguredProviders(providers);
+}
+
+function getRecommendedModel(providerId) {
+    if (recommendedModelMap[providerId]) {
+        return recommendedModelMap[providerId];
+    }
+
+    const matchedBaseId = Object.keys(recommendedModelMap).find(baseId => providerId.startsWith(baseId + '-'));
+    if (matchedBaseId) {
+        return recommendedModelMap[matchedBaseId];
+    }
+
+    return 'gpt-4o';
+}
+
 function renderDefaultProviders(defaultProviders, configMap) {
     const container = getElement('accessDefaultProviders');
     if (!container) {
@@ -70,7 +124,11 @@ function renderProviderCards(providers, defaultProviders, configMap) {
     }
 
     if (!providers.length) {
-        container.innerHTML = `<div class="access-empty">${escapeHtml(t('access.empty.providers'))}</div>`;
+        const configuredOnly = getElement('accessConfiguredOnly')?.checked !== false;
+        const emptyText = configuredOnly
+            ? t('access.empty.providersConfiguredOnly')
+            : t('access.empty.providers');
+        container.innerHTML = `<div class="access-empty">${escapeHtml(emptyText)}</div>`;
         return;
     }
 
@@ -170,6 +228,93 @@ function updateFields(data) {
     }
 }
 
+function renderSnippetProviderOptions(data, configMap) {
+    const select = getElement('accessSnippetProvider');
+    if (!select) {
+        return;
+    }
+
+    const preferredProviders = getConfiguredProviders(data.providers);
+    const fallbackProviders = data.providers;
+    const optionsSource = preferredProviders.length > 0 ? preferredProviders : fallbackProviders;
+    const currentValue = select.value;
+    const preferredSelected = optionsSource.find(provider => provider.id === currentValue)
+        ? currentValue
+        : (data.defaultProviders.find(id => optionsSource.some(provider => provider.id === id)) || optionsSource[0]?.id || '');
+
+    select.innerHTML = optionsSource.map(provider => {
+        const config = configMap.get(provider.id);
+        const name = config?.name || provider.id;
+        return `<option value="${escapeHtml(provider.id)}">${escapeHtml(name)} (${escapeHtml(provider.id)})</option>`;
+    }).join('');
+
+    if (preferredSelected) {
+        select.value = preferredSelected;
+    }
+}
+
+function buildCherryStudioSnippet(providerName, baseUrl, apiKey, model) {
+    return [
+        '[Cherry Studio]',
+        'Provider: OpenAI Compatible',
+        `Name: AIClient2API (${providerName})`,
+        `Base URL: ${baseUrl}`,
+        `API Key: ${apiKey || t('access.empty.key')}`,
+        `Model: ${model}`
+    ].join('\n');
+}
+
+function buildNextChatSnippet(baseUrl, apiKey, model) {
+    return [
+        '# NextChat',
+        `OPENAI_API_KEY=${apiKey || 'YOUR_API_KEY'}`,
+        `OPENAI_BASE_URL=${baseUrl}`,
+        `CUSTOM_MODELS=${model}`
+    ].join('\n');
+}
+
+function buildClineSnippet(providerName, baseUrl, apiKey, model) {
+    return [
+        '[Cline]',
+        'API Provider: OpenAI Compatible',
+        `Profile Name: AIClient2API (${providerName})`,
+        `Base URL: ${baseUrl}`,
+        `API Key: ${apiKey || 'YOUR_API_KEY'}`,
+        `Model ID: ${model}`
+    ].join('\n');
+}
+
+function renderClientSnippets(data, configMap) {
+    const select = getElement('accessSnippetProvider');
+    const cherryNode = getElement('accessCherrySnippet');
+    const nextChatNode = getElement('accessNextChatSnippet');
+    const clineNode = getElement('accessClineSnippet');
+
+    if (!select || !cherryNode || !nextChatNode || !clineNode) {
+        return;
+    }
+
+    const providerId = select.value;
+    const provider = data.providers.find(item => item.id === providerId) || data.providers[0];
+    if (!provider) {
+        cherryNode.textContent = t('access.empty.providers');
+        nextChatNode.textContent = t('access.empty.providers');
+        clineNode.textContent = t('access.empty.providers');
+        return;
+    }
+
+    const config = configMap.get(provider.id);
+    const providerName = config?.name || provider.id;
+    const route = resolveRouteInfo(provider.id, providerName);
+    const baseUrl = getClientBaseUrl(route.paths?.openai || route.paths?.claude);
+    const model = getRecommendedModel(provider.id);
+    const apiKey = data.apiKey || '';
+
+    cherryNode.textContent = buildCherryStudioSnippet(providerName, baseUrl, apiKey, model);
+    nextChatNode.textContent = buildNextChatSnippet(baseUrl, apiKey, model);
+    clineNode.textContent = buildClineSnippet(providerName, baseUrl, apiKey, model);
+}
+
 async function copyFromButton(button) {
     const value = button.getAttribute('data-copy') || '';
     if (!value) {
@@ -185,6 +330,18 @@ async function copyFromButton(button) {
     }
 }
 
+function renderAccessPage(data) {
+    const configMap = buildProviderConfigMap(data.supportedProviders || []);
+    const visibleProviders = getVisibleProviders(data.providers || []);
+
+    updateStats(data);
+    updateFields(data);
+    renderDefaultProviders(data.defaultProviders || [], configMap);
+    renderSnippetProviderOptions(data, configMap);
+    renderClientSnippets(data, configMap);
+    renderProviderCards(visibleProviders, data.defaultProviders || [], configMap);
+}
+
 export async function loadAccessInfo() {
     const container = getElement('accessProvidersTable');
     if (container) {
@@ -197,13 +354,8 @@ export async function loadAccessInfo() {
     }
 
     try {
-        const data = await window.apiClient.get('/access-info');
-        const configMap = buildProviderConfigMap(data.supportedProviders || []);
-
-        updateStats(data);
-        updateFields(data);
-        renderDefaultProviders(data.defaultProviders || [], configMap);
-        renderProviderCards(data.providers || [], data.defaultProviders || [], configMap);
+        latestAccessData = await window.apiClient.get('/access-info');
+        renderAccessPage(latestAccessData);
     } catch (error) {
         console.error('Failed to load access info:', error);
         if (container) {
@@ -267,11 +419,49 @@ export function initAccessManager() {
         copyBaseUrlButton.dataset.bound = 'true';
     }
 
+    const configuredOnlyToggle = getElement('accessConfiguredOnly');
+    if (configuredOnlyToggle && !configuredOnlyToggle.dataset.bound) {
+        configuredOnlyToggle.addEventListener('change', () => {
+            if (latestAccessData) {
+                renderAccessPage(latestAccessData);
+            }
+        });
+        configuredOnlyToggle.dataset.bound = 'true';
+    }
+
+    const snippetProviderSelect = getElement('accessSnippetProvider');
+    if (snippetProviderSelect && !snippetProviderSelect.dataset.bound) {
+        snippetProviderSelect.addEventListener('change', () => {
+            if (latestAccessData) {
+                const configMap = buildProviderConfigMap(latestAccessData.supportedProviders || []);
+                renderClientSnippets(latestAccessData, configMap);
+            }
+        });
+        snippetProviderSelect.dataset.bound = 'true';
+    }
+
     if (!document.body.dataset.accessCopyBound) {
         document.body.addEventListener('click', async event => {
-            const button = event.target.closest('.access-copy-btn');
-            if (button) {
-                await copyFromButton(button);
+            const endpointButton = event.target.closest('.access-copy-btn');
+            if (endpointButton) {
+                await copyFromButton(endpointButton);
+                return;
+            }
+
+            const snippetButton = event.target.closest('.access-snippet-copy-btn');
+            if (snippetButton) {
+                const targetId = snippetButton.getAttribute('data-target');
+                const text = getElement(targetId)?.textContent || '';
+                if (!text) {
+                    showToast(t('common.error'), t('access.copy.missing'), 'error');
+                    return;
+                }
+                const copied = await copyToClipboard(text);
+                if (copied) {
+                    showToast(t('common.success'), t('common.copy.success'), 'success');
+                } else {
+                    showToast(t('common.error'), t('common.copy.failed'), 'error');
+                }
             }
         });
         document.body.dataset.accessCopyBound = 'true';

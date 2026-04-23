@@ -72,6 +72,70 @@
     gap: 0.75rem;
 }
 
+.access-snippet-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.access-snippet-provider {
+    min-width: min(420px, 100%);
+}
+
+.access-snippet-provider label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.access-snippet-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.access-snippet-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    background: var(--bg-secondary);
+    padding: 1rem;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.access-snippet-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.access-snippet-head h4 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.access-snippet-card pre {
+    margin: 0;
+    padding: 1rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow-x: auto;
+    min-height: 210px;
+}
+
+.access-snippet-card code {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+    font-size: 0.85rem;
+    display: block;
+}
+
 .access-chip {
     display: inline-flex;
     align-items: center;
@@ -163,6 +227,21 @@
     gap: 0.5rem;
 }
 
+.access-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.access-filter-toggle input {
+    width: 16px;
+    height: 16px;
+}
+
 .access-badge {
     display: inline-flex;
     align-items: center;
@@ -242,12 +321,18 @@
     .access-grid {
         grid-template-columns: 1fr;
     }
+
+    .access-snippet-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 768px) {
     .access-header,
     .access-provider-head,
-    .access-copy-row {
+    .access-copy-row,
+    .access-snippet-toolbar,
+    .access-snippet-head {
         flex-direction: column;
         align-items: stretch;
     }
@@ -262,5 +347,11 @@
 
     .access-endpoint-row {
         grid-template-columns: 1fr;
+    }
+
+    .access-panel-header {
+        align-items: stretch;
+        gap: 0.75rem;
+        flex-direction: column;
     }
 }

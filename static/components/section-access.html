@@ -108,7 +108,55 @@
 
     <section class="access-panel access-panel-full">
         <div class="access-panel-header">
+            <h3><i class="fas fa-window-restore"></i> <span data-i18n="access.snippets.title">客户端配置片段</span></h3>
+        </div>
+        <div class="access-snippet-toolbar">
+            <div class="access-snippet-provider">
+                <label for="accessSnippetProvider" data-i18n="access.snippets.provider">用于生成片段的供应商</label>
+                <select id="accessSnippetProvider" class="form-control"></select>
+            </div>
+        </div>
+        <div class="access-snippet-grid">
+            <article class="access-snippet-card">
+                <div class="access-snippet-head">
+                    <h4><i class="fas fa-gem"></i> Cherry Studio</h4>
+                    <button type="button" class="btn btn-secondary btn-sm access-snippet-copy-btn" data-target="accessCherrySnippet">
+                        <i class="fas fa-copy"></i>
+                        <span data-i18n="access.actions.copySnippet">复制片段</span>
+                    </button>
+                </div>
+                <pre><code id="accessCherrySnippet"></code></pre>
+            </article>
+            <article class="access-snippet-card">
+                <div class="access-snippet-head">
+                    <h4><i class="fas fa-comment-alt"></i> NextChat</h4>
+                    <button type="button" class="btn btn-secondary btn-sm access-snippet-copy-btn" data-target="accessNextChatSnippet">
+                        <i class="fas fa-copy"></i>
+                        <span data-i18n="access.actions.copySnippet">复制片段</span>
+                    </button>
+                </div>
+                <pre><code id="accessNextChatSnippet"></code></pre>
+            </article>
+            <article class="access-snippet-card">
+                <div class="access-snippet-head">
+                    <h4><i class="fas fa-terminal"></i> Cline</h4>
+                    <button type="button" class="btn btn-secondary btn-sm access-snippet-copy-btn" data-target="accessClineSnippet">
+                        <i class="fas fa-copy"></i>
+                        <span data-i18n="access.actions.copySnippet">复制片段</span>
+                    </button>
+                </div>
+                <pre><code id="accessClineSnippet"></code></pre>
+            </article>
+        </div>
+    </section>
+
+    <section class="access-panel access-panel-full">
+        <div class="access-panel-header">
             <h3><i class="fas fa-table"></i> <span data-i18n="access.providers.title">供应商与调用端点</span></h3>
+            <label class="access-filter-toggle" for="accessConfiguredOnly">
+                <input type="checkbox" id="accessConfiguredOnly" checked>
+                <span data-i18n="access.providers.configuredOnly">只显示已配置供应商</span>
+            </label>
         </div>
         <div id="accessProvidersTable" class="access-provider-list">
             <div class="status-loading">
