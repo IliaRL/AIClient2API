@@ -138,7 +138,10 @@ function getRetryAfterMs(error, now = Date.now()) {
     const explicitDelay = parseDurationMs(error?.retryAfterMs);
     if (explicitDelay !== null) return explicitDelay;
 
-    const retryAfterDelay = parseRetryAfterMs(error?.retryAfter ?? error?.response?.data?.retryAfter ?? error?.response?.data?.retry_after, now);
+    const internalRetryAfterDelay = parseDurationMs(error?.retryAfter);
+    if (internalRetryAfterDelay !== null) return internalRetryAfterDelay;
+
+    const retryAfterDelay = parseRetryAfterMs(error?.response?.data?.retryAfter ?? error?.response?.data?.retry_after, now);
     if (retryAfterDelay !== null) return retryAfterDelay;
 
     return getRetryDelayFromBody(error?.response?.data);

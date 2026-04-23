@@ -266,7 +266,7 @@ async function loadConfiguration() {
         const credentialSwitchMaxRetriesEl = document.getElementById('credentialSwitchMaxRetries');
         if (credentialSwitchMaxRetriesEl) credentialSwitchMaxRetriesEl.value = data.CREDENTIAL_SWITCH_MAX_RETRIES || 5;
         if (rateLimitCooldownEnabledEl) rateLimitCooldownEnabledEl.checked = data.RATE_LIMIT_COOLDOWN_ENABLED || false;
-        if (rateLimitCooldownMsEl) rateLimitCooldownMsEl.value = data.RATE_LIMIT_COOLDOWN_MS || 30000;
+        if (rateLimitCooldownMsEl) rateLimitCooldownMsEl.value = data.RATE_LIMIT_COOLDOWN_MS ?? 30000;
         
         if (cronNearMinutesEl) cronNearMinutesEl.value = data.CRON_NEAR_MINUTES || 1;
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;

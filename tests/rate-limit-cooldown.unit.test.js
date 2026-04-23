@@ -53,6 +53,21 @@ describe('rate-limit cooldown helper', () => {
         expect(recoveryTime.toISOString()).toBe('2026-04-22T00:00:10.000Z');
     });
 
+    test('treats internal error.retryAfter values as milliseconds', () => {
+        const recoveryTime = getRateLimitCooldownRecoveryTime(
+            { response: { status: 429 }, retryAfter: 60000 },
+            {
+                RATE_LIMIT_COOLDOWN_ENABLED: true,
+                RATE_LIMIT_COOLDOWN_MS: 30000,
+                RATE_LIMIT_COOLDOWN_JITTER_MS: 0,
+                RATE_LIMIT_COOLDOWN_MAX_MS: 300000
+            },
+            NOW
+        );
+
+        expect(recoveryTime.toISOString()).toBe('2026-04-22T00:01:00.000Z');
+    });
+
     test('caps excessive Retry-After values', () => {
         const recoveryTime = getRateLimitCooldownRecoveryTime(
             { response: { status: 429, headers: { 'retry-after': '9999' } } },
