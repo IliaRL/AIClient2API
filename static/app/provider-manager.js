@@ -18,6 +18,91 @@ let initialUptime = null;
 let initialLoadTime = null;
 let isStaticProviderConfigsUpdated = false;
 let cachedSupportedProviders = null;
+let latestProvidersAccessInfo = null;
+
+function navigateToSection(sectionId) {
+    const navItem = document.querySelector(`.nav-item[data-section="${sectionId}"]`);
+    if (navItem) {
+        navItem.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        return;
+    }
+
+    window.location.hash = `#${sectionId}`;
+}
+
+function initProvidersPageHelpers() {
+    const openAccessBtn = document.getElementById('providersOpenQuickAccess');
+    if (openAccessBtn && !openAccessBtn.dataset.bound) {
+        openAccessBtn.addEventListener('click', () => navigateToSection('access'));
+        openAccessBtn.dataset.bound = 'true';
+    }
+
+    const openConfigBtn = document.getElementById('providersOpenConfig');
+    if (openConfigBtn && !openConfigBtn.dataset.bound) {
+        openConfigBtn.addEventListener('click', () => navigateToSection('config'));
+        openConfigBtn.dataset.bound = 'true';
+    }
+}
+
+function updateProvidersHandoffSummary(providers = {}, supportedProviders = []) {
+    const providerGroups = Object.values(providers).filter(group => Array.isArray(group) && group.length > 0);
+    const totalGroups = providerGroups.length;
+    const allNodes = providerGroups.flat();
+    const totalNodes = allNodes.length;
+    const healthyNodes = allNodes.filter(node => node.isHealthy && !node.isDisabled).length;
+
+    const groupsEl = document.getElementById('providersHandoffGroups');
+    const healthyEl = document.getElementById('providersHandoffHealthyNodes');
+    const defaultsEl = document.getElementById('providersHandoffDefaults');
+    const nextStepEl = document.getElementById('providersHandoffNextStep');
+
+    if (groupsEl) {
+        groupsEl.textContent = totalGroups > 0
+            ? t('providers.handoff.groupsReady', { count: totalGroups })
+            : t('providers.handoff.groupsMissing');
+    }
+
+    if (healthyEl) {
+        healthyEl.textContent = totalNodes > 0
+            ? t('providers.handoff.healthyReady', { healthy: healthyNodes, total: totalNodes })
+            : t('providers.handoff.healthyMissing');
+    }
+
+    const providerConfigs = getProviderConfigs(supportedProviders);
+    const configMap = providerConfigs.reduce((map, config) => {
+        map[config.id] = config;
+        return map;
+    }, {});
+    const defaultProviders = latestProvidersAccessInfo?.defaultProviders || [];
+    const defaultProviderNames = defaultProviders.map(id => configMap[id]?.name || id);
+
+    if (defaultsEl) {
+        defaultsEl.textContent = defaultProviderNames.length > 0
+            ? defaultProviderNames.join(' / ')
+            : t('providers.handoff.defaultsMissing');
+    }
+
+    if (nextStepEl) {
+        if (totalNodes === 0) {
+            nextStepEl.textContent = t('providers.handoff.nextStepAddNodes');
+        } else if (defaultProviderNames.length === 0) {
+            nextStepEl.textContent = t('providers.handoff.nextStepConfig');
+        } else {
+            nextStepEl.textContent = t('providers.handoff.nextStepAccess');
+        }
+    }
+}
+
+async function refreshProvidersHandoffSummary(providers = {}, supportedProviders = []) {
+    try {
+        latestProvidersAccessInfo = await window.apiClient.get('/access-info');
+    } catch (error) {
+        console.warn('Failed to load provider handoff summary:', error);
+        latestProvidersAccessInfo = null;
+    }
+
+    updateProvidersHandoffSummary(providers, supportedProviders);
+}
 
 /**
  * 加载系统信息
@@ -183,6 +268,7 @@ function updateTimeDisplay() {
  */
 async function loadProviders(forceRefreshSupported = false) {
     try {
+        initProvidersPageHelpers();
         // 获取合并后的数据（包括 providers 和 supportedProviders）
         const data = await window.apiClient.get('/providers');
         if (!data || !data.providers) return;
@@ -213,6 +299,7 @@ async function loadProviders(forceRefreshSupported = false) {
         }
 
         renderProviders(providers, cachedSupportedProviders);
+        await refreshProvidersHandoffSummary(providers, cachedSupportedProviders);
     } catch (error) {
         console.error('Failed to load providers:', error);
     }
