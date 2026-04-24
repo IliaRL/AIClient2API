@@ -19,16 +19,12 @@ function initNavigation() {
     });
 
     window.addEventListener('hashchange', () => {
-        const sectionId = window.location.hash.slice(1);
-        if (sectionId) {
-            activateSection(sectionId, { updateHash: false });
-        }
+        const sectionId = window.location.hash.slice(1) || 'dashboard';
+        activateSection(sectionId, { updateHash: false });
     });
 
-    const initialSectionId = window.location.hash.slice(1);
-    if (initialSectionId) {
-        activateSection(initialSectionId, { updateHash: false });
-    }
+    const initialSectionId = window.location.hash.slice(1) || 'dashboard';
+    activateSection(initialSectionId, { updateHash: false });
 }
 
 /**
@@ -73,11 +69,14 @@ function activateSection(sectionId, options = {}) {
     // 滚动到顶部
     scrollToTop();
 
-    if (updateHash && window.location.hash !== `#${sectionId}`) {
+    const hashWillChange = updateHash && window.location.hash !== `#${sectionId}`;
+    if (hashWillChange) {
         window.location.hash = sectionId;
     }
 
-    if (sectionId === 'access' && typeof window.loadAccessInfo === 'function') {
+    // 只有在哈希不改变时（例如初始加载、hashchange 事件触发、或点击当前已激活的项）才调用 loadAccessInfo
+    // 这样可以防止在 hashchange 触发时产生重复请求
+    if (sectionId === 'access' && !hashWillChange && typeof window.loadAccessInfo === 'function') {
         window.loadAccessInfo();
     }
 }

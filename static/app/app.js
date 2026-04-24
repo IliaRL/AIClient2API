@@ -131,7 +131,6 @@ function initApp() {
     initEventListeners();
     initEventStream();
     initFileUpload(); // 初始化文件上传功能
-    initRoutingExamples(); // 初始化路径路由示例功能
     initAccessManager(); // 初始化快速接入页面
     initUploadConfigManager(); // 初始化配置管理功能
     initUsageManager(); // 初始化用量管理功能

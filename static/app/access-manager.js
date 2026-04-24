@@ -1,5 +1,5 @@
 import { getProviderConfigs, copyToClipboard, showToast, escapeHtml } from './utils.js';
-import { getAvailableRoutes } from './routing-examples.js';
+import { getAvailableRoutes, copyCurlExample } from './routing-examples.js';
 import { t } from './i18n.js';
 
 let latestAccessData = null;
@@ -116,8 +116,8 @@ function toPrettyJson(value) {
 
 function buildMarkdownSnippet(title, entries) {
     return [
-        `# ${title}`,
-        ...entries.map(([label, value]) => `- ${label}: ${value}`)
+        `# ${t(title)}`,
+        ...entries.map(([label, value]) => `- ${t(label)}: ${t(value)}`)
     ].join('\n');
 }
 
@@ -179,6 +179,9 @@ function renderProviderCards(providers, defaultProviders, configMap) {
         const defaultBadge = isDefault
             ? `<span class="access-badge default"><i class="fas fa-thumbtack"></i>${escapeHtml(t('access.badges.default'))}</span>`
             : '';
+        const routeBadge = route.badge 
+            ? `<span class="access-badge ${route.badgeClass}">${escapeHtml(t(route.badge))}</span>` 
+            : '';
 
         return `
             <article class="access-provider-card ${emptyClass}">
@@ -191,6 +194,7 @@ function renderProviderCards(providers, defaultProviders, configMap) {
                         </div>
                     </div>
                     <div class="access-provider-badges">
+                        ${routeBadge}
                         ${defaultBadge}
                         ${emptyBadge}
                     </div>
@@ -213,18 +217,40 @@ function renderProviderCards(providers, defaultProviders, configMap) {
                     <div class="access-endpoint-row">
                         <strong>${escapeHtml(t('access.providers.openaiEndpoint'))}</strong>
                         <code>${escapeHtml(openaiPath ? getFullEndpoint(openaiPath) : t('access.empty.endpoint'))}</code>
-                        <button type="button" class="btn btn-secondary btn-sm access-copy-btn" data-copy="${escapeHtml(openaiPath ? getFullEndpoint(openaiPath) : '')}">
-                            <i class="fas fa-copy"></i>
-                            <span>${escapeHtml(t('access.actions.copyEndpoint'))}</span>
-                        </button>
+                        <div class="access-endpoint-actions">
+                            <button type="button" class="btn btn-secondary btn-sm access-copy-btn" 
+                                    data-i18n-title="access.actions.copyEndpoint"
+                                    title="${escapeHtml(t('access.actions.copyEndpoint'))}"
+                                    data-copy="${escapeHtml(openaiPath ? getFullEndpoint(openaiPath) : '')}">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline btn-sm access-curl-btn" 
+                                    data-i18n-title="access.actions.copyCurl"
+                                    title="复制 curl 示例"
+                                    data-provider="${provider.id}"
+                                    data-protocol="openai">
+                                <i class="fas fa-terminal"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="access-endpoint-row">
                         <strong>${escapeHtml(t('access.providers.claudeEndpoint'))}</strong>
                         <code>${escapeHtml(claudePath ? getFullEndpoint(claudePath) : t('access.empty.endpoint'))}</code>
-                        <button type="button" class="btn btn-secondary btn-sm access-copy-btn" data-copy="${escapeHtml(claudePath ? getFullEndpoint(claudePath) : '')}">
-                            <i class="fas fa-copy"></i>
-                            <span>${escapeHtml(t('access.actions.copyEndpoint'))}</span>
-                        </button>
+                        <div class="access-endpoint-actions">
+                            <button type="button" class="btn btn-secondary btn-sm access-copy-btn" 
+                                    data-i18n-title="access.actions.copyEndpoint"
+                                    title="${escapeHtml(t('access.actions.copyEndpoint'))}"
+                                    data-copy="${escapeHtml(claudePath ? getFullEndpoint(claudePath) : '')}">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline btn-sm access-curl-btn" 
+                                    data-i18n-title="access.actions.copyCurl"
+                                    title="复制 curl 示例"
+                                    data-provider="${provider.id}"
+                                    data-protocol="claude">
+                                <i class="fas fa-terminal"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </article>
@@ -310,11 +336,11 @@ function buildCherryStudioSnippet(providerName, baseUrl, apiKey, model, format) 
     }
 
     return buildMarkdownSnippet('Cherry Studio', [
-        ['Provider Type', 'OpenAI Compatible'],
-        ['Display Name', `AIClient2API (${providerName})`],
-        ['Base URL', baseUrl],
-        ['API Key', resolvedApiKey],
-        ['Model', model]
+        ['API 提供商', 'OpenAI 兼容协议'],
+        ['显示名称', `AIClient2API (${providerName})`],
+        ['Base URL (基础地址)', baseUrl],
+        ['API Key (密钥)', resolvedApiKey],
+        ['模型 (Model)', model]
     ]);
 }
 
@@ -341,10 +367,10 @@ function buildNextChatSnippet(baseUrl, apiKey, model, format) {
     }
 
     return buildMarkdownSnippet('NextChat', [
-        ['API Key', resolvedApiKey],
-        ['Base URL', baseUrl],
-        ['Custom Models', model],
-        ['Default Model', model]
+        ['API Key (密钥)', resolvedApiKey],
+        ['Base URL (基础地址)', baseUrl],
+        ['自定义模型 (Custom Models)', model],
+        ['默认模型 (Default Model)', model]
     ]);
 }
 
@@ -373,11 +399,11 @@ function buildClineSnippet(providerName, baseUrl, apiKey, model, format) {
     }
 
     return buildMarkdownSnippet('Cline', [
-        ['API Provider', 'OpenAI Compatible'],
-        ['Profile Name', `AIClient2API (${providerName})`],
-        ['Base URL', baseUrl],
-        ['API Key', resolvedApiKey],
-        ['Model ID', model]
+        ['API 提供商', 'OpenAI 兼容协议'],
+        ['配置名称 (Profile Name)', `AIClient2API (${providerName})`],
+        ['Base URL (基础地址)', baseUrl],
+        ['API Key (密钥)', resolvedApiKey],
+        ['模型 ID', model]
     ]);
 }
 
@@ -570,6 +596,15 @@ export function initAccessManager() {
             const endpointButton = event.target.closest('.access-copy-btn');
             if (endpointButton) {
                 await copyFromButton(endpointButton);
+                return;
+            }
+
+            const curlButton = event.target.closest('.access-curl-btn');
+            if (curlButton) {
+                const provider = curlButton.dataset.provider;
+                const protocol = curlButton.dataset.protocol;
+                const model = getRecommendedModel(provider);
+                await copyCurlExample(provider, { protocol, model });
                 return;
             }
 
