@@ -722,7 +722,7 @@ body {
     padding: 8px 10px;
     position: relative;
     transition: all 0.2s ease;
-    cursor: pointer;
+    cursor: default;
     display: flex;
     flex-direction: column;
     gap: 4px;
