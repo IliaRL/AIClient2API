@@ -14,41 +14,36 @@ function initNavigation() {
     elements.navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
-            const sectionId = item.dataset.section;
-
-            // 更新导航状态
-            elements.navItems.forEach(nav => nav.classList.remove('active'));
-            item.classList.add('active');
-
-            // 显示对应章节
-            elements.sections.forEach(section => {
-                section.classList.remove('active');
-                if (section.id === sectionId) {
-                    section.classList.add('active');
-                    
-                    // 如果是日志页面，默认滚动到底部
-                    if (sectionId === 'logs') {
-                        setTimeout(() => {
-                            const logsContainer = document.getElementById('logsContainer');
-                            if (logsContainer) {
-                                logsContainer.scrollTop = logsContainer.scrollHeight;
-                            }
-                        }, 100);
-                    }
-                }
-            });
-
-            // 滚动到顶部
-            scrollToTop();
+            activateSection(item.dataset.section, { updateHash: true });
         });
     });
+
+    window.addEventListener('hashchange', () => {
+        const sectionId = window.location.hash.slice(1);
+        if (sectionId) {
+            activateSection(sectionId, { updateHash: false });
+        }
+    });
+
+    const initialSectionId = window.location.hash.slice(1);
+    if (initialSectionId) {
+        activateSection(initialSectionId, { updateHash: false });
+    }
 }
 
 /**
- * 切换到指定章节
+ * 激活指定章节
  * @param {string} sectionId - 章节ID
+ * @param {Object} options - 额外选项
  */
-function switchToSection(sectionId) {
+function activateSection(sectionId, options = {}) {
+    const { updateHash = false } = options;
+    const hasMatchingSection = Array.from(elements.sections).some(section => section.id === sectionId);
+
+    if (!hasMatchingSection) {
+        return;
+    }
+
     // 更新导航状态
     elements.navItems.forEach(nav => {
         nav.classList.remove('active');
@@ -77,6 +72,22 @@ function switchToSection(sectionId) {
 
     // 滚动到顶部
     scrollToTop();
+
+    if (updateHash && window.location.hash !== `#${sectionId}`) {
+        window.location.hash = sectionId;
+    }
+
+    if (sectionId === 'access' && typeof window.loadAccessInfo === 'function') {
+        window.loadAccessInfo();
+    }
+}
+
+/**
+ * 切换到指定章节
+ * @param {string} sectionId - 章节ID
+ */
+function switchToSection(sectionId) {
+    activateSection(sectionId, { updateHash: true });
 }
 
 /**

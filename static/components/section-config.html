@@ -2,6 +2,38 @@
 <!-- Configuration Section -->
 <section id="config" class="section" aria-labelledby="config-title">
     <h2 id="config-title" data-i18n="config.title">配置管理</h2>
+    <div class="config-handoff-panel">
+        <div class="config-handoff-head">
+            <div>
+                <h3 data-i18n="config.handoff.title">对外接入交付</h3>
+                <p class="config-handoff-subtitle" data-i18n="config.handoff.subtitle">先在这里把对外 Key 和默认供应商配好，再一键跳到“快速接入”页面复制给客户端。</p>
+            </div>
+            <div class="config-handoff-actions">
+                <button type="button" class="btn btn-outline" id="configOpenQuickAccess">
+                    <i class="fas fa-external-link-alt"></i>
+                    <span data-i18n="config.handoff.openAccess">打开快速接入</span>
+                </button>
+                <button type="button" class="btn btn-primary" id="configSaveAndAccess">
+                    <i class="fas fa-paper-plane"></i>
+                    <span data-i18n="config.handoff.saveAndAccess">保存并前往快速接入</span>
+                </button>
+            </div>
+        </div>
+        <div class="config-handoff-grid">
+            <div class="config-handoff-item">
+                <span class="config-handoff-label" data-i18n="config.handoff.key">对外 Key</span>
+                <strong id="configHandoffKeyStatus">--</strong>
+            </div>
+            <div class="config-handoff-item">
+                <span class="config-handoff-label" data-i18n="config.handoff.providers">默认供应商</span>
+                <strong id="configHandoffProviders">--</strong>
+            </div>
+            <div class="config-handoff-item">
+                <span class="config-handoff-label" data-i18n="config.handoff.nextStep">下一步</span>
+                <strong data-i18n="config.handoff.nextStepValue">去快速接入复制现成片段</strong>
+            </div>
+        </div>
+    </div>
     <div class="config-panel">
         <div class="config-form">
             <!-- 基础设置 -->

@@ -1,0 +1,437 @@
+.access-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.access-subtitle {
+    color: var(--text-secondary);
+    max-width: 68ch;
+    line-height: 1.6;
+}
+
+.access-stats {
+    margin-bottom: 1.5rem;
+}
+
+.access-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.access-panel {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    padding: 1.5rem;
+}
+
+.access-panel-full {
+    margin-top: 0;
+}
+
+.access-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.access-panel-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.access-panel-subtitle {
+    margin: 0 0 1rem;
+    color: var(--text-secondary);
+    max-width: 72ch;
+    line-height: 1.6;
+}
+
+.access-panel-note {
+    margin: 0.85rem 0 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+}
+
+.access-field-group {
+    margin-bottom: 1.25rem;
+}
+
+.access-field-group:last-child {
+    margin-bottom: 0;
+}
+
+.access-copy-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.access-copy-row .form-control,
+.access-copy-row .password-input-wrapper {
+    flex: 1;
+}
+
+.access-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.access-snippet-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.access-snippet-provider {
+    min-width: min(420px, 100%);
+}
+
+.access-snippet-provider label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.access-snippet-format {
+    display: grid;
+    gap: 0.5rem;
+    justify-items: end;
+}
+
+.access-snippet-format-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.access-segmented-control {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.access-format-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.access-format-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.access-format-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
+.access-snippet-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.access-snippet-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    background: var(--bg-secondary);
+    padding: 1rem;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.access-snippet-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.access-snippet-head h4 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.access-snippet-desc {
+    margin: 0.35rem 0 0;
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    line-height: 1.5;
+}
+
+.access-snippet-card pre {
+    margin: 0;
+    padding: 1rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow-x: auto;
+    min-height: 230px;
+}
+
+.access-snippet-card code {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.6;
+    font-size: 0.85rem;
+    display: block;
+}
+
+.access-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--primary-10);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-20);
+    border-radius: 999px;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.access-hint-list {
+    display: grid;
+    gap: 0.875rem;
+}
+
+.access-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.access-hint-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+}
+
+.access-hint-card strong {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+.access-hint-card p {
+    color: var(--text-secondary);
+    line-height: 1.55;
+    margin: 0;
+}
+
+.access-provider-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.access-provider-card {
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 1.25rem;
+    display: grid;
+    gap: 1rem;
+}
+
+.access-provider-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.access-provider-name {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.access-provider-name i {
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-lg);
+    background: var(--primary-10);
+    color: var(--primary-color);
+}
+
+.access-provider-name h4 {
+    margin: 0 0 0.2rem;
+    font-size: 1rem;
+}
+
+.access-provider-id {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.access-provider-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.access-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.access-filter-toggle input {
+    width: 16px;
+    height: 16px;
+}
+
+.access-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.access-badge.default {
+    background: rgba(5, 150, 105, 0.12);
+    color: #047857;
+}
+
+.access-badge.empty {
+    background: rgba(148, 163, 184, 0.14);
+    color: var(--text-secondary);
+}
+
+.access-provider-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.access-provider-stat {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 0.85rem;
+}
+
+.access-provider-stat span {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    margin-bottom: 0.3rem;
+}
+
+.access-provider-stat strong {
+    font-size: 1.25rem;
+}
+
+.access-endpoints {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.access-endpoint-row {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 0.85rem;
+}
+
+.access-endpoint-row code {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+.access-empty {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 2rem 1rem;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-xl);
+}
+
+@media (max-width: 1024px) {
+    .access-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .access-snippet-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .access-header,
+    .access-provider-head,
+    .access-copy-row,
+    .access-snippet-toolbar,
+    .access-snippet-head {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .access-provider-badges {
+        justify-content: flex-start;
+    }
+
+    .access-provider-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .access-endpoint-row {
+        grid-template-columns: 1fr;
+    }
+
+    .access-snippet-format,
+    .access-segmented-control {
+        justify-items: stretch;
+        justify-content: stretch;
+    }
+
+    .access-format-btn {
+        width: 100%;
+    }
+
+    .access-panel-header {
+        align-items: stretch;
+        gap: 0.75rem;
+        flex-direction: column;
+    }
+}

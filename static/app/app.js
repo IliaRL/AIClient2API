@@ -61,6 +61,11 @@ import {
 } from './routing-examples.js';
 
 import {
+    initAccessManager,
+    loadAccessInfo
+} from './access-manager.js';
+
+import {
     initUploadConfigManager,
     loadConfigList,
     viewConfig,
@@ -99,6 +104,7 @@ function loadInitialData() {
     loadSystemInfo();
     loadProviders();
     loadConfiguration();
+    loadAccessInfo();
     if (window.customModelsManager) {
         window.customModelsManager.load();
     }
@@ -126,6 +132,7 @@ function initApp() {
     initEventStream();
     initFileUpload(); // 初始化文件上传功能
     initRoutingExamples(); // 初始化路径路由示例功能
+    initAccessManager(); // 初始化快速接入页面
     initUploadConfigManager(); // 初始化配置管理功能
     initUsageManager(); // 初始化用量管理功能
     initImageZoom(); // 初始化图片放大功能
@@ -255,6 +262,7 @@ window.closeConfigModal = closeConfigModal;
 window.copyConfigContent = copyConfigContent;
 window.reloadConfig = reloadConfig;
 window.generateApiKey = generateApiKey;
+window.loadAccessInfo = loadAccessInfo;
 
 // 用量管理相关全局函数
 window.refreshUsage = refreshUsage;
