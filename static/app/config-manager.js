@@ -338,6 +338,8 @@ async function loadConfiguration() {
         const refreshConcurrencyPerProviderEl = document.getElementById('refreshConcurrencyPerProvider');
         const providerFallbackChainEl = document.getElementById('providerFallbackChain');
         const modelFallbackMappingEl = document.getElementById('modelFallbackMapping');
+        const rateLimitCooldownEnabledEl = document.getElementById('rateLimitCooldownEnabled');
+        const rateLimitCooldownMsEl = document.getElementById('rateLimitCooldownMs');
 
         if (systemPromptFilePathEl) systemPromptFilePathEl.value = data.SYSTEM_PROMPT_FILE_PATH || 'configs/input_system_prompt.txt';
         if (systemPromptModeEl) systemPromptModeEl.value = data.SYSTEM_PROMPT_MODE || 'append';
@@ -349,6 +351,8 @@ async function loadConfiguration() {
         // 坏凭证切换最大重试次数
         const credentialSwitchMaxRetriesEl = document.getElementById('credentialSwitchMaxRetries');
         if (credentialSwitchMaxRetriesEl) credentialSwitchMaxRetriesEl.value = data.CREDENTIAL_SWITCH_MAX_RETRIES || 5;
+        if (rateLimitCooldownEnabledEl) rateLimitCooldownEnabledEl.checked = data.RATE_LIMIT_COOLDOWN_ENABLED || false;
+        if (rateLimitCooldownMsEl) rateLimitCooldownMsEl.value = data.RATE_LIMIT_COOLDOWN_MS ?? 30000;
         
         if (cronNearMinutesEl) cronNearMinutesEl.value = data.CRON_NEAR_MINUTES || 1;
         if (cronRefreshTokenEl) cronRefreshTokenEl.checked = data.CRON_REFRESH_TOKEN || false;
@@ -540,6 +544,8 @@ async function saveConfiguration(options = {}) {
     config.REQUEST_MAX_RETRIES = parseInt(document.getElementById('requestMaxRetries')?.value || 3);
     config.REQUEST_BASE_DELAY = parseInt(document.getElementById('requestBaseDelay')?.value || 1000);
     config.CREDENTIAL_SWITCH_MAX_RETRIES = parseInt(document.getElementById('credentialSwitchMaxRetries')?.value || 5);
+    config.RATE_LIMIT_COOLDOWN_ENABLED = document.getElementById('rateLimitCooldownEnabled')?.checked || false;
+    config.RATE_LIMIT_COOLDOWN_MS = parseInt(document.getElementById('rateLimitCooldownMs')?.value || 30000);
     config.CRON_NEAR_MINUTES = parseInt(document.getElementById('cronNearMinutes')?.value || 1);
     config.CRON_REFRESH_TOKEN = document.getElementById('cronRefreshToken')?.checked || false;
     config.LOGIN_EXPIRY = parseInt(document.getElementById('loginExpiry')?.value || 3600);

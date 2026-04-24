@@ -599,6 +599,25 @@ input:checked + .toggle-slider:before {
     opacity: 0.5;
 }
 
+.config-inline-heading {
+    margin-bottom: 1rem;
+}
+
+.config-inline-heading span {
+    display: block;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.config-inline-heading small {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
 /* 响应式调整 */
 @media (max-width: 768px) {
     .form-row, .config-row {

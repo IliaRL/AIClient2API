@@ -57,6 +57,121 @@ export function isRetryableNetworkError(error) {
     );
 }
 
+function getErrorStatusCode(error) {
+    return error?.response?.status || error?.status || error?.statusCode || error?.code || null;
+}
+
+function getHeaderValue(headers, headerName) {
+    if (!headers) return null;
+
+    if (typeof headers.get === 'function') {
+        return headers.get(headerName) || headers.get(headerName.toLowerCase());
+    }
+
+    const lowerName = headerName.toLowerCase();
+    for (const [key, value] of Object.entries(headers)) {
+        if (key.toLowerCase() === lowerName) {
+            return Array.isArray(value) ? value[0] : value;
+        }
+    }
+
+    return null;
+}
+
+function parseRetryAfterMs(value, now = Date.now()) {
+    if (value === null || value === undefined) return null;
+
+    const rawValue = Array.isArray(value) ? value[0] : value;
+    const text = String(rawValue).trim();
+    if (!text) return null;
+
+    const seconds = Number(text);
+    if (Number.isFinite(seconds)) {
+        return Math.max(0, Math.round(seconds * 1000));
+    }
+
+    const dateMs = Date.parse(text);
+    if (!Number.isNaN(dateMs)) {
+        return Math.max(0, dateMs - now);
+    }
+
+    return null;
+}
+
+function parseDurationMs(value) {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.round(value));
+
+    const text = String(value).trim();
+    const match = text.match(/^([\d.]+)\s*(ms|s)?$/i);
+    if (!match) return null;
+
+    const amount = Number(match[1]);
+    if (!Number.isFinite(amount)) return null;
+
+    return Math.max(0, Math.round(match[2]?.toLowerCase() === 's' ? amount * 1000 : amount));
+}
+
+function getRetryDelayFromBody(errorBody) {
+    try {
+        const data = typeof errorBody === 'string' ? JSON.parse(errorBody) : errorBody;
+
+        const directDelay = parseDurationMs(data?.retryDelay ?? data?.retry_delay ?? data?.retryAfterMs);
+        if (directDelay !== null) return directDelay;
+
+        const details = data?.error?.details;
+        if (Array.isArray(details)) {
+            for (const detail of details) {
+                const retryDelay = parseDurationMs(detail?.retryDelay || detail?.metadata?.quotaResetDelay);
+                if (retryDelay !== null) return retryDelay;
+            }
+        }
+    } catch {}
+
+    return null;
+}
+
+function getRetryAfterMs(error, now = Date.now()) {
+    const headerDelay = parseRetryAfterMs(getHeaderValue(error?.response?.headers, 'retry-after'), now);
+    if (headerDelay !== null) return headerDelay;
+
+    const explicitDelay = parseDurationMs(error?.retryAfterMs);
+    if (explicitDelay !== null) return explicitDelay;
+
+    const internalRetryAfterDelay = parseDurationMs(error?.retryAfter);
+    if (internalRetryAfterDelay !== null) return internalRetryAfterDelay;
+
+    const retryAfterDelay = parseRetryAfterMs(error?.response?.data?.retryAfter ?? error?.response?.data?.retry_after, now);
+    if (retryAfterDelay !== null) return retryAfterDelay;
+
+    return getRetryDelayFromBody(error?.response?.data);
+}
+
+function getPositiveInteger(value, fallback) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : fallback;
+}
+
+/**
+ * Calculates a scheduled recovery time for optional 429 account cooldown.
+ * Returns null when cooldown is disabled or the error is not an HTTP 429.
+ */
+export function getRateLimitCooldownRecoveryTime(error, config = {}, now = Date.now()) {
+    if (!config?.RATE_LIMIT_COOLDOWN_ENABLED || Number(getErrorStatusCode(error)) !== 429) {
+        return null;
+    }
+
+    const defaultCooldownMs = getPositiveInteger(config.RATE_LIMIT_COOLDOWN_MS, 30000);
+    const maxCooldownMs = getPositiveInteger(config.RATE_LIMIT_COOLDOWN_MAX_MS, 300000);
+    const jitterMs = getPositiveInteger(config.RATE_LIMIT_COOLDOWN_JITTER_MS, 0);
+    const retryAfterMs = getRetryAfterMs(error, now);
+    const baseCooldownMs = retryAfterMs === null ? defaultCooldownMs : retryAfterMs;
+    const cappedCooldownMs = Math.min(baseCooldownMs, Math.max(defaultCooldownMs, maxCooldownMs));
+    const jitter = jitterMs > 0 ? Math.floor(Math.random() * (jitterMs + 1)) : 0;
+
+    return new Date(now + cappedCooldownMs + jitter);
+}
+
 // ==================== API 常量 ====================
 
 export const API_ACTIONS = {
@@ -676,7 +791,7 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         }
         
         // 获取状态码（用于日志记录，不再用于判断是否重试）
-        const status = error.response?.status;
+        const status = getErrorStatusCode(error);
         
         // 检查是否应该跳过错误计数（用于 429/5xx 等需要直接切换凭证的情况）
         const skipErrorCount = error.skipErrorCount === true;
@@ -685,6 +800,15 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         
         // 检查凭证是否已在底层被标记为不健康（避免重复标记）
         let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
+
+        const rateLimitRecoveryTime = getRateLimitCooldownRecoveryTime(error, CONFIG);
+        if (rateLimitRecoveryTime && providerPoolManager && pooluuid) {
+            logger.info(`[Provider Pool] Applying 429 cooldown for ${toProvider} (${pooluuid}) until ${rateLimitRecoveryTime.toISOString()}`);
+            providerPoolManager.markProviderUnhealthyWithRecoveryTime(toProvider, {
+                uuid: pooluuid
+            }, '429 Too Many Requests - short cooldown', rateLimitRecoveryTime);
+            credentialMarkedUnhealthy = true;
+        }
         
         // 如果底层未标记，且不跳过错误计数，则在此处标记
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
@@ -878,7 +1002,7 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         logger.error('\n[Server] Error during unary processing:', error.stack);
         
         // 获取状态码（用于日志记录，不再用于判断是否重试）
-        const status = error.response?.status;
+        const status = getErrorStatusCode(error);
         
         // 检查是否应该跳过错误计数（用于 429/5xx 等需要直接切换凭证的情况）
         const skipErrorCount = error.skipErrorCount === true;
@@ -887,6 +1011,15 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         
         // 检查凭证是否已在底层被标记为不健康（避免重复标记）
         let credentialMarkedUnhealthy = error.credentialMarkedUnhealthy === true;
+
+        const rateLimitRecoveryTime = getRateLimitCooldownRecoveryTime(error, CONFIG);
+        if (rateLimitRecoveryTime && providerPoolManager && pooluuid) {
+            logger.info(`[Provider Pool] Applying 429 cooldown for ${toProvider} (${pooluuid}) until ${rateLimitRecoveryTime.toISOString()}`);
+            providerPoolManager.markProviderUnhealthyWithRecoveryTime(toProvider, {
+                uuid: pooluuid
+            }, '429 Too Many Requests - short cooldown', rateLimitRecoveryTime);
+            credentialMarkedUnhealthy = true;
+        }
         
         // 如果底层未标记，且不跳过错误计数，则在此处标记
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {

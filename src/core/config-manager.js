@@ -84,6 +84,10 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         REQUEST_MAX_RETRIES: 3,
         REQUEST_BASE_DELAY: 1000,
         CREDENTIAL_SWITCH_MAX_RETRIES: 5, // 坏凭证切换最大重试次数（用于认证错误后切换凭证）
+        RATE_LIMIT_COOLDOWN_ENABLED: false, // 429 限流后是否短暂冷却账号
+        RATE_LIMIT_COOLDOWN_MS: 30000, // 429 限流默认冷却时间（毫秒）
+        RATE_LIMIT_COOLDOWN_JITTER_MS: 5000, // 429 限流冷却随机抖动（毫秒）
+        RATE_LIMIT_COOLDOWN_MAX_MS: 300000, // Retry-After 允许的最大冷却时间（毫秒）
         CRON_NEAR_MINUTES: 15,
         CRON_REFRESH_TOKEN: false,
         LOGIN_EXPIRY: 3600, // 登录过期时间（秒），默认1小时
@@ -142,6 +146,10 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         { flag: '--system-prompt-mode',   configKey: 'SYSTEM_PROMPT_MODE',     type: 'enum', validValues: ['overwrite', 'append'] },
         { flag: '--host',                 configKey: 'HOST',                   type: 'string' },
         { flag: '--prompt-log-base-name', configKey: 'PROMPT_LOG_BASE_NAME',   type: 'string' },
+        { flag: '--rate-limit-cooldown-enabled', configKey: 'RATE_LIMIT_COOLDOWN_ENABLED', type: 'bool' },
+        { flag: '--rate-limit-cooldown-ms', configKey: 'RATE_LIMIT_COOLDOWN_MS', type: 'int' },
+        { flag: '--rate-limit-cooldown-jitter-ms', configKey: 'RATE_LIMIT_COOLDOWN_JITTER_MS', type: 'int' },
+        { flag: '--rate-limit-cooldown-max-ms', configKey: 'RATE_LIMIT_COOLDOWN_MAX_MS', type: 'int' },
         { flag: '--cron-near-minutes',    configKey: 'CRON_NEAR_MINUTES',      type: 'int' },
         { flag: '--cron-refresh-token',   configKey: 'CRON_REFRESH_TOKEN',     type: 'bool' },
         { flag: '--provider-pools-file',  configKey: 'PROVIDER_POOLS_FILE_PATH', type: 'string' },
@@ -297,4 +305,3 @@ export async function getSystemPromptFileContent(filePath) {
 }
 
 export { ALL_MODEL_PROVIDERS };
-

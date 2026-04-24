@@ -623,6 +623,7 @@ kill -9 <PID>
 **解决方案**：
 - **配置账号池**：添加多个账号到 `provider_pools.json`，启用轮询机制
 - **配置 Fallback**：在 `config.json` 中配置 `providerFallbackChain`，实现跨类型降级
+- **启用 429 短冷却**：将 `RATE_LIMIT_COOLDOWN_ENABLED` 设为 `true`，并通过 `RATE_LIMIT_COOLDOWN_MS` 设置默认冷却时间，让被限流账号短暂退出账号池后自动恢复
 - **降低请求频率**：适当增加请求间隔，避免触发速率限制
 - **等待配额重置**：免费配额通常每日或每分钟重置
 

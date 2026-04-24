@@ -625,6 +625,7 @@ Or modify the port configuration in `configs/config.json` to use a different por
 **Solutions**:
 - **Configure Account Pool**: Add multiple accounts to `provider_pools.json`, enable polling mechanism
 - **Configure Fallback**: Configure `providerFallbackChain` in `config.json` for cross-type degradation
+- **Enable 429 Cooldown**: Set `RATE_LIMIT_COOLDOWN_ENABLED` to `true` and tune `RATE_LIMIT_COOLDOWN_MS` so rate-limited accounts temporarily leave the pool and recover automatically
 - **Reduce Request Frequency**: Appropriately increase request intervals to avoid triggering rate limits
 - **Wait for Quota Reset**: Free quotas usually reset daily or per minute
 
