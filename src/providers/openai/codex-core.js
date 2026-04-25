@@ -358,21 +358,36 @@ export class CodexApiService {
         const defaultServiceTier = isFastModel ? 'priority' : 'default';
         const defaultReasoningEffort = isFastModel ? 'xhigh' : 'medium';
 
+        // 图像生成模型：gpt-image-2 通过 image_generation 工具 + gpt-5.4 实现
+        const IMAGE_MODELS = ['gpt-image-2'];
+        const isImageModel = IMAGE_MODELS.includes(upstreamModel);
+        const effectiveUpstreamModel = isImageModel ? 'gpt-5.4' : upstreamModel;
+
         const cleanedBody = { ...requestBody };
         delete cleanedBody.metadata;
 
         // 【关键修复】确保传给上游的模型名称不带 -fast 后缀
         // 即使 originalRequestBody 中已经带了 model，这里也必须覆盖
-        cleanedBody.model = upstreamModel;
+        cleanedBody.model = effectiveUpstreamModel;
 
-        // 为所有 Codex 模型增加默认工具
-        if (!cleanedBody.tools) {
-            cleanedBody.tools = [];
-        }
-        if (Array.isArray(cleanedBody.tools)) {
-            const hasWebSearch = cleanedBody.tools.some(t => t.type === 'web_search');
-            if (!hasWebSearch) {
-                cleanedBody.tools.push({ type: 'web_search' });
+        if (isImageModel) {
+            // 图像模型：强制使用 image_generation 工具，不加 web_search
+            cleanedBody.tools = [{ type: 'image_generation' }];
+            // 服务器要求 instructions 非空
+            if (!cleanedBody.instructions?.trim()) {
+                cleanedBody.instructions = 'You are a helpful assistant.';
+            }
+            logger.info(`[Codex] Image model detected: ${upstreamModel} -> ${effectiveUpstreamModel} with image_generation tool`);
+        } else {
+            // 为普通 Codex 模型增加默认工具
+            if (!cleanedBody.tools) {
+                cleanedBody.tools = [];
+            }
+            if (Array.isArray(cleanedBody.tools)) {
+                const hasWebSearch = cleanedBody.tools.some(t => t.type === 'web_search');
+                if (!hasWebSearch) {
+                    cleanedBody.tools.push({ type: 'web_search' });
+                }
             }
         }
 
