@@ -611,6 +611,12 @@ export class CodexConverter extends BaseConverter {
                         }
                     });
                     break;
+                case 'image_generation_call':
+                    if (item.result) {
+                        const imgMd = `![generated image](data:image/${item.output_format || 'png'};base64,${item.result})`;
+                        contentText = contentText ? `${contentText}\n${imgMd}` : imgMd;
+                    }
+                    break;
             }
         }
 
@@ -749,6 +755,9 @@ export class CodexConverter extends BaseConverter {
                             args: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
                         }
                     });
+                } else if (item.type === 'image_generation_call' && item.result) {
+                    const imgMd = `![generated image](data:image/${item.output_format || 'png'};base64,${item.result})`;
+                    parts.push({ text: imgMd });
                 }
             }
         }
@@ -812,6 +821,9 @@ export class CodexConverter extends BaseConverter {
                         name: this.getOriginalToolName(item.name),
                         input: typeof item.arguments === 'string' ? JSON.parse(item.arguments) : item.arguments
                     });
+                } else if (item.type === 'image_generation_call' && item.result) {
+                    const imgMd = `![generated image](data:image/${item.output_format || 'png'};base64,${item.result})`;
+                    content.push({ type: "text", text: imgMd });
                 }
             }
         }
@@ -962,6 +974,22 @@ export class CodexConverter extends BaseConverter {
                 }]
             };
             return template;
+        }
+
+        if (type === 'response.output_item.done' && chunk.item?.type === 'image_generation_call') {
+            if (chunk.item.result) {
+                const template = buildTemplate();
+                const imgMd = `![generated image](data:image/${chunk.item.output_format || 'png'};base64,${chunk.item.result})`;
+                template.choices[0].delta = {
+                    role: 'assistant',
+                    content: state.isFirstChunk ? imgMd : imgMd,
+                    reasoning_content: null,
+                    tool_calls: null
+                };
+                state.isFirstChunk = false;
+                return template;
+            }
+            return null;
         }
 
         if (type === 'response.completed') {
@@ -1139,6 +1167,15 @@ export class CodexConverter extends BaseConverter {
             return template;
         }
 
+        if (type === 'response.output_item.done' && chunk.item?.type === 'image_generation_call') {
+            if (chunk.item.result) {
+                const imgMd = `![generated image](data:image/${chunk.item.output_format || 'png'};base64,${chunk.item.result})`;
+                template.candidates[0].content.parts.push({ text: imgMd });
+                return template;
+            }
+            return null;
+        }
+
         if (type === 'response.completed') {
             template.candidates[0].finishReason = "STOP";
             template.usageMetadata = {
@@ -1300,6 +1337,34 @@ export class CodexConverter extends BaseConverter {
             );
             state.blockIndex++;
             return events;
+        }
+
+        if (type === 'response.output_item.done' && chunk.item?.type === 'image_generation_call') {
+            if (chunk.item.result) {
+                const events = [];
+                if (state.blockStarted && state.currentBlockType !== 'text') {
+                    events.push({ type: "content_block_stop", index: state.blockIndex });
+                    state.blockIndex++;
+                    state.blockStarted = false;
+                }
+                if (!state.blockStarted) {
+                    events.push({
+                        type: "content_block_start",
+                        index: state.blockIndex,
+                        content_block: { type: "text", text: "" }
+                    });
+                    state.blockStarted = true;
+                    state.currentBlockType = 'text';
+                }
+                const imgMd = `![generated image](data:image/${chunk.item.output_format || 'png'};base64,${chunk.item.result})`;
+                events.push({
+                    type: "content_block_delta",
+                    index: state.blockIndex,
+                    delta: { type: "text_delta", text: imgMd }
+                });
+                return events;
+            }
+            return null;
         }
 
         if (type === 'response.completed') {
