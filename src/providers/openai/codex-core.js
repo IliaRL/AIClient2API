@@ -225,7 +225,8 @@ export class CodexApiService {
                 error.skipErrorCount = true;
                 throw error;
             } else {
-                logger.error(`[Codex] Error calling non-stream API (Status: ${error.response?.status}, Code: ${error.code || 'N/A'}):`, error.message);
+                const errBody = error.response?.data ? String(error.response.data).slice(0, 500) : '';
+                logger.error(`[Codex] Error calling non-stream API (Status: ${error.response?.status}, Code: ${error.code || 'N/A'}): ${error.message}${errBody ? ` | body: ${errBody}` : ''}`);
                 throw error;
             }
         }
@@ -416,10 +417,14 @@ export class CodexApiService {
         // 注意：requestBody 已经去除了 metadata
         const result = {
             ...cleanedBody,
+            store: cleanedBody.store ?? false,
+            parallel_tool_calls: cleanedBody.parallel_tool_calls ?? true,
+            include: cleanedBody.include || ['reasoning.encrypted_content'],
             service_tier: cleanedBody.service_tier || defaultServiceTier,
             reasoning: {
                 ...cleanedBody.reasoning,
-                effort: isFastModel ? defaultReasoningEffort : (cleanedBody.reasoning?.effort === 'minimal' ? 'none' : (cleanedBody.reasoning?.effort || defaultReasoningEffort))
+                effort: isFastModel ? defaultReasoningEffort : (cleanedBody.reasoning?.effort === 'minimal' ? 'none' : (cleanedBody.reasoning?.effort || defaultReasoningEffort)),
+                summary: cleanedBody.reasoning?.summary || 'auto',
             },
             stream,
             prompt_cache_key: cache.id

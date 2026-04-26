@@ -2,9 +2,10 @@ import {
     handleModelListRequest,
     handleContentGenerationRequest,
     API_ACTIONS,
-    ENDPOINT_TYPE
+    ENDPOINT_TYPE,
+    getRequestBody
 } from '../utils/common.js';
-import { getProviderPoolManager } from './service-manager.js';
+import { getProviderPoolManager, getApiServiceWithFallback } from './service-manager.js';
 import logger from '../utils/logger.js';
 /**
  * Handle API authentication and routing
@@ -31,6 +32,12 @@ export async function handleAPIRequests(method, path, req, res, currentConfig, a
             await handleModelListRequest(req, res, apiService, ENDPOINT_TYPE.GEMINI_MODEL_LIST, currentConfig, providerPoolManager, currentConfig.uuid);
             return true;
         }
+    }
+
+    // Route image generation requests
+    if (method === 'POST' && path === '/v1/images/generations') {
+        await handleImageGenerationRequest(req, res, currentConfig, providerPoolManager);
+        return true;
     }
 
     // Route content generation requests
@@ -93,6 +100,81 @@ export function initializeAPIManagement(services) {
             }
         }
     };
+}
+
+/**
+ * Handle POST /v1/images/generations - OpenAI 标准生图接口
+ */
+async function handleImageGenerationRequest(req, res, currentConfig, providerPoolManager) {
+    try {
+        const body = await getRequestBody(req);
+        const { model = 'gpt-image-2', prompt, n = 1, response_format = 'b64_json' } = body;
+
+        if (!prompt) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'prompt is required', type: 'invalid_request_error', code: 'invalid_request_error' } }));
+            return;
+        }
+
+        // 构造 Codex 格式请求，prepareRequestBody 会自动处理 gpt-image-2 → gpt-5.4 + image_generation tool
+        const codexRequestBody = {
+            model,
+            input: [{
+                type: 'message',
+                role: 'user',
+                content: [{ type: 'input_text', text: prompt }]
+            }]
+        };
+
+        // 从号池获取服务实例
+        const shouldUsePool = providerPoolManager && currentConfig.providerPools;
+        const result = await getApiServiceWithFallback(currentConfig, model, { acquireSlot: !!shouldUsePool });
+        const service = result.service;
+
+        if (!service) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'No service available for image generation', type: 'server_error' } }));
+            return;
+        }
+
+        logger.info(`[Image Generation] model=${model}, n=${n}, response_format=${response_format}`);
+
+        // 发起请求（generateContent 内部已经是 SSE 解析，返回 completedEvent）
+        const imageRequests = [];
+        for (let i = 0; i < Math.max(1, n); i++) {
+            imageRequests.push(service.generateContent(model, { ...codexRequestBody }));
+        }
+        const completedEvents = await Promise.all(imageRequests);
+
+        // 从 response.output 中提取 image_generation_call 结果
+        const data = [];
+        for (const completedEvent of completedEvents) {
+            const output = completedEvent?.response?.output || [];
+            for (const item of output) {
+                if (item.type === 'image_generation_call' && item.result) {
+                    if (response_format === 'url') {
+                        data.push({ url: `data:image/${item.output_format || 'png'};base64,${item.result}` });
+                    } else {
+                        data.push({ b64_json: item.result });
+                    }
+                }
+            }
+        }
+
+        if (data.length === 0) {
+            logger.error('[Image Generation] No image found in response output');
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Image generation failed: no image in response', type: 'server_error' } }));
+            return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ created: Math.floor(Date.now() / 1000), data }));
+    } catch (error) {
+        logger.error('[Image Generation] Error:', error.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: error.message, type: 'server_error' } }));
+    }
 }
 
 /**
