@@ -191,7 +191,7 @@ export class CodexApiService {
             const config = {
                 headers,
                 responseType: 'text', // 确保以文本形式接收 SSE 流
-                timeout: 120000 // 2 分钟超时
+                timeout: 180000 // 3 分钟超时（图片生成可能耗时会多一些）
             };
 
             // 配置代理

@@ -106,13 +106,27 @@ export function initializeAPIManagement(services) {
  * Handle POST /v1/images/generations - OpenAI 标准生图接口
  */
 async function handleImageGenerationRequest(req, res, currentConfig, providerPoolManager) {
+    const IMAGE_GEN_MAX_N = 4;
+    const VALID_RESPONSE_FORMATS = new Set(['b64_json', 'url']);
+
+    let slotProviderType = null;
+    let slotUuid = null;
+
     try {
         const body = await getRequestBody(req);
-        const { model = 'gpt-image-2', prompt, n = 1, response_format = 'b64_json', size } = body;
+        const { model = 'gpt-image-2', prompt, response_format = 'b64_json', size } = body;
+        // cap n：至少 1，最多 IMAGE_GEN_MAX_N，非数字降级为 1
+        const n = Math.min(Math.max(1, parseInt(body.n) || 1), IMAGE_GEN_MAX_N);
 
         if (!prompt) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'prompt is required', type: 'invalid_request_error', code: 'invalid_request_error' } }));
+            res.end(JSON.stringify({ error: { message: 'prompt is required', type: 'invalid_request_error' } }));
+            return;
+        }
+
+        if (!VALID_RESPONSE_FORMATS.has(response_format)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: `response_format must be 'b64_json' or 'url'`, type: 'invalid_request_error' } }));
             return;
         }
 
@@ -127,9 +141,9 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
             ...(size ? { _imageSize: size } : {})
         };
 
-        // 从号池获取服务实例
-        const shouldUsePool = providerPoolManager && currentConfig.providerPools;
-        const result = await getApiServiceWithFallback(currentConfig, model, { acquireSlot: !!shouldUsePool });
+        // 从号池获取服务实例，acquireSlot 与其他接口保持一致
+        const shouldUsePool = !!(providerPoolManager && currentConfig.providerPools);
+        const result = await getApiServiceWithFallback(currentConfig, model, { acquireSlot: shouldUsePool });
         const service = result.service;
 
         if (!service) {
@@ -138,13 +152,18 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
             return;
         }
 
-        logger.info(`[Image Generation] model=${model}, n=${n}, response_format=${response_format}`);
-
-        // 发起请求（generateContent 内部已经是 SSE 解析，返回 completedEvent）
-        const imageRequests = [];
-        for (let i = 0; i < Math.max(1, n); i++) {
-            imageRequests.push(service.generateContent(model, { ...codexRequestBody }));
+        // 记录 slot 信息，供 finally 释放
+        if (shouldUsePool && result.uuid) {
+            slotProviderType = result.actualProviderType || currentConfig.MODEL_PROVIDER;
+            slotUuid = result.uuid;
         }
+
+        logger.info(`[Image Generation] model=${model}, n=${n}, response_format=${response_format}${size ? `, size=${size}` : ''}`);
+
+        // n 张图并发发起，每张独立 generateContent 调用
+        const imageRequests = Array.from({ length: n }, () =>
+            service.generateContent(model, { ...codexRequestBody })
+        );
         const completedEvents = await Promise.all(imageRequests);
 
         // 从 response.output 中提取 image_generation_call 结果
@@ -173,8 +192,15 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
         res.end(JSON.stringify({ created: Math.floor(Date.now() / 1000), data }));
     } catch (error) {
         logger.error('[Image Generation] Error:', error.message);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: { message: error.message, type: 'server_error' } }));
+        if (!res.writableEnded) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message, type: 'server_error' } }));
+        }
+    } finally {
+        // 确保并发槽在请求结束后归还（与 handleStreamRequest/handleUnaryRequest 保持一致）
+        if (providerPoolManager && slotProviderType && slotUuid) {
+            providerPoolManager.releaseSlot(slotProviderType, slotUuid);
+        }
     }
 }
 
