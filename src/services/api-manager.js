@@ -195,9 +195,16 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
         }
 
         if (data.length === 0) {
-            logger.error('[Image Generation] No image found in response output');
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'Image generation failed: no image in response', type: 'server_error' } }));
+            const rejectionText = extractRejectionMessage(completedEvents);
+            if (rejectionText) {
+                logger.warn(`[Image Generation] Content policy rejection: ${rejectionText.slice(0, 100)}`);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { code: 'content_policy_violation', message: rejectionText, type: 'invalid_request_error' } }));
+            } else {
+                logger.error('[Image Generation] No image found in response output');
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Image generation failed: no image in response', type: 'server_error' } }));
+            }
             return;
         }
 
@@ -215,6 +222,23 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
             providerPoolManager.releaseSlot(slotProviderType, slotUuid);
         }
     }
+}
+
+/**
+ * Extract assistant rejection text from Codex output items.
+ * Returns the text if a policy/safety rejection message is found, otherwise null.
+ */
+function extractRejectionMessage(completedEvents) {
+    for (const completedEvent of completedEvents) {
+        const output = completedEvent?.response?.output || [];
+        for (const item of output) {
+            if (item.type === 'message' && item.role === 'assistant') {
+                const textPart = (item.content || []).find(c => c.type === 'output_text' && c.text);
+                if (textPart?.text) return textPart.text;
+            }
+        }
+    }
+    return null;
 }
 
 /**
@@ -345,9 +369,16 @@ async function handleImageEditsRequest(req, res, currentConfig, providerPoolMana
         }
 
         if (data.length === 0) {
-            logger.error('[Image Edits] No image found in response output');
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'Image editing failed: no image in response', type: 'server_error' } }));
+            const rejectionText = extractRejectionMessage(completedEvents);
+            if (rejectionText) {
+                logger.warn(`[Image Edits] Content policy rejection: ${rejectionText.slice(0, 100)}`);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { code: 'content_policy_violation', message: rejectionText, type: 'invalid_request_error' } }));
+            } else {
+                logger.error('[Image Edits] No image found in response output');
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Image editing failed: no image in response', type: 'server_error' } }));
+            }
             return;
         }
 
