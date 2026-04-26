@@ -108,7 +108,7 @@ export function initializeAPIManagement(services) {
 async function handleImageGenerationRequest(req, res, currentConfig, providerPoolManager) {
     try {
         const body = await getRequestBody(req);
-        const { model = 'gpt-image-2', prompt, n = 1, response_format = 'b64_json' } = body;
+        const { model = 'gpt-image-2', prompt, n = 1, response_format = 'b64_json', size } = body;
 
         if (!prompt) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -123,7 +123,8 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
                 type: 'message',
                 role: 'user',
                 content: [{ type: 'input_text', text: prompt }]
-            }]
+            }],
+            ...(size ? { _imageSize: size } : {})
         };
 
         // 从号池获取服务实例
@@ -152,11 +153,11 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
             const output = completedEvent?.response?.output || [];
             for (const item of output) {
                 if (item.type === 'image_generation_call' && item.result) {
-                    if (response_format === 'url') {
-                        data.push({ url: `data:image/${item.output_format || 'png'};base64,${item.result}` });
-                    } else {
-                        data.push({ b64_json: item.result });
-                    }
+                    const dataItem = response_format === 'url'
+                        ? { url: `data:image/${item.output_format || 'png'};base64,${item.result}` }
+                        : { b64_json: item.result };
+                    if (item.revised_prompt) dataItem.revised_prompt = item.revised_prompt;
+                    data.push(dataItem);
                 }
             }
         }

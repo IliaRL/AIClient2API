@@ -373,12 +373,17 @@ export class CodexApiService {
 
         if (isImageModel) {
             // 图像模型：强制使用 image_generation 工具，不加 web_search
-            cleanedBody.tools = [{ type: 'image_generation' }];
+            const imageToolConfig = { type: 'image_generation' };
+            if (cleanedBody._imageSize) {
+                imageToolConfig.size = cleanedBody._imageSize;
+            }
+            delete cleanedBody._imageSize;
+            cleanedBody.tools = [imageToolConfig];
             // 服务器要求 instructions 非空
             if (!cleanedBody.instructions?.trim()) {
                 cleanedBody.instructions = 'You are a helpful assistant.';
             }
-            logger.info(`[Codex] Image model detected: ${upstreamModel} -> ${effectiveUpstreamModel} with image_generation tool`);
+            logger.info(`[Codex] Image model detected: ${upstreamModel} -> ${effectiveUpstreamModel} with image_generation tool${imageToolConfig.size ? `, size=${imageToolConfig.size}` : ''}`);
         } else {
             // 为普通 Codex 模型增加默认工具
             if (!cleanedBody.tools) {
@@ -708,6 +713,8 @@ export class CodexApiService {
                     if (doneItem?.result) {
                         item.result = doneItem.result;
                         item.output_format = doneItem.output_format || item.output_format;
+                        if (doneItem.revised_prompt) item.revised_prompt = doneItem.revised_prompt;
+                        if (doneItem.size) item.size = doneItem.size;
                     }
                 }
             }
