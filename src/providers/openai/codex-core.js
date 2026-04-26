@@ -645,6 +645,12 @@ export class CodexApiService {
                                 outputItems.set(parsed.item.id, parsed.item);
                             }
                             break;
+                        case 'response.output_item.done':
+                            // 用完整的 done item 覆盖 added 时的占位，保留 result 等字段
+                            if (parsed.item) {
+                                outputItems.set(parsed.item.id, parsed.item);
+                            }
+                            break;
                         case 'response.output_text.delta':
                             if (parsed.item_id && parsed.delta) {
                                 const existing = textDeltas.get(parsed.item_id) || '';
@@ -672,14 +678,14 @@ export class CodexApiService {
             throw new Error('stream error: stream disconnected before completion: stream closed before response.completed');
         }
 
-        // 用累积的 delta 文本填充 output items 中缺失的内容
-        if (completedEvent.response && textDeltas.size > 0) {
+        // 用累积的 delta 文本 & output_item.done 数据填充 output items 中缺失的内容
+        if (completedEvent.response) {
             const output = completedEvent.response.output || [];
+
             for (const item of output) {
                 if (item.type === 'message' && item.role === 'assistant') {
                     const accumulatedText = textDeltas.get(item.id);
                     if (accumulatedText !== undefined) {
-                        // content 为空或不含 output_text，直接注入
                         if (!item.content || item.content.length === 0) {
                             item.content = [{ type: 'output_text', text: accumulatedText }];
                         } else {
@@ -691,8 +697,16 @@ export class CodexApiService {
                             });
                         }
                     }
+                } else if (item.type === 'image_generation_call' && !item.result) {
+                    // response.completed 里的 image_generation_call 可能缺 result，从 output_item.done 补充
+                    const doneItem = outputItems.get(item.id);
+                    if (doneItem?.result) {
+                        item.result = doneItem.result;
+                        item.output_format = doneItem.output_format || item.output_format;
+                    }
                 }
             }
+
             // 如果 output 完全为空，从累积事件重建
             if (output.length === 0 && outputItems.size > 0) {
                 for (const [id, item] of outputItems) {
