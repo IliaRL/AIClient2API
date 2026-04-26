@@ -7,6 +7,8 @@ import {
 } from '../utils/common.js';
 import { getProviderPoolManager, getApiServiceWithFallback } from './service-manager.js';
 import logger from '../utils/logger.js';
+import busboy from 'busboy';
+
 /**
  * Handle API authentication and routing
  * @param {string} method - The HTTP method
@@ -34,9 +36,13 @@ export async function handleAPIRequests(method, path, req, res, currentConfig, a
         }
     }
 
-    // Route image generation requests
+    // Route image generation/editing requests
     if (method === 'POST' && path === '/v1/images/generations') {
         await handleImageGenerationRequest(req, res, currentConfig, providerPoolManager);
+        return true;
+    }
+    if (method === 'POST' && path === '/v1/images/edits') {
+        await handleImageEditsRequest(req, res, currentConfig, providerPoolManager);
         return true;
     }
 
@@ -83,9 +89,9 @@ export function initializeAPIManagement(services) {
                 // For pooled providers, refreshToken should be handled by individual instances
                 // For single instances, this remains relevant
                 if (serviceAdapter.config?.uuid && providerPoolManager) {
-                    providerPoolManager._enqueueRefresh(serviceAdapter.config.MODEL_PROVIDER, { 
-                        config: serviceAdapter.config, 
-                        uuid: serviceAdapter.config.uuid 
+                    providerPoolManager._enqueueRefresh(serviceAdapter.config.MODEL_PROVIDER, {
+                        config: serviceAdapter.config,
+                        uuid: serviceAdapter.config.uuid
                     });
                 } else {
                     await serviceAdapter.refreshToken();
@@ -198,6 +204,152 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
         }
     } finally {
         // 确保并发槽在请求结束后归还（与 handleStreamRequest/handleUnaryRequest 保持一致）
+        if (providerPoolManager && slotProviderType && slotUuid) {
+            providerPoolManager.releaseSlot(slotProviderType, slotUuid);
+        }
+    }
+}
+
+/**
+ * Parse multipart/form-data from a raw http.IncomingMessage via busboy.
+ * Returns { fields: {key: string}, files: {key: {buffer, mimetype}} }
+ * File buffers are collected in memory; mask field is accepted but ignored.
+ */
+function parseMultipartForm(req) {
+    return new Promise((resolve, reject) => {
+        const contentType = req.headers['content-type'] || '';
+        if (!contentType.includes('multipart/form-data')) {
+            return reject(new Error('Content-Type must be multipart/form-data'));
+        }
+
+        const bb = busboy({ headers: req.headers, limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB cap
+        const fields = {};
+        const files = {};
+
+        bb.on('field', (name, value) => { fields[name] = value; });
+
+        bb.on('file', (name, stream, info) => {
+            const chunks = [];
+            stream.on('data', chunk => chunks.push(chunk));
+            stream.on('end', () => { files[name] = { buffer: Buffer.concat(chunks), mimetype: info.mimeType }; });
+            stream.on('error', reject);
+        });
+
+        bb.on('close', () => resolve({ fields, files }));
+        bb.on('error', reject);
+
+        req.pipe(bb);
+    });
+}
+
+/**
+ * Handle POST /v1/images/edits - OpenAI 标准改图接口
+ * Accepts multipart/form-data: image (required), prompt (required),
+ * mask (ignored), model, n, size, response_format
+ */
+async function handleImageEditsRequest(req, res, currentConfig, providerPoolManager) {
+    const IMAGE_GEN_MAX_N = 4;
+    const VALID_RESPONSE_FORMATS = new Set(['b64_json', 'url']);
+
+    let slotProviderType = null;
+    let slotUuid = null;
+
+    try {
+        const { fields, files } = await parseMultipartForm(req);
+
+        const model = fields.model || 'gpt-image-2';
+        const prompt = fields.prompt;
+        const response_format = fields.response_format || 'b64_json';
+        const size = fields.size;
+        const n = Math.min(Math.max(1, parseInt(fields.n) || 1), IMAGE_GEN_MAX_N);
+
+        if (!prompt) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'prompt is required', type: 'invalid_request_error' } }));
+            return;
+        }
+
+        if (!files.image) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'image is required', type: 'invalid_request_error' } }));
+            return;
+        }
+
+        if (!VALID_RESPONSE_FORMATS.has(response_format)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: `response_format must be 'b64_json' or 'url'`, type: 'invalid_request_error' } }));
+            return;
+        }
+
+        const { buffer, mimetype } = files.image;
+        const imageUrl = `data:${mimetype || 'image/png'};base64,${buffer.toString('base64')}`;
+
+        // 构造 Codex 请求：input_image + input_text，prepareRequestBody 自动处理 gpt-image-2 → gpt-5.4 + image_generation tool
+        const codexRequestBody = {
+            model,
+            input: [{
+                type: 'message',
+                role: 'user',
+                content: [
+                    { type: 'input_image', image_url: imageUrl },
+                    { type: 'input_text', text: prompt }
+                ]
+            }],
+            ...(size ? { _imageSize: size } : {})
+        };
+
+        const shouldUsePool = !!(providerPoolManager && currentConfig.providerPools);
+        const result = await getApiServiceWithFallback(currentConfig, model, { acquireSlot: shouldUsePool });
+        const service = result.service;
+
+        if (!service) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'No service available for image editing', type: 'server_error' } }));
+            return;
+        }
+
+        if (shouldUsePool && result.uuid) {
+            slotProviderType = result.actualProviderType || currentConfig.MODEL_PROVIDER;
+            slotUuid = result.uuid;
+        }
+
+        logger.info(`[Image Edits] model=${model}, n=${n}, response_format=${response_format}, imageSize=${Math.round(buffer.length / 1024)}KB${size ? `, size=${size}` : ''}`);
+
+        const imageRequests = Array.from({ length: n }, () =>
+            service.generateContent(model, { ...codexRequestBody })
+        );
+        const completedEvents = await Promise.all(imageRequests);
+
+        const data = [];
+        for (const completedEvent of completedEvents) {
+            const output = completedEvent?.response?.output || [];
+            for (const item of output) {
+                if (item.type === 'image_generation_call' && item.result) {
+                    const dataItem = response_format === 'url'
+                        ? { url: `data:image/${item.output_format || 'png'};base64,${item.result}` }
+                        : { b64_json: item.result };
+                    if (item.revised_prompt) dataItem.revised_prompt = item.revised_prompt;
+                    data.push(dataItem);
+                }
+            }
+        }
+
+        if (data.length === 0) {
+            logger.error('[Image Edits] No image found in response output');
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'Image editing failed: no image in response', type: 'server_error' } }));
+            return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ created: Math.floor(Date.now() / 1000), data }));
+    } catch (error) {
+        logger.error('[Image Edits] Error:', error.message);
+        if (!res.writableEnded) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message, type: 'server_error' } }));
+        }
+    } finally {
         if (providerPoolManager && slotProviderType && slotUuid) {
             providerPoolManager.releaseSlot(slotProviderType, slotUuid);
         }
