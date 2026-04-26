@@ -51,6 +51,9 @@ async function loadProviderData() {
         }
     } catch (e) {
         console.error('[Playground] Failed to load provider data:', e);
+    } finally {
+        // re-evaluate send button state after data loads
+        updateInputState();
     }
 }
 
@@ -151,6 +154,10 @@ async function handleSend() {
     const text = input?.value.trim();
 
     if (!provider || !model || (!text && pendingFiles.length === 0)) return;
+    if (!apiKey) {
+        console.warn('[Playground] API key not loaded yet, aborting send');
+        return;
+    }
 
     const userContent = buildUserContent(text, pendingFiles);
     messages.push({ role: 'user', content: userContent });
