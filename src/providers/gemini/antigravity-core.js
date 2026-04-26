@@ -14,7 +14,7 @@ import { configureTLSSidecar } from '../../utils/proxy-utils.js';
 import { formatExpiryTime, isRetryableNetworkError, formatExpiryLog } from '../../utils/common.js';
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiAntigravityOAuth } from '../../auth/oauth-handlers.js';
-import { getProxyConfigForProvider, getGoogleAuthProxyConfig } from '../../utils/proxy-utils.js';
+import { getProxyConfigForProvider, getGoogleAuthProxyConfig, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { cleanJsonSchemaProperties } from '../../converters/utils.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 import { MODEL_PROVIDER } from '../../utils/common.js';
@@ -716,13 +716,18 @@ export class AntigravityApiService {
         // 检查是否需要使用代理
         const proxyConfig = getGoogleAuthProxyConfig(config, config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY);
 
+        // 检查是否启用了 TLS Sidecar
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.ANTIGRAVITY);
+
         // 配置 OAuth2Client 使用自定义的 HTTP agent
         const oauth2Options = {
             clientId: OAUTH_CLIENT_ID,
             clientSecret: OAUTH_CLIENT_SECRET,
         };
 
-        if (proxyConfig) {
+        if (isTLSSidecarEnabled) {
+            logger.info('[Antigravity] TLS Sidecar enabled, skipping proxy/agent configuration for OAuth2Client');
+        } else if (proxyConfig) {
             oauth2Options.transporterOptions = proxyConfig;
             logger.info('[Antigravity] Using proxy for OAuth2Client');
         } else {

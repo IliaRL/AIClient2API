@@ -2,7 +2,7 @@ import axios from 'axios';
 import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
-import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
+import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
 
 /**
@@ -45,18 +45,20 @@ export class ForwardApiService {
         };
         headers[this.headerName] = `${this.headerValuePrefix}${this.apiKey}`;
 
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.FORWARD_API);
+        
         const axiosConfig = {
             baseURL: this.baseUrl,
-            httpAgent,
-            httpsAgent,
             headers,
         };
         
-        if (!this.useSystemProxy) {
-            axiosConfig.proxy = false;
+        // 如果启用了 TLS Sidecar，就不配置 httpAgent 和 httpsAgent，避免配置冲突
+        if (!isTLSSidecarEnabled) {
+            axiosConfig.httpAgent = httpAgent;
+            axiosConfig.httpsAgent = httpsAgent;
+            // 配置自定义代理
+            configureAxiosProxy(axiosConfig, config, config.MODEL_PROVIDER || MODEL_PROVIDER.FORWARD_API);
         }
-        
-        configureAxiosProxy(axiosConfig, config, config.MODEL_PROVIDER || MODEL_PROVIDER.FORWARD_API);
         
         this.axiosInstance = axios.create(axiosConfig);
     }

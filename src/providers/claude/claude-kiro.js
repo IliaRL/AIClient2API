@@ -15,7 +15,7 @@ import {
     processContent as processContentUtil,
     getContentText as getContentTextUtil
 } from '../../utils/token-utils.js';
-import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
+import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 
@@ -502,10 +502,10 @@ export class KiroApiService {
             timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
         });
         
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API);
+        
         const axiosConfig = {
             timeout: KIRO_CONSTANTS.AXIOS_TIMEOUT,
-            httpAgent,
-            httpsAgent,
             headers: {
                 'Content-Type': KIRO_CONSTANTS.CONTENT_TYPE_JSON,
                 'Accept': KIRO_CONSTANTS.ACCEPT_JSON,
@@ -518,14 +518,14 @@ export class KiroApiService {
                 'Connection': 'close'
             },
         };
-        
-        // 根据 useSystemProxy 配置代理设置
-        if (!this.useSystemProxy) {
-            axiosConfig.proxy = false;
+
+        // 如果启用了 TLS Sidecar，就不配置 httpAgent 和 httpsAgent，避免配置冲突
+        if (!isTLSSidecarEnabled) {
+            axiosConfig.httpAgent = httpAgent;
+            axiosConfig.httpsAgent = httpsAgent;
+            // 配置自定义代理
+            configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API);
         }
-        
-        // 配置自定义代理
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.KIRO_API);
         
         this.axiosInstance = axios.create(axiosConfig);
 

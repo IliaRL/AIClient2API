@@ -6,7 +6,7 @@ import path from 'path';
 import os from 'os';
 import { refreshCodexTokensWithRetry } from '../../auth/oauth-handlers.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
-import { configureTLSSidecar } from '../../utils/proxy-utils.js';
+import { configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
 import { getProxyConfigForProvider } from '../../utils/proxy-utils.js';
 import { getProviderModels } from '../provider-models.js';
@@ -37,6 +37,8 @@ export class CodexApiService {
         // 会话缓存管理
         this.conversationCache = new Map(); // key: model-userId, value: {id, expire}
         this.startCacheCleanup();
+
+        this.imageGenTool = { type: 'image_generation', output_format: 'png' };
     }
 
     _applySidecar(axiosConfig) {
@@ -187,18 +189,23 @@ export class CodexApiService {
         const body = await this.prepareRequestBody(selectedModel, requestBody, true);
         const headers = this.buildHeaders(body.prompt_cache_key, true);
 
+        // 检查是否启用了 TLS Sidecar
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
+
         try {
             const config = {
                 headers,
                 responseType: 'text', // 确保以文本形式接收 SSE 流
-                timeout: 120000 // 2 分钟超时
+                timeout: 300000 // 5 分钟超时，适应慢速模型
             };
 
-            // 配置代理
-            const proxyConfig = getProxyConfigForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
-            if (proxyConfig) {
-                config.httpAgent = proxyConfig.httpAgent;
-                config.httpsAgent = proxyConfig.httpsAgent;
+            // 配置代理（如果未启用 TLS Sidecar）
+            if (!isTLSSidecarEnabled) {
+                const proxyConfig = getProxyConfigForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
+                if (proxyConfig) {
+                    config.httpAgent = proxyConfig.httpAgent;
+                    config.httpsAgent = proxyConfig.httpsAgent;
+                }
             }
 
             const axiosRequestConfig = {
@@ -264,18 +271,23 @@ export class CodexApiService {
         const body = await this.prepareRequestBody(selectedModel, requestBody, true);
         const headers = this.buildHeaders(body.prompt_cache_key, true);
 
+        // 检查是否启用了 TLS Sidecar
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
+
         try {
             const config = {
                 headers,
                 responseType: 'stream',
-                timeout: 120000
+                timeout: 300000 // 5 分钟超时
             };
 
-            // 配置代理
-            const proxyConfig = getProxyConfigForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
-            if (proxyConfig) {
-                config.httpAgent = proxyConfig.httpAgent;
-                config.httpsAgent = proxyConfig.httpsAgent;
+            // 配置代理（如果未启用 TLS Sidecar）
+            if (!isTLSSidecarEnabled) {
+                const proxyConfig = getProxyConfigForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
+                if (proxyConfig) {
+                    config.httpAgent = proxyConfig.httpAgent;
+                    config.httpsAgent = proxyConfig.httpsAgent;
+                }
             }
 
             const axiosRequestConfig = {
@@ -342,6 +354,29 @@ export class CodexApiService {
     }
 
     /**
+     * 确保包含图像生成工具
+     */
+    ensureImageGenerationTool(body, model) {
+        if (model.endsWith('spark')) {
+            return body;
+        }
+
+        if (!body.tools) {
+            body.tools = [this.imageGenTool];
+            return body;
+        }
+
+        if (Array.isArray(body.tools)) {
+            const hasImageGen = body.tools.some(t => t.type === 'image_generation');
+            if (!hasImageGen) {
+                body.tools.push(this.imageGenTool);
+            }
+        }
+
+        return body;
+    }
+
+    /**
      * 准备请求体
      */
     async prepareRequestBody(model, requestBody, stream) {
@@ -375,6 +410,9 @@ export class CodexApiService {
                 cleanedBody.tools.push({ type: 'web_search' });
             }
         }
+
+        // 确保包含图像生成工具
+        this.ensureImageGenerationTool(cleanedBody, upstreamModel);
 
         if (isFastModel) {
             logger.info(`[Codex] Detected -fast model: ${normalizedModel} -> ${upstreamModel}, service_tier: ${cleanedBody.service_tier || defaultServiceTier}`);
@@ -562,10 +600,57 @@ export class CodexApiService {
     }
 
     /**
+     * 收集 Codex 输出项
+     */
+    collectCodexOutputItemDone(eventData, outputItemsByIndex, outputItemsFallback) {
+        if (!eventData.item) {
+            return;
+        }
+        if (eventData.output_index !== undefined) {
+            outputItemsByIndex.set(eventData.output_index, eventData.item);
+        } else {
+            outputItemsFallback.push(eventData.item);
+        }
+    }
+
+    /**
+     * 修正 Codex 完成输出
+     */
+    patchCodexCompletedOutput(eventData, outputItemsByIndex, outputItemsFallback) {
+        const response = eventData.response || {};
+        const output = response.output;
+
+        const shouldPatch = (!output || !Array.isArray(output) || output.length === 0) && 
+                           (outputItemsByIndex.size > 0 || outputItemsFallback.length > 0);
+
+        if (!shouldPatch) {
+            return eventData;
+        }
+
+        const items = [];
+        // 按索引排序
+        const sortedIndexes = Array.from(outputItemsByIndex.keys()).sort((a, b) => a - b);
+        for (const idx of sortedIndexes) {
+            items.push(outputItemsByIndex.get(idx));
+        }
+        // 添加 fallback 项
+        items.push(...outputItemsFallback);
+
+        if (!eventData.response) {
+            eventData.response = {};
+        }
+        eventData.response.output = items;
+
+        return eventData;
+    }
+
+    /**
      * 解析 SSE 流
      */
     async *parseSSEStream(stream) {
         let buffer = '';
+        const outputItemsByIndex = new Map();
+        const outputItemsFallback = [];
 
         for await (const chunk of stream) {
             buffer += chunk.toString();
@@ -573,31 +658,81 @@ export class CodexApiService {
             buffer = lines.pop(); // 保留不完整的行
 
             for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const data = line.slice(6).trim();
-                    if (data && data !== '[DONE]') {
-                        try {
-                            const parsed = JSON.parse(data);
-                            yield parsed;
-                        } catch (e) {
-                            logger.error('[Codex] Failed to parse SSE data:', e.message);
+                const trimmedLine = line.trim();
+                if (!trimmedLine) continue;
+
+                let dataStr = trimmedLine;
+                if (trimmedLine.startsWith('data: ')) {
+                    dataStr = trimmedLine.slice(6).trim();
+                }
+
+                if (dataStr && dataStr !== '[DONE]') {
+                    try {
+                        let parsed = JSON.parse(dataStr);
+                        
+                        if (parsed.type === 'error') {
+                            logger.error('[Codex] API returned error in stream:', parsed.error || parsed);
+                            const errorMsg = (parsed.error && parsed.error.message) || JSON.stringify(parsed.error || parsed);
+                            const error = new Error(`Codex API error: ${errorMsg}`);
+                            if (parsed.error?.code === 'insufficient_quota' || parsed.error?.type === 'insufficient_quota') {
+                                error.shouldSwitchCredential = true;
+                                error.skipErrorCount = true;
+                            }
+                            throw error;
                         }
+
+                        if (parsed.type === 'response.output_item.done') {
+                            this.collectCodexOutputItemDone(parsed, outputItemsByIndex, outputItemsFallback);
+                        } else if (parsed.type === 'response.completed') {
+                            parsed = this.patchCodexCompletedOutput(parsed, outputItemsByIndex, outputItemsFallback);
+                        }
+
+                        yield parsed;
+                    } catch (e) {
+                        if (e.message.startsWith('Codex API error')) {
+                            throw e;
+                        }
+                        logger.error('[Codex] Failed to parse SSE data:', e.message);
                     }
                 }
             }
         }
 
         // 处理剩余的 buffer
-        if (buffer.trim()) {
-            if (buffer.startsWith('data: ')) {
-                const data = buffer.slice(6).trim();
-                if (data && data !== '[DONE]') {
-                    try {
-                        const parsed = JSON.parse(data);
-                        yield parsed;
-                    } catch (e) {
-                        logger.error('[Codex] Failed to parse final SSE data:', e.message);
+        const finalTrimmed = buffer.trim();
+        if (finalTrimmed) {
+            let dataStr = finalTrimmed;
+            if (finalTrimmed.startsWith('data: ')) {
+                dataStr = finalTrimmed.slice(6).trim();
+            }
+
+            if (dataStr && dataStr !== '[DONE]') {
+                try {
+                    let parsed = JSON.parse(dataStr);
+
+                    if (parsed.type === 'error') {
+                        logger.error('[Codex] API returned error in final stream buffer:', parsed.error || parsed);
+                        const errorMsg = (parsed.error && parsed.error.message) || JSON.stringify(parsed.error || parsed);
+                        const error = new Error(`Codex API error: ${errorMsg}`);
+                        if (parsed.error?.code === 'insufficient_quota' || parsed.error?.type === 'insufficient_quota') {
+                            error.shouldSwitchCredential = true;
+                            error.skipErrorCount = true;
+                        }
+                        throw error;
                     }
+
+                    if (parsed.type === 'response.output_item.done') {
+                        this.collectCodexOutputItemDone(parsed, outputItemsByIndex, outputItemsFallback);
+                    } else if (parsed.type === 'response.completed') {
+                        parsed = this.patchCodexCompletedOutput(parsed, outputItemsByIndex, outputItemsFallback);
+                    }
+
+                    yield parsed;
+                } catch (e) {
+                    if (e.message.startsWith('Codex API error')) {
+                        throw e;
+                    }
+                    logger.error('[Codex] Failed to parse final SSE data:', e.message);
                 }
             }
         }
@@ -614,47 +749,98 @@ export class CodexApiService {
         const lines = responseText.split('\n');
         const outputItems = new Map(); // id -> output item
         const textDeltas = new Map(); // item_id -> accumulated text
+        
+        const outputItemsByIndex = new Map();
+        const outputItemsFallback = [];
+        
         let completedEvent = null;
 
         for (const line of lines) {
-            if (line.startsWith('data: ')) {
-                const jsonData = line.slice(6).trim();
-                if (!jsonData || jsonData === '[DONE]') {
-                    continue;
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+
+            let jsonData = trimmedLine;
+            if (trimmedLine.startsWith('data: ')) {
+                jsonData = trimmedLine.slice(6).trim();
+            }
+            
+            if (!jsonData || jsonData === '[DONE]') {
+                continue;
+            }
+
+            try {
+                let parsed = JSON.parse(jsonData);
+                switch (parsed.type) {
+                    case 'error':
+                        logger.error('[Codex] API returned error:', parsed.error || parsed);
+                        const errorMsg = (parsed.error && parsed.error.message) || JSON.stringify(parsed.error || parsed);
+                        const error = new Error(`Codex API error: ${errorMsg}`);
+                        if (parsed.error?.code === 'insufficient_quota' || parsed.error?.type === 'insufficient_quota') {
+                            error.shouldSwitchCredential = true;
+                            error.skipErrorCount = true;
+                        }
+                        throw error;
+                    case 'response.output_item.added':
+                        if (parsed.item) {
+                            outputItems.set(parsed.item.id, parsed.item);
+                        }
+                        break;
+                    case 'response.output_item.done':
+                        this.collectCodexOutputItemDone(parsed, outputItemsByIndex, outputItemsFallback);
+                        break;
+                    case 'response.output_text.delta':
+                        if (parsed.item_id && parsed.delta) {
+                            const existing = textDeltas.get(parsed.item_id) || '';
+                            textDeltas.set(parsed.item_id, existing + parsed.delta);
+                        }
+                        break;
+                    case 'response.output_text.done':
+                        if (parsed.item_id && parsed.text) {
+                            textDeltas.set(parsed.item_id, parsed.text);
+                        }
+                        break;
+                    case 'response.completed':
+                        completedEvent = this.patchCodexCompletedOutput(parsed, outputItemsByIndex, outputItemsFallback);
+                        break;
                 }
-                try {
-                    const parsed = JSON.parse(jsonData);
-                    switch (parsed.type) {
-                        case 'response.output_item.added':
-                            if (parsed.item) {
-                                outputItems.set(parsed.item.id, parsed.item);
-                            }
-                            break;
-                        case 'response.output_text.delta':
-                            if (parsed.item_id && parsed.delta) {
-                                const existing = textDeltas.get(parsed.item_id) || '';
-                                textDeltas.set(parsed.item_id, existing + parsed.delta);
-                            }
-                            break;
-                        case 'response.output_text.done':
-                            if (parsed.item_id && parsed.text) {
-                                textDeltas.set(parsed.item_id, parsed.text);
-                            }
-                            break;
-                        case 'response.completed':
-                            completedEvent = parsed;
-                            break;
-                    }
-                } catch (e) {
-                    // 继续解析下一行
-                    logger.debug('[Codex] Failed to parse SSE line:', e.message);
-                }
+            } catch (e) {
+                // 继续解析下一行
+                logger.debug('[Codex] Failed to parse SSE line:', e.message);
             }
         }
 
         if (!completedEvent) {
-            logger.error('[Codex] No completed response found in Codex response');
-            throw new Error('stream error: stream disconnected before completion: stream closed before response.completed');
+            // 如果我们已经收集到了一些输出项或文本，尝试合成一个完成事件
+            if (outputItems.size > 0 || textDeltas.size > 0 || outputItemsByIndex.size > 0 || outputItemsFallback.length > 0) {
+                logger.warn('[Codex] No completed response found, but some output items were received. Synthesizing response.');
+                
+                // 构造一个模拟的 completed 事件
+                completedEvent = {
+                    type: 'response.completed',
+                    response: {
+                        id: 'synth_' + Date.now(),
+                        status: 'completed',
+                        object: 'response',
+                        model: 'unknown',
+                        output: []
+                    }
+                };
+                
+                // 使用 patchCodexCompletedOutput 填充输出
+                completedEvent = this.patchCodexCompletedOutput(completedEvent, outputItemsByIndex, outputItemsFallback);
+                
+                // 如果 patch 后还是没输出，尝试直接从 outputItems 填充
+                if (completedEvent.response.output.length === 0 && outputItems.size > 0) {
+                    completedEvent.response.output = Array.from(outputItems.values());
+                }
+            } else {
+                logger.error('[Codex] No completed response found in Codex response');
+                // 记录前 1000 个字符用于调试
+                const debugInfo = responseText.length > 1000 ? responseText.slice(0, 1000) + '...' : responseText;
+                logger.debug('[Codex] Raw response data:', debugInfo);
+                
+                throw new Error('stream error: stream disconnected before completion: stream closed before response.completed');
+            }
         }
 
         // 用累积的 delta 文本填充 output items 中缺失的内容
@@ -743,6 +929,9 @@ export class CodexApiService {
             await this.initialize();
         }
 
+        // 检查是否启用了 TLS Sidecar
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
+
         try {
             const url = 'https://chatgpt.com/backend-api/wham/usage';
             const headers = {
@@ -759,11 +948,13 @@ export class CodexApiService {
                 timeout: 30000 // 30 秒超时
             };
 
-            // 配置代理
-            const proxyConfig = getProxyConfigForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
-            if (proxyConfig) {
-                config.httpAgent = proxyConfig.httpAgent;
-                config.httpsAgent = proxyConfig.httpsAgent;
+            // 配置代理（如果未启用 TLS Sidecar）
+            if (!isTLSSidecarEnabled) {
+                const proxyConfig = getProxyConfigForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CODEX_API);
+                if (proxyConfig) {
+                    config.httpAgent = proxyConfig.httpAgent;
+                    config.httpsAgent = proxyConfig.httpsAgent;
+                }
             }
 
             const axiosRequestConfig = {
