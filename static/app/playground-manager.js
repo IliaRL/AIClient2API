@@ -136,11 +136,26 @@ function onProviderChange(providerType) {
 function updateInputState() {
     const provider = getProviderSelect()?.value;
     const model = getModelSelect()?.value;
-    const ready = !!(provider && model && !isStreaming);
+    const selected = !!(provider && model);
+    const ready = selected && !isStreaming;
+
     const input = getInput();
     const sendBtn = getSendBtn();
     if (input) input.disabled = !ready;
     if (sendBtn) sendBtn.disabled = !ready;
+
+    const inputArea = document.querySelector('.playground-input-area');
+    const hint = el('pg-hint');
+    if (inputArea) inputArea.classList.toggle('pg-input-disabled', !ready);
+    if (hint) {
+        if (ready) {
+            hint.textContent = t('playground.hint');
+        } else if (isStreaming) {
+            hint.textContent = t('playground.generating');
+        } else {
+            hint.textContent = t('playground.selectFirst');
+        }
+    }
 }
 
 // ── Chat logic ────────────────────────────────────────────────────────────────
@@ -235,7 +250,8 @@ async function streamResponse(provider, model, bubble) {
         const decoder = new TextDecoder();
         let sseBuffer = '';
 
-        while (true) {
+        let streamDone = false;
+        outer: while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
@@ -247,10 +263,17 @@ async function streamResponse(provider, model, bubble) {
             for (const line of lines) {
                 if (!line.startsWith('data: ')) continue;
                 const data = line.slice(6).trim();
-                if (data === '[DONE]') break;
+                if (data === '[DONE]') {
+                    streamDone = true;
+                    break outer;
+                }
 
                 try {
                     const json = JSON.parse(data);
+                    // detect server-side stream error event
+                    if (json.error) {
+                        throw new Error(json.error.message || t('playground.reqFailed'));
+                    }
                     const delta = json.choices?.[0]?.delta?.content || '';
                     if (delta) {
                         accumulated += delta;
@@ -258,24 +281,33 @@ async function streamResponse(provider, model, bubble) {
                         bubble.appendChild(cursor);
                         scrollToBottom();
                     }
-                } catch {
+                } catch (parseErr) {
+                    if (parseErr.message && !parseErr.message.startsWith('Unexpected')) {
+                        // re-throw real stream errors, swallow JSON parse errors
+                        throw parseErr;
+                    }
                 }
             }
         }
 
         // flush whatever remains in the buffer
-        if (sseBuffer.trim().startsWith('data: ')) {
+        if (!streamDone && sseBuffer.trim().startsWith('data: ')) {
             const data = sseBuffer.slice(6).trim();
             if (data && data !== '[DONE]') {
                 try {
                     const json = JSON.parse(data);
+                    if (json.error) throw new Error(json.error.message || t('playground.reqFailed'));
                     const delta = json.choices?.[0]?.delta?.content || '';
                     if (delta) accumulated += delta;
-                } catch {}
+                } catch (parseErr) {
+                    if (parseErr.message && !parseErr.message.startsWith('Unexpected')) throw parseErr;
+                }
             }
         }
 
-        messages.push({ role: 'assistant', content: accumulated });
+        // strip base64 data URLs before storing in history to avoid context overflow
+        const historyContent = accumulated.replace(/data:[^;]+;base64,[A-Za-z0-9+/=]+/g, '[图片]');
+        messages.push({role: 'assistant', content: historyContent});
 
     } catch (e) {
         if (e.name === 'AbortError') {

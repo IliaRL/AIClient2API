@@ -305,6 +305,12 @@
     box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
 }
 
+.playground-textarea:disabled {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+}
+
 .pg-send-btn {
     flex-shrink: 0;
     width: 36px;
@@ -325,8 +331,21 @@
 }
 
 .pg-send-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
+    background: var(--text-secondary, #9ca3af);
+}
+
+/* Input area disabled state */
+.playground-input-area.pg-input-disabled .playground-input-row {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.playground-input-area.pg-input-disabled .pg-hint {
+    opacity: 1;
+    color: var(--primary-color, #059669);
+    font-weight: 500;
 }
 
 .pg-hint {
