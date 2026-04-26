@@ -8,6 +8,10 @@ import {
 import { getProviderPoolManager, getApiServiceWithFallback } from './service-manager.js';
 import logger from '../utils/logger.js';
 import busboy from 'busboy';
+import { IMAGE_MODELS as SUPPORTED_IMAGE_MODELS } from '../providers/openai/codex-core.js';
+
+const IMAGE_GEN_MAX_N = 4;
+const VALID_RESPONSE_FORMATS = new Set(['b64_json', 'url']);
 
 /**
  * Handle API authentication and routing
@@ -112,9 +116,6 @@ export function initializeAPIManagement(services) {
  * Handle POST /v1/images/generations - OpenAI 标准生图接口
  */
 async function handleImageGenerationRequest(req, res, currentConfig, providerPoolManager) {
-    const IMAGE_GEN_MAX_N = 4;
-    const VALID_RESPONSE_FORMATS = new Set(['b64_json', 'url']);
-
     let slotProviderType = null;
     let slotUuid = null;
 
@@ -123,6 +124,12 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
         const { model = 'gpt-image-2', prompt, response_format = 'b64_json', size } = body;
         // cap n：至少 1，最多 IMAGE_GEN_MAX_N，非数字降级为 1
         const n = Math.min(Math.max(1, parseInt(body.n) || 1), IMAGE_GEN_MAX_N);
+
+        if (!SUPPORTED_IMAGE_MODELS.has(model)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: `model '${model}' is not supported; supported image models: ${[...SUPPORTED_IMAGE_MODELS].join(', ')}`, type: 'invalid_request_error' } }));
+            return;
+        }
 
         if (!prompt) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -248,9 +255,6 @@ function parseMultipartForm(req) {
  * mask (ignored), model, n, size, response_format
  */
 async function handleImageEditsRequest(req, res, currentConfig, providerPoolManager) {
-    const IMAGE_GEN_MAX_N = 4;
-    const VALID_RESPONSE_FORMATS = new Set(['b64_json', 'url']);
-
     let slotProviderType = null;
     let slotUuid = null;
 
@@ -262,6 +266,12 @@ async function handleImageEditsRequest(req, res, currentConfig, providerPoolMana
         const response_format = fields.response_format || 'b64_json';
         const size = fields.size;
         const n = Math.min(Math.max(1, parseInt(fields.n) || 1), IMAGE_GEN_MAX_N);
+
+        if (!SUPPORTED_IMAGE_MODELS.has(model)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: `model '${model}' is not supported; supported image models: ${[...SUPPORTED_IMAGE_MODELS].join(', ')}`, type: 'invalid_request_error' } }));
+            return;
+        }
 
         if (!prompt) {
             res.writeHead(400, { 'Content-Type': 'application/json' });

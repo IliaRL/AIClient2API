@@ -15,6 +15,7 @@ const baseModels = getProviderModels(MODEL_PROVIDER.CODEX_API);
 const fastModels = baseModels.map(m => `${m}-fast`);
 const CODEX_MODELS = [...new Set([...baseModels, ...fastModels])];
 const CODEX_VERSION = '0.124.0';
+export const IMAGE_MODELS = new Set(['gpt-image-2']);
 
 /**
  * Codex API 服务类
@@ -355,29 +356,6 @@ export class CodexApiService {
     }
 
     /**
-     * 确保包含图像生成工具
-     */
-    ensureImageGenerationTool(body, model) {
-        if (model.endsWith('spark')) {
-            return body;
-        }
-
-        if (!body.tools) {
-            body.tools = [this.imageGenTool];
-            return body;
-        }
-
-        if (Array.isArray(body.tools)) {
-            const hasImageGen = body.tools.some(t => t.type === 'image_generation');
-            if (!hasImageGen) {
-                body.tools.push(this.imageGenTool);
-            }
-        }
-
-        return body;
-    }
-
-    /**
      * 准备请求体
      */
     async prepareRequestBody(model, requestBody, stream) {
@@ -395,8 +373,7 @@ export class CodexApiService {
         const defaultReasoningEffort = isFastModel ? 'xhigh' : 'medium';
 
         // 图像生成模型：gpt-image-2 通过 image_generation 工具 + gpt-5.4 实现
-        const IMAGE_MODELS = ['gpt-image-2'];
-        const isImageModel = IMAGE_MODELS.includes(upstreamModel);
+        const isImageModel = IMAGE_MODELS.has(upstreamModel);
         const effectiveUpstreamModel = isImageModel ? 'gpt-5.4' : upstreamModel;
 
         const cleanedBody = {...requestBody};
@@ -429,11 +406,14 @@ export class CodexApiService {
                 if (!hasWebSearch) {
                     cleanedBody.tools.push({type: 'web_search'});
                 }
+                if (!upstreamModel.endsWith('spark')) {
+                    const hasImageGen = cleanedBody.tools.some(t => t.type === 'image_generation');
+                    if (!hasImageGen) {
+                        cleanedBody.tools.push(this.imageGenTool);
+                    }
+                }
             }
         }
-
-        // 确保包含图像生成工具
-        this.ensureImageGenerationTool(cleanedBody, upstreamModel);
 
         if (isFastModel) {
             logger.info(`[Codex] Detected -fast model: ${normalizedModel} -> ${upstreamModel}, service_tier: ${cleanedBody.service_tier || defaultServiceTier}`);
