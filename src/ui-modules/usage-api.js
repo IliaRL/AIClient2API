@@ -228,24 +228,25 @@ async function getAdapterUsage(adapter, providerType) {
  * @returns {string} 显示名称
  */
 function getProviderDisplayName(provider, providerType) {
-    // 优先使用自定义名称
+    // 1. 优先使用自定义名称
     if (provider.customName) {
         return provider.customName;
     }
 
-    if (provider.uuid) {
-        return provider.uuid;
-    }
-
-    // 尝试从凭据文件路径提取名称
+    // 2. 尝试从凭据文件路径提取名称（自动从文件名识别账号）
     const mapping = PROVIDER_MAPPINGS.find(m => m.providerType === providerType);
     const credPathKey = mapping ? mapping.credPathKey : null;
 
     if (credPathKey && provider[credPathKey]) {
         const filePath = provider[credPathKey];
-        const fileName = path.basename(filePath);
-        const dirName = path.basename(path.dirname(filePath));
-        return `${dirName}/${fileName}`;
+        // 提取文件名（不含扩展名）作为显示名称，例如 account-a.json -> account-a
+        const fileName = path.basename(filePath, path.extname(filePath));
+        return fileName;
+    }
+
+    // 3. 兜底显示 UUID
+    if (provider.uuid) {
+        return provider.uuid;
     }
 
     return 'Unnamed';

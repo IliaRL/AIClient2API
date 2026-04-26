@@ -710,6 +710,7 @@ function createUsageBreakdownHTML(breakdown, providerType) {
             ? Math.min(100, (breakdown.currentUsage / breakdown.usageLimit) * 100)
             : 0);
     const remainingPercent = hasRemainingPct ? breakdown.remainingPercent : (100 - usagePercent);
+    const progressFillPercent = hasRemainingPct ? remainingPercent : usagePercent;
     
     const progressClass = remainingPercent <= 10 ? 'danger' : (remainingPercent <= 30 ? 'warning' : 'normal');
 
@@ -729,7 +730,7 @@ function createUsageBreakdownHTML(breakdown, providerType) {
             </div>
             ${showUsage ? `
             <div class="progress-bar-small ${progressClass}">
-                <div class="progress-fill" style="width: ${remainingPercent}%"></div>
+                <div class="progress-fill" style="width: ${progressFillPercent}%"></div>
             </div>
             ` : ''}
     `;
