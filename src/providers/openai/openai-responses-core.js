@@ -2,7 +2,7 @@ import axios from 'axios';
 import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
-import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
+import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER } from '../../utils/common.js';
 
 // OpenAI Responses API specification service for interacting with third-party models
@@ -31,25 +31,27 @@ export class OpenAIResponsesApiService {
             timeout: 120000,
         });
 
+        // 检查是否启用了 TLS Sidecar
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(config, config.MODEL_PROVIDER || MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES);
+
         const axiosConfig = {
             baseURL: this.baseUrl,
-            httpAgent,
-            httpsAgent,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${this.apiKey}`
             }
         };
 
-        // 禁用系统代理以避免HTTPS代理错误
-        if (!this.useSystemProxy) {
-            axiosConfig.proxy = false;
+        // 如果启用了 TLS Sidecar，就不配置 httpAgent 和 httpsAgent，避免配置冲突
+        if (!isTLSSidecarEnabled) {
+            axiosConfig.httpAgent = httpAgent;
+            axiosConfig.httpsAgent = httpsAgent;
+            // 配置自定义代理 (使用 openai-custom 的代理配置)
+            configureAxiosProxy(axiosConfig, config, config.MODEL_PROVIDER || MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES);
         }
-        
-        // 配置自定义代理 (使用 openai-custom 的代理配置)
-        configureAxiosProxy(axiosConfig, config, config.MODEL_PROVIDER || MODEL_PROVIDER.OPENAI_CUSTOM_RESPONSES);
 
         this.axiosInstance = axios.create(axiosConfig);
+
     }
 
     _applySidecar(axiosConfig) {

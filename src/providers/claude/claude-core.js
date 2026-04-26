@@ -2,7 +2,7 @@ import axios from 'axios';
 import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
-import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
+import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
 
 /**
@@ -46,24 +46,24 @@ export class ClaudeApiService {
             timeout: 120000,
         });
 
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CLAUDE_CUSTOM);
+        
         const axiosConfig = {
             baseURL: this.baseUrl,
-            httpAgent,
-            httpsAgent,
             headers: {
                 'x-api-key': this.apiKey,
                 'Content-Type': 'application/json',
                 'anthropic-version': '2023-06-01', // Claude API 版本
             },
         };
-        
-        // 禁用系统代理以避免HTTPS代理错误
-        if (!this.useSystemProxy) {
-            axiosConfig.proxy = false;
+
+        // 如果启用了 TLS Sidecar，就不配置 httpAgent 和 httpsAgent，避免配置冲突
+        if (!isTLSSidecarEnabled) {
+            axiosConfig.httpAgent = httpAgent;
+            axiosConfig.httpsAgent = httpsAgent;
+            // 配置自定义代理
+            configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CLAUDE_CUSTOM);
         }
-        
-        // 配置自定义代理
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.CLAUDE_CUSTOM);
         
         return axios.create(axiosConfig);
     }

@@ -5,7 +5,7 @@ import * as https from 'https';
 import { v4 as uuidv4 } from 'uuid';
 import { MODEL_PROTOCOL_PREFIX, isRetryableNetworkError } from '../../utils/common.js';
 import { getProviderModels } from '../provider-models.js';
-import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
+import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER } from '../../utils/common.js';
 import { ConverterFactory } from '../../converters/ConverterFactory.js';
 import * as readline from 'readline';
@@ -230,19 +230,26 @@ export class GrokApiService {
             ...otherOptions
         } = options;
 
+        // 检查是否启用了 TLS Sidecar
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
+
         const axiosConfig = { 
             method, 
             url, 
             headers, 
             data, 
-            httpAgent, 
-            httpsAgent, 
             timeout,
             ...otherOptions
         };
         if (responseType) axiosConfig.responseType = responseType;
 
-        configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
+        // 如果未启用 TLS Sidecar，则配置 httpAgent 和 httpsAgent
+        if (!isTLSSidecarEnabled) {
+            axiosConfig.httpAgent = httpAgent;
+            axiosConfig.httpsAgent = httpsAgent;
+            configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
+        }
+        
         this._applySidecar(axiosConfig);
 
         return await axios(axiosConfig);

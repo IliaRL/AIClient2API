@@ -10,7 +10,9 @@ import { t, getCurrentLanguage } from './i18n.js';
  * 
  * 注：gemini-antigravity 已支持 remainingPercent，移除限制
  */
-const PROVIDERS_WITHOUT_USAGE_DISPLAY = [];
+const PROVIDERS_WITHOUT_USAGE_DISPLAY = [
+    'gemini-antigravity'
+];
 
 // 提供商配置缓存
 let currentProviderConfigs = null;

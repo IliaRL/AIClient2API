@@ -52,10 +52,24 @@ export function isRetryableNetworkError(error) {
     const errorCode = error.code || '';
     const errorMessage = error.message || '';
     
-    return RETRYABLE_NETWORK_ERRORS.some(errId =>
-        errorCode === errId || errorMessage.includes(errId)
+    return RETRYABLE_NETWORK_ERRORS.some(err => 
+        errorCode === err || errorMessage.includes(err)
     );
 }
+
+/**
+ * 确保状态码是有效的 HTTP 状态码
+ * @param {any} code - 待检查的状态码
+ * @returns {number} - 有效的 HTTP 状态码 (100-599)，默认为 500
+ */
+export function ensureValidStatusCode(code) {
+    const num = parseInt(code, 10);
+    if (!isNaN(num) && num >= 100 && num < 600) {
+        return num;
+    }
+    return 500;
+}
+
 
 function getErrorStatusCode(error) {
     return error?.response?.status || error?.status || error?.statusCode || error?.code || null;
@@ -560,10 +574,11 @@ export function isAuthorized(req, requestUrl, REQUIRED_API_KEY) {
  * @param {boolean} isStream - Whether the response is a stream.
  */
 export async function handleUnifiedResponse(res, responsePayload, isStream, statusCode = 200) {
+    const validatedStatusCode = ensureValidStatusCode(statusCode);
     if (isStream) {
         res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive", "Transfer-Encoding": "chunked" });
     } else {
-        res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+        res.writeHead(validatedStatusCode, { 'Content-Type': 'application/json' });
     }
 
     if (isStream) {
@@ -1091,7 +1106,8 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
 
         // 使用新方法创建符合 fromProvider 格式的错误响应
         const errorResponse = createErrorResponse(error, fromProvider);
-        const statusCode = error.status || error.code || (error.response && error.response.status) || 500;
+        const rawStatusCode = error.status || error.code || (error.response && error.response.status) || 500;
+        const statusCode = ensureValidStatusCode(rawStatusCode);
         await handleUnifiedResponse(res, JSON.stringify(errorResponse), false, statusCode);
     } finally {
         // 确保在请求结束或出错时释放插槽
@@ -1516,7 +1532,8 @@ function _applyCustomModelParameters(requestBody, customConfig, provider) {
 }
 
 export function handleError(res, error, provider = null, fromProvider = null, req = null) {
-    const statusCode = error.response?.status || error.statusCode || error.status || error.code || 500;
+    const rawStatusCode = error.response?.status || error.statusCode || error.status || error.code || 500;
+    const statusCode = ensureValidStatusCode(rawStatusCode);
     
     // 如果没有提供 fromProvider 但提供了 req，尝试从路径推断
     if (!fromProvider && req && req.url) {
@@ -1752,7 +1769,7 @@ export function extractSystemPromptFromRequestBody(requestBody, provider) {
     let incomingSystemText = '';
     switch (provider) {
         case MODEL_PROTOCOL_PREFIX.OPENAI:
-            const openaiSystemMessage = requestBody.messages?.find(m => m.role === 'system');
+            const openaiSystemMessage = requestBody.messages?.find(m => m.role === 'system' || m.role === 'developer');
             if (openaiSystemMessage?.content) {
                 incomingSystemText = openaiSystemMessage.content;
             } else if (requestBody.messages?.length > 0) {
@@ -1852,7 +1869,8 @@ export function formatToLocal(dateInput) {
  */
 function createErrorResponse(error, fromProvider) {
     const protocolPrefix = getProtocolPrefix(fromProvider);
-    const statusCode = error.status || error.code || 500;
+    const rawStatusCode = error.status || error.code || 500;
+    const statusCode = ensureValidStatusCode(rawStatusCode);
     const errorMessage = error.message || "An error occurred during processing.";
     
     // 根据 HTTP 状态码映射错误类型
@@ -1936,7 +1954,8 @@ function createErrorResponse(error, fromProvider) {
  */
 function createStreamErrorResponse(error, fromProvider) {
     const protocolPrefix = getProtocolPrefix(fromProvider);
-    const statusCode = error.status || error.code || 500;
+    const rawStatusCode = error.status || error.code || 500;
+    const statusCode = ensureValidStatusCode(rawStatusCode);
     const errorMessage = error.message || "An error occurred during streaming.";
     
     // 根据 HTTP 状态码映射错误类型
