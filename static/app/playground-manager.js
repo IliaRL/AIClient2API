@@ -1,6 +1,7 @@
 // Playground 管理模块
 
 import { getAuthHeaders } from './auth.js';
+import { t } from './i18n.js';
 
 let providerModels = {};   // { providerType: [model1, model2, ...] }
 let apiKey = '';           // REQUIRED_API_KEY, used for /v1/chat/completions auth
@@ -57,7 +58,7 @@ function renderProviderOptions(providers) {
     const sel = getProviderSelect();
     if (!sel) return;
 
-    sel.innerHTML = '<option value="">— 选择提供商 —</option>';
+    sel.innerHTML = `<option value="">${t('playground.selectProvider')}</option>`;
 
     providers.forEach(p => {
         const hasNodes = p.totalNodes > 0;
@@ -73,17 +74,14 @@ function renderProviderOptions(providers) {
 // ── Events ───────────────────────────────────────────────────────────────────
 
 function bindEvents() {
-    // Provider change → populate models
     document.addEventListener('change', (e) => {
         if (e.target.id === 'pg-provider-select') onProviderChange(e.target.value);
     });
 
-    // Model change → enable input
     document.addEventListener('change', (e) => {
         if (e.target.id === 'pg-model-select') updateInputState();
     });
 
-    // Send on Enter (not Shift+Enter)
     document.addEventListener('keydown', (e) => {
         if (e.target.id === 'pg-input' && e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -91,7 +89,6 @@ function bindEvents() {
         }
     });
 
-    // Auto-resize textarea
     document.addEventListener('input', (e) => {
         if (e.target.id === 'pg-input') {
             e.target.style.height = 'auto';
@@ -99,14 +96,12 @@ function bindEvents() {
         }
     });
 
-    // Send button
     document.addEventListener('click', (e) => {
         if (e.target.closest('#pg-send-btn')) handleSend();
         if (e.target.closest('#pg-clear-btn')) clearChat();
         if (e.target.closest('#pg-attach-btn')) el('pg-file-input')?.click();
     });
 
-    // File input
     document.addEventListener('change', (e) => {
         if (e.target.id === 'pg-file-input') handleFiles(e.target.files);
     });
@@ -117,14 +112,14 @@ function onProviderChange(providerType) {
     if (!modelSel) return;
 
     if (!providerType) {
-        modelSel.innerHTML = '<option value="">请先选择提供商</option>';
+        modelSel.innerHTML = `<option value="">${t('playground.providerFirst')}</option>`;
         modelSel.disabled = true;
         updateInputState();
         return;
     }
 
     const models = providerModels[providerType] || [];
-    modelSel.innerHTML = '<option value="">— 选择模型 —</option>';
+    modelSel.innerHTML = `<option value="">${t('playground.selectModel')}</option>`;
     models.forEach(m => {
         const opt = document.createElement('option');
         opt.value = m;
@@ -157,23 +152,19 @@ async function handleSend() {
 
     if (!provider || !model || (!text && pendingFiles.length === 0)) return;
 
-    // Build user message content
     const userContent = buildUserContent(text, pendingFiles);
     messages.push({ role: 'user', content: userContent });
 
-    // Render user bubble (show text + file names)
     const displayText = [
         text,
-        ...pendingFiles.map(f => `[附件: ${f.name}]`)
+        ...pendingFiles.map(f => `${t('playground.attachPrefix')}${f.name}]`)
     ].filter(Boolean).join('\n');
     appendMessage('user', displayText);
 
-    // Reset input
     if (input) { input.value = ''; input.style.height = 'auto'; }
     pendingFiles = [];
     renderAttachmentPreview();
 
-    // Start streaming
     const assistantBubble = appendMessage('assistant', '');
     await streamResponse(provider, model, assistantBubble);
 }
@@ -191,7 +182,6 @@ function buildUserContent(text, files) {
                 image_url: { url: f.dataUrl }
             });
         } else {
-            // PDF or other — send as text note (broad compatibility)
             parts.push({ type: 'text', text: `[File: ${f.name}]\n${f.dataUrl}` });
         }
     });
@@ -228,7 +218,7 @@ async function streamResponse(provider, model, bubble) {
 
         if (!response.ok) {
             const errText = await response.text();
-            let msg = `请求失败 (${response.status})`;
+            let msg = `${t('playground.reqFailed')} (${response.status})`;
             try { msg = JSON.parse(errText)?.error?.message || msg; } catch {}
             throw new Error(msg);
         }
@@ -253,7 +243,6 @@ async function streamResponse(provider, model, bubble) {
                     const delta = json.choices?.[0]?.delta?.content || '';
                     if (delta) {
                         accumulated += delta;
-                        // Update bubble text (before cursor)
                         bubble.textContent = accumulated;
                         bubble.appendChild(cursor);
                         scrollToBottom();
@@ -266,7 +255,7 @@ async function streamResponse(provider, model, bubble) {
 
     } catch (e) {
         if (e.name === 'AbortError') {
-            accumulated = accumulated || '(已中断)';
+            accumulated = accumulated || t('playground.aborted');
         } else {
             bubble.textContent = '';
             bubble.className = 'pg-message-bubble';
@@ -301,7 +290,7 @@ function appendMessage(role, text) {
 
     const roleLabel = document.createElement('div');
     roleLabel.className = 'pg-message-role';
-    roleLabel.textContent = role === 'user' ? '你' : 'AI';
+    roleLabel.textContent = role === 'user' ? t('playground.you') : 'AI';
     wrapper.appendChild(roleLabel);
 
     const bubble = document.createElement('div');
@@ -326,7 +315,7 @@ function clearChat() {
     const empty = document.createElement('div');
     empty.className = 'playground-empty';
     empty.id = 'pg-empty';
-    empty.innerHTML = '<i class="fas fa-comment-dots"></i><p>选择提供商和模型后开始对话</p>';
+    empty.innerHTML = `<i class="fas fa-comment-dots"></i><p>${t('playground.emptyHint')}</p>`;
     container.appendChild(empty);
 
     if (currentAbortController) {
@@ -350,7 +339,6 @@ async function handleFiles(fileList) {
         pendingFiles.push({ name: file.name, type: file.type, dataUrl });
     }
 
-    // Reset input so same file can be re-selected
     const fileInput = el('pg-file-input');
     if (fileInput) fileInput.value = '';
 
@@ -377,7 +365,7 @@ function renderAttachmentPreview() {
         tag.innerHTML = `
             <i class="fas ${f.type.startsWith('image/') ? 'fa-image' : 'fa-file-pdf'}"></i>
             <span>${f.name}</span>
-            <button data-index="${i}" title="移除">×</button>
+            <button data-index="${i}" title="×">×</button>
         `;
         tag.querySelector('button').addEventListener('click', () => {
             pendingFiles.splice(i, 1);

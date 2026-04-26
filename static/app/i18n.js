@@ -37,6 +37,7 @@ const translations = {
         'nav.plugins': '插件管理',
         'nav.models': '可用模型',
         'nav.customModels': '自定义模型',
+        'nav.playground': 'Playground',
         
         // Dashboard
         'dashboard.title': '系统概览',
@@ -796,7 +797,24 @@ const translations = {
         'logs.clear.success.title': '清空成功',
         'logs.clear.success.msg': '前端实时日志和服务器当日日志文件已全部清空',
         'logs.clear.failed': '清空日志失败',
-        
+
+        // Playground
+        'playground.provider': '提供商',
+        'playground.model': '模型',
+        'playground.loading': '加载中...',
+        'playground.selectProvider': '— 选择提供商 —',
+        'playground.selectModel': '— 选择模型 —',
+        'playground.providerFirst': '请先选择提供商',
+        'playground.clearChat': '清空对话',
+        'playground.emptyHint': '选择提供商和模型后开始对话',
+        'playground.inputPlaceholder': '输入消息... (Shift+Enter 换行，Enter 发送)',
+        'playground.hint': 'Shift+Enter 换行 · Enter 发送',
+        'playground.attachTitle': '上传文件（图片/PDF）',
+        'playground.you': '你',
+        'playground.aborted': '(已中断)',
+        'playground.attachPrefix': '[附件: ',
+        'playground.reqFailed': '请求失败',
+
         // Plugins
         'plugins.title': '插件管理',
         'plugins.description': '插件系统允许您扩展系统功能，启用或禁用插件需要重启服务才能生效',
@@ -1115,6 +1133,7 @@ const translations = {
         'nav.plugins': 'Plugin Management',
         'nav.models': 'Available Models',
         'nav.customModels': 'Custom Models',
+        'nav.playground': 'Playground',
         
         // Dashboard
         'dashboard.title': 'System Overview',
@@ -1883,7 +1902,24 @@ const translations = {
         'logs.clear.success.title': 'Success',
         'logs.clear.success.msg': 'Both real-time logs and today\'s log file on server have been cleared',
         'logs.clear.failed': 'Failed to clear logs',
-        
+
+        // Playground
+        'playground.provider': 'Provider',
+        'playground.model': 'Model',
+        'playground.loading': 'Loading...',
+        'playground.selectProvider': '— Select Provider —',
+        'playground.selectModel': '— Select Model —',
+        'playground.providerFirst': 'Select a provider first',
+        'playground.clearChat': 'Clear Chat',
+        'playground.emptyHint': 'Select a provider and model to start chatting',
+        'playground.inputPlaceholder': 'Type a message... (Shift+Enter for new line, Enter to send)',
+        'playground.hint': 'Shift+Enter for new line · Enter to send',
+        'playground.attachTitle': 'Upload file (image/PDF)',
+        'playground.you': 'You',
+        'playground.aborted': '(Aborted)',
+        'playground.attachPrefix': '[Attachment: ',
+        'playground.reqFailed': 'Request failed',
+
         // Plugins
         'plugins.title': 'Plugin Management',
         'plugins.description': 'The plugin system allows you to extend system functionality. Enabling or disabling plugins requires a service restart to take effect.',
