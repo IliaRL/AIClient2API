@@ -37,8 +37,8 @@ const translations = {
         'nav.plugins': '插件管理',
         'nav.models': '可用模型',
         'nav.customModels': '自定义模型',
-        'nav.playground': 'Playground',
-        
+        'nav.playground': '模型测试',
+
         // Dashboard
         'dashboard.title': '系统概览',
         'dashboard.uptime': '运行时间',
