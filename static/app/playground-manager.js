@@ -206,6 +206,7 @@ async function streamResponse(provider, model, bubble) {
 
     currentAbortController = new AbortController();
     let accumulated = '';
+    let errorMsg = '';
 
     try {
         const response = await fetch('/v1/chat/completions', {
@@ -232,13 +233,16 @@ async function streamResponse(provider, model, bubble) {
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        let sseBuffer = '';
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
+            // buffer across chunks so a large data: line isn't split mid-JSON
+            sseBuffer += decoder.decode(value, {stream: true});
+            const lines = sseBuffer.split('\n');
+            sseBuffer = lines.pop(); // keep the (possibly incomplete) last line
 
             for (const line of lines) {
                 if (!line.startsWith('data: ')) continue;
@@ -254,6 +258,19 @@ async function streamResponse(provider, model, bubble) {
                         bubble.appendChild(cursor);
                         scrollToBottom();
                     }
+                } catch {
+                }
+            }
+        }
+
+        // flush whatever remains in the buffer
+        if (sseBuffer.trim().startsWith('data: ')) {
+            const data = sseBuffer.slice(6).trim();
+            if (data && data !== '[DONE]') {
+                try {
+                    const json = JSON.parse(data);
+                    const delta = json.choices?.[0]?.delta?.content || '';
+                    if (delta) accumulated += delta;
                 } catch {}
             }
         }
@@ -264,23 +281,79 @@ async function streamResponse(provider, model, bubble) {
         if (e.name === 'AbortError') {
             accumulated = accumulated || t('playground.aborted');
         } else {
-            bubble.textContent = '';
-            bubble.className = 'pg-message-bubble';
-            const errBubble = document.createElement('span');
-            errBubble.textContent = e.message;
-            bubble.appendChild(errBubble);
-            bubble.closest('.pg-message')?.classList.add('error');
+            console.error('[Playground] Stream error:', e.message);
+            errorMsg = e.message || t('playground.reqFailed');
         }
     } finally {
         cursor.remove();
-        if (accumulated && !bubble.closest('.pg-message.error')) {
-            bubble.textContent = accumulated;
+        if (errorMsg) {
+            bubble.textContent = errorMsg;
+            bubble.closest('.pg-message')?.classList.add('error');
+        } else if (accumulated) {
+            bubble.innerHTML = renderMarkdown(accumulated);
         }
         isStreaming = false;
         currentAbortController = null;
         updateInputState();
         scrollToBottom();
     }
+}
+
+// ── Markdown renderer ─────────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function isSafeImageUrl(url) {
+    return url.startsWith('data:image/') || /^https?:\/\//.test(url);
+}
+
+function renderMarkdown(text) {
+    const blocks = [];
+
+    // pull out fenced code blocks first to protect them from further processing
+    text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+        const escaped = escapeHtml(code.trimEnd());
+        const langAttr = lang ? ` class="language-${escapeHtml(lang)}"` : '';
+        const html = `<pre style="background:var(--code-bg,#1e1e1e);color:var(--code-text,#d4d4d4);padding:0.75rem;border-radius:0.375rem;overflow-x:auto;font-size:0.8rem;margin:0.5rem 0;white-space:pre"><code${langAttr}>${escaped}</code></pre>`;
+        blocks.push(html);
+        return `\x00BLOCK${blocks.length - 1}\x00`;
+    });
+
+    // inline code `...`
+    text = text.replace(/`([^`]+)`/g, (_, code) =>
+        `<code style="background:var(--code-bg,#1e1e1e);color:var(--code-text,#d4d4d4);padding:0.1em 0.3em;border-radius:3px;font-size:0.85em">${escapeHtml(code)}</code>`
+    );
+
+    // markdown images ![alt](url) — only render safe URLs as <img>
+    text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
+        if (!isSafeImageUrl(url)) return escapeHtml(match);
+        const safeAlt = escapeHtml(alt);
+        const safeUrl = url.startsWith('data:image/') ? url : escapeHtml(url);
+        return `<img src="${safeUrl}" alt="${safeAlt}" style="max-width:100%;border-radius:0.375rem;margin:0.25rem 0;display:block">`;
+    });
+
+    // markdown links [text](url)
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, label, url) =>
+        `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
+    );
+
+    // **bold** and *italic*
+    text = text.replace(/\*\*([^*]+)\*\*/g, (_, s) => `<strong>${escapeHtml(s)}</strong>`);
+    text = text.replace(/\*([^*\n]+)\*/g, (_, s) => `<em>${escapeHtml(s)}</em>`);
+
+    // newlines → <br>
+    text = text.replace(/\n/g, '<br>');
+
+    // restore protected code blocks
+    text = text.replace(/\x00BLOCK(\d+)\x00/g, (_, i) => blocks[+i]);
+
+    return text;
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
