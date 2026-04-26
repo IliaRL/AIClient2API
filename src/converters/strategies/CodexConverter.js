@@ -338,7 +338,7 @@ export class CodexConverter extends BaseConverter {
         // 首先检查显式的 instructions 字段 (OpenAI Responses)
         if (data.instructions) return data.instructions;
 
-        const systemMessages = (data.messages || []).filter(m => m.role === 'system');
+        const systemMessages = (data.messages || []).filter(m => m.role === 'system' || m.role === 'developer');
         if (systemMessages.length > 0) {
             return systemMessages.map(m => {
                 if (typeof m.content === 'string') {

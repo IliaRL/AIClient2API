@@ -1769,7 +1769,7 @@ export function extractSystemPromptFromRequestBody(requestBody, provider) {
     let incomingSystemText = '';
     switch (provider) {
         case MODEL_PROTOCOL_PREFIX.OPENAI:
-            const openaiSystemMessage = requestBody.messages?.find(m => m.role === 'system');
+            const openaiSystemMessage = requestBody.messages?.find(m => m.role === 'system' || m.role === 'developer');
             if (openaiSystemMessage?.content) {
                 incomingSystemText = openaiSystemMessage.content;
             } else if (requestBody.messages?.length > 0) {
