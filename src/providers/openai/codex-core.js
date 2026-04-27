@@ -666,6 +666,10 @@ export class CodexApiService {
                 const trimmedLine = line.trim();
                 if (!trimmedLine) continue;
 
+                if (trimmedLine.startsWith('event: ') || trimmedLine.startsWith('id: ') || trimmedLine.startsWith('retry: ')) {
+                    continue;
+                }
+
                 let dataStr = trimmedLine;
                 if (trimmedLine.startsWith('data: ')) {
                     dataStr = trimmedLine.slice(6).trim();
@@ -763,6 +767,10 @@ export class CodexApiService {
         for (const line of lines) {
             const trimmedLine = line.trim();
             if (!trimmedLine) continue;
+
+            if (trimmedLine.startsWith('event: ') || trimmedLine.startsWith('id: ') || trimmedLine.startsWith('retry: ')) {
+                continue;
+            }
 
             let jsonData = trimmedLine;
             if (trimmedLine.startsWith('data: ')) {
