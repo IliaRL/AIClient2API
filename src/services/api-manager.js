@@ -257,17 +257,39 @@ function parseMultipartForm(req) {
         const fields = {};
         const files = {};
 
+        let settled = false;
+        const rejectOnce = (err) => {
+            if (!settled) {
+                settled = true;
+                reject(err);
+            }
+        };
+        const resolveOnce = (val) => {
+            if (!settled) {
+                settled = true;
+                resolve(val);
+            }
+        };
+
         bb.on('field', (name, value) => { fields[name] = value; });
 
         bb.on('file', (name, stream, info) => {
             const chunks = [];
             stream.on('data', chunk => chunks.push(chunk));
             stream.on('end', () => { files[name] = { buffer: Buffer.concat(chunks), mimetype: info.mimeType }; });
-            stream.on('error', reject);
+            stream.on('error', rejectOnce);
         });
 
-        bb.on('close', () => resolve({ fields, files }));
-        bb.on('error', reject);
+        bb.on('close', () => resolveOnce({fields, files}));
+        bb.on('error', rejectOnce);
+
+        // 客户端提前断连时 req 不会触发 'end'，需要主动拒绝，否则 Promise 永远挂起
+        req.on('aborted', () => rejectOnce(new Error('Request aborted by client')));
+        req.on('close', () => {
+            if (!req.complete) {
+                rejectOnce(new Error('Request connection closed before body was fully received'));
+            }
+        });
 
         req.pipe(bb);
     });
