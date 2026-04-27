@@ -817,6 +817,9 @@ export class CodexApiService {
                         break;
                 }
             } catch (e) {
+                if (e.message.startsWith('Codex API error')) {
+                    throw e;
+                }
                 // 继续解析下一行
                 logger.debug('[Codex] Failed to parse SSE line:', e.message);
             }

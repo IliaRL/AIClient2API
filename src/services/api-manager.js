@@ -313,31 +313,40 @@ async function handleImageEditsRequest(req, res, currentConfig, providerPoolMana
         const size = fields.size;
         const n = Math.min(Math.max(1, parseInt(fields.n) || 1), IMAGE_GEN_MAX_N);
 
+        // 兼容 image[] 字段名（LiteLLM 发送的是 image[]，OpenAI 标准是 image）
+        const imageFile = files.image || files['image[]'];
+
+        logger.info(`[Image Edits] Received request: model=${model}, n=${n}, response_format=${response_format}, hasPrompt=${!!prompt}, hasImage=${!!imageFile}${size ? `, size=${size}` : ''}, fields=${JSON.stringify(Object.keys(fields))}, fileKeys=${JSON.stringify(Object.keys(files))}`);
+
         if (!SUPPORTED_IMAGE_MODELS.has(model)) {
+            logger.warn(`[Image Edits] Unsupported model: ${model}`);
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: `model '${model}' is not supported; supported image models: ${[...SUPPORTED_IMAGE_MODELS].join(', ')}`, type: 'invalid_request_error' } }));
             return;
         }
 
         if (!prompt) {
+            logger.warn(`[Image Edits] Missing required field: prompt`);
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'prompt is required', type: 'invalid_request_error' } }));
             return;
         }
 
-        if (!files.image) {
+        if (!imageFile) {
+            logger.warn(`[Image Edits] Missing required field: image (received file keys: ${JSON.stringify(Object.keys(files))})`);
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: 'image is required', type: 'invalid_request_error' } }));
             return;
         }
 
         if (!VALID_RESPONSE_FORMATS.has(response_format)) {
+            logger.warn(`[Image Edits] Invalid response_format: ${response_format}`);
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: { message: `response_format must be 'b64_json' or 'url'`, type: 'invalid_request_error' } }));
             return;
         }
 
-        const { buffer, mimetype } = files.image;
+        const {buffer, mimetype} = imageFile;
         const imageUrl = `data:${mimetype || 'image/png'};base64,${buffer.toString('base64')}`;
 
         // 构造 Codex 请求：input_image + input_text，prepareRequestBody 自动处理 gpt-image-2 → gpt-5.4 + image_generation tool
