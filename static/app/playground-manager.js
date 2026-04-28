@@ -159,6 +159,10 @@ function updateInputState() {
 
 // ── Chat logic ────────────────────────────────────────────────────────────────
 
+function isImageGenModel(provider, model) {
+    return provider === 'openai-codex-oauth' && model.includes('image');
+}
+
 async function handleSend() {
     if (isStreaming) return;
 
@@ -173,8 +177,8 @@ async function handleSend() {
         return;
     }
 
-    const userContent = buildUserContent(text, pendingFiles);
-    messages.push({ role: 'user', content: userContent });
+    const isImageModel = isImageGenModel(provider, model);
+    const filesToSend = [...pendingFiles];
 
     const displayText = [
         text,
@@ -182,12 +186,21 @@ async function handleSend() {
     ].filter(Boolean).join('\n');
     appendMessage('user', displayText);
 
+    if (!isImageModel) {
+        const userContent = buildUserContent(text, pendingFiles);
+        messages.push({role: 'user', content: userContent});
+    }
+
     if (input) { input.value = ''; input.style.height = 'auto'; }
     pendingFiles = [];
     renderAttachmentPreview();
 
     const assistantBubble = appendMessage('assistant', '');
-    await streamResponse(provider, model, assistantBubble);
+    if (isImageModel) {
+        await imageResponse(provider, model, text, filesToSend, assistantBubble);
+    } else {
+        await streamResponse(provider, model, assistantBubble);
+    }
 }
 
 function buildUserContent(text, files) {
@@ -208,6 +221,86 @@ function buildUserContent(text, files) {
     });
 
     return parts;
+}
+
+function dataUrlToBlob(dataUrl) {
+    const [meta, data] = dataUrl.split(',');
+    const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/png';
+    const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+    return new Blob([bytes], {type: mime});
+}
+
+async function imageResponse(provider, model, prompt, files, bubble) {
+    isStreaming = true;
+    updateInputState();
+
+    let errorMsg = '';
+
+    try {
+        const imageFiles = files.filter(f => f.type.startsWith('image/'));
+        const hasImages = imageFiles.length > 0;
+        let response;
+
+        if (hasImages) {
+            const formData = new FormData();
+            formData.append('model', model);
+            formData.append('prompt', prompt || '');
+            formData.append('response_format', 'b64_json');
+            imageFiles.forEach(f => formData.append('image', dataUrlToBlob(f.dataUrl), f.name));
+
+            response = await fetch('/v1/images/edits', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'model-provider': provider
+                },
+                body: formData
+            });
+        } else {
+            response = await fetch('/v1/images/generations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                    'model-provider': provider
+                },
+                body: JSON.stringify({model, prompt, response_format: 'b64_json'})
+            });
+        }
+
+        if (!response.ok) {
+            const errText = await response.text();
+            let msg = `${t('playground.reqFailed')} (${response.status})`;
+            try {
+                msg = JSON.parse(errText)?.error?.message || msg;
+            } catch {
+            }
+            throw new Error(msg);
+        }
+
+        const json = await response.json();
+        const images = json.data || [];
+        if (images.length === 0) throw new Error(t('playground.reqFailed'));
+
+        bubble.innerHTML = images.map((img, i) => {
+            const src = img.b64_json ? `data:image/png;base64,${img.b64_json}` : img.url;
+            const alt = escapeHtml(img.revised_prompt ? `generated image ${i + 1}` : 'generated image');
+            return `<img src="${src}" alt="${alt}" style="max-width:100%;border-radius:0.375rem;margin:0.25rem 0;display:block">`;
+        }).join('');
+
+    } catch (e) {
+        console.error('[Playground] Image generation error:', e.message);
+        errorMsg = e.message || t('playground.reqFailed');
+    } finally {
+        if (errorMsg) {
+            bubble.textContent = errorMsg;
+            bubble.closest('.pg-message')?.classList.add('error');
+        }
+        isStreaming = false;
+        currentAbortController = null;
+        updateInputState();
+        scrollToBottom();
+    }
 }
 
 async function streamResponse(provider, model, bubble) {
