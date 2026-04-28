@@ -234,6 +234,10 @@ async function imageResponse(provider, model, prompt, files, bubble) {
     isStreaming = true;
     updateInputState();
 
+    const cursor = document.createElement('span');
+    cursor.className = 'pg-cursor';
+    bubble.appendChild(cursor);
+
     let errorMsg = '';
 
     try {
@@ -292,6 +296,7 @@ async function imageResponse(provider, model, prompt, files, bubble) {
         console.error('[Playground] Image generation error:', e.message);
         errorMsg = e.message || t('playground.reqFailed');
     } finally {
+        cursor.remove();
         if (errorMsg) {
             bubble.textContent = errorMsg;
             bubble.closest('.pg-message')?.classList.add('error');
