@@ -204,7 +204,7 @@ export class GrokApiService {
     }
 
     _applySidecar(axiosConfig) {
-        return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
+        return configureTLSSidecar(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_WEB);
     }
 
     /**
@@ -231,7 +231,7 @@ export class GrokApiService {
         } = options;
 
         // 检查是否启用了 TLS Sidecar
-        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
+        const isTLSSidecarEnabled = isTLSSidecarEnabledForProvider(this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_WEB);
 
         const axiosConfig = { 
             method, 
@@ -247,7 +247,7 @@ export class GrokApiService {
         if (!isTLSSidecarEnabled) {
             axiosConfig.httpAgent = httpAgent;
             axiosConfig.httpsAgent = httpsAgent;
-            configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM);
+            configureAxiosProxy(axiosConfig, this.config, this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_WEB);
         }
         
         this._applySidecar(axiosConfig);
@@ -344,7 +344,7 @@ export class GrokApiService {
             // await this.getUsageLimits(); return Promise.resolve();
             const poolManager = getProviderPoolManager();
             if (poolManager && this.uuid) {
-                poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM, this.uuid);
+                poolManager.resetProviderRefreshStatus(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_WEB, this.uuid);
             }
             return true;
         } catch (error) {
@@ -1297,7 +1297,7 @@ export class GrokApiService {
         if (requestBody._requestBaseUrl) delete requestBody._requestBaseUrl;
 
         if (this.isExpiryDateNear() && getProviderPoolManager() && this.uuid) {
-            getProviderPoolManager().markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_CUSTOM, { uuid: this.uuid });
+            getProviderPoolManager().markProviderNeedRefresh(this.config.MODEL_PROVIDER || MODEL_PROVIDER.GROK_WEB, { uuid: this.uuid });
         }
 
         const rawModel = typeof model === 'string' ? model : '';

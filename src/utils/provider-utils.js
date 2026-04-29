@@ -80,13 +80,13 @@ export const PROVIDER_MAPPINGS = [
         urlKeys: ['CODEX_BASE_URL']
     },
     {
-        // Grok Reverse 配置
+        // Grok Web 配置
         dirName: 'grok',
         patterns: ['configs/grok/', '/grok/'],
-        providerType: 'grok-custom',
+        providerType: 'grok-web',
         credPathKey: 'GROK_COOKIE_TOKEN',
         defaultCheckModel: 'grok-4.1-mini',
-        displayName: 'Grok Reverse',
+        displayName: 'Grok Web',
         needsProjectId: false,
         urlKeys: ['GROK_BASE_URL', 'GROK_CF_CLEARANCE', 'GROK_USER_AGENT']
     }

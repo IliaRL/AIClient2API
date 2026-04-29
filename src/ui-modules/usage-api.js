@@ -7,7 +7,7 @@ import { PROVIDER_MAPPINGS } from '../utils/provider-utils.js';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
 
-const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth', 'grok-custom'];
+const supportedProviders = ['claude-kiro-oauth', 'gemini-cli-oauth', 'gemini-antigravity', 'openai-codex-oauth', 'grok-web'];
 
 
 /**
@@ -210,7 +210,7 @@ async function getAdapterUsage(adapter, providerType) {
         throw new Error('This adapter does not support usage query');
     }
 
-    if (providerType === 'grok-custom') {
+    if (providerType === 'grok-web') {
         if (typeof adapter.getUsageLimits === 'function') {
             const rawUsage = await adapter.getUsageLimits();
             return formatGrokUsage(rawUsage);

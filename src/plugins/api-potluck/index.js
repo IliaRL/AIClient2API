@@ -120,8 +120,7 @@ function extractUsage(...candidates) {
 
 function getTrackedRequestIds(hookContext = {}) {
     return [...new Set([
-        hookContext._monitorRequestId,
-        hookContext._pluginRequestId
+        hookContext._monitorRequestId
     ].filter(Boolean))];
 }
 

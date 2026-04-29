@@ -55,7 +55,7 @@ function getBaseProviderConfigs() {
             defaultPath: 'configs/iflow/'
         },
         { 
-            id: 'grok-custom', 
+            id: 'grok-web', 
             name: t('dashboard.routing.nodeName.grok'), 
             icon: 'fa-user-secret'
         },
@@ -201,6 +201,7 @@ function getFieldLabel(key) {
         'CODEX_OAUTH_CREDS_FILE_PATH': t('modal.provider.field.oauthPath'),
         'GROK_COOKIE_TOKEN': t('modal.provider.field.ssoToken'),
         'GROK_CF_CLEARANCE': t('modal.provider.field.cfClearance'),
+
         'GROK_USER_AGENT': t('modal.provider.field.userAgent'),
         'GEMINI_BASE_URL': 'Gemini Base URL',
         'KIRO_BASE_URL': t('modal.provider.field.baseUrl'),
@@ -399,7 +400,7 @@ function getProviderTypeFields(providerType) {
                 placeholder: 'https://api.openai.com/v1/codex'
             }
         ],
-        'grok-custom': [
+        'grok-web': [
             {
                 id: 'GROK_COOKIE_TOKEN',
                 label: t('modal.provider.field.ssoToken'),

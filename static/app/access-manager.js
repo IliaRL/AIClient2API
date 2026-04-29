@@ -14,7 +14,7 @@ const recommendedModelMap = {
     'openai-qwen-oauth': 'qwen3-coder-plus',
     'openai-iflow': 'qwen3-max',
     'openai-codex-oauth': 'gpt-5',
-    'grok-custom': 'grok-4.1-mini',
+    'grok-web': 'grok-4.1-mini',
     'openaiResponses-custom': 'gpt-4o',
     'forward-api': 'gpt-4o'
 };

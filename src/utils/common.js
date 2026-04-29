@@ -589,7 +589,7 @@ export async function handleUnifiedResponse(res, responsePayload, isStream, stat
 }
 
 function getPluginHookRequestId(config) {
-    return config?._monitorRequestId || config?._pluginRequestId || null;
+    return config?._monitorRequestId || null;
 }
 
 export async function handleStreamRequest(res, service, model, requestBody, fromProvider, toProvider, PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, pooluuid, customName, retryContext = null) {

@@ -759,7 +759,7 @@ async function openProviderManager(providerType, searchTerm = '') {
  */
 function generateAuthButton(providerType) {
     // 只为支持OAuth或批量导入的提供商显示授权按钮
-    const oauthProviders = ['gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth', 'claude-kiro-oauth', 'openai-iflow', 'openai-codex-oauth', 'grok-custom'];
+    const oauthProviders = ['gemini-cli-oauth', 'gemini-antigravity', 'openai-qwen-oauth', 'claude-kiro-oauth', 'openai-iflow', 'openai-codex-oauth', 'grok-web'];
 
     if (!oauthProviders.includes(providerType)) {
         return '';
@@ -873,7 +873,7 @@ async function handleGenerateAuthUrl(providerType) {
     }
 
     // 如果是 Grok，显示认证方式选择对话框（目前仅支持批量导入，因为没有标准 OAuth）
-    if (providerType === 'grok-custom') {
+    if (providerType === 'grok-web') {
         showGrokAuthMethodSelector(providerType);
         return;
     }

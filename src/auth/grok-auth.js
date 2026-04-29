@@ -23,7 +23,7 @@ export async function batchImportGrokTokensStream(tokens, onProgress = null, ski
         details: []
     };
 
-    const providerType = 'grok-custom';
+    const providerType = 'grok-web';
     const poolManager = getProviderPoolManager();
     const allPools = poolManager ? poolManager.providerPools : (CONFIG.providerPools || {});
     if (!allPools[providerType]) allPools[providerType] = [];

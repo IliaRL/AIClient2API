@@ -441,10 +441,11 @@ This project supports flexible proxy configuration, allowing you to configure a 
         "gemini-cli-oauth",
         "gemini-antigravity",
         "claude-kiro-oauth",
-        "grok-custom"
+        "grok-web"
       ]
-}
-   ```
+    }
+    ```
+
 
 3. **Provider-Specific Proxied Endpoints**: Some providers (like OpenAI, Claude) support configuring proxied API endpoints
 

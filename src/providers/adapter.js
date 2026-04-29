@@ -708,7 +708,7 @@ registerAdapter(MODEL_PROVIDER.GEMINI_CLI, GeminiApiServiceAdapter);
 registerAdapter(MODEL_PROVIDER.ANTIGRAVITY, AntigravityApiServiceAdapter);
 registerAdapter(MODEL_PROVIDER.KIRO_API, KiroApiServiceAdapter);
 registerAdapter(MODEL_PROVIDER.CODEX_API, CodexApiServiceAdapter);
-registerAdapter(MODEL_PROVIDER.GROK_CUSTOM, GrokApiServiceAdapter);
+registerAdapter(MODEL_PROVIDER.GROK_WEB, GrokApiServiceAdapter);
 // registerAdapter(MODEL_PROVIDER.FORWARD_API, ForwardApiServiceAdapter);
 // registerAdapter(MODEL_PROVIDER.QWEN_API, QwenApiServiceAdapter);
 // registerAdapter(MODEL_PROVIDER.IFLOW_API, IFlowApiServiceAdapter);

@@ -58,7 +58,7 @@ export class ProviderPoolManager {
         'openai-codex-oauth': 'gpt-5-codex-mini',
         'openaiResponses-custom': 'gpt-4o-mini',
         'forward-api': 'gpt-4o-mini',
-        'grok-custom': 'grok-4.1-mini',
+        'grok-web': 'grok-4.1-mini',
     };
 
     constructor(providerPools, options = {}) {

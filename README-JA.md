@@ -441,10 +441,11 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
         "gemini-cli-oauth",
         "gemini-antigravity",
         "claude-kiro-oauth",
-        "grok-custom"
+        "grok-web"
       ]
-}
-   ```
+    }
+    ```
+
 
 3. **プロバイダー独自のプロキシ済みエンドポイント**：一部のプロバイダー（OpenAI、Claudeなど）はプロキシ済みAPIエンドポイントの設定をサポートしています
 

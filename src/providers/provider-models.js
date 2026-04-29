@@ -122,7 +122,7 @@ export const PROVIDER_MODELS = {
         'gpt-image-2',
     ],
     'forward-api': [],
-    'grok-custom': [
+    'grok-web': [
         'grok-4.1-mini',
         'grok-4.1-thinking',
         'grok-4.20',

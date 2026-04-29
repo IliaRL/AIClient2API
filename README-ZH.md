@@ -439,10 +439,11 @@ curl http://localhost:3000/claude-kiro-oauth/v1/chat/completions \
         "gemini-cli-oauth",
         "gemini-antigravity",
         "claude-kiro-oauth",
-        "grok-custom"
+        "grok-web"
       ]
-}
-   ```
+    }
+    ```
+
 
 3. **提供商自带代理端点**：某些提供商（如 OpenAI、Claude）支持配置已代理的 API 端点
 

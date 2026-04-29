@@ -54,7 +54,7 @@ export function createRequestHandler(config, providerPoolManager) {
         return logger.runWithContext(requestId, async () => {
             // Deep copy the config for each request to allow dynamic modification
             const currentConfig = deepmerge({}, config);
-            currentConfig._pluginRequestId = requestId;
+            currentConfig._monitorRequestId = requestId;
             
             // 计算当前请求的基础 URL
             const protocol = req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';

@@ -1272,7 +1272,7 @@ function getFieldOrder(provider) {
         } else if (provider.CODEX_OAUTH_CREDS_FILE_PATH) {
             providerType = 'openai-codex-oauth';
         } else if (provider.GROK_COOKIE_TOKEN) {
-            providerType = 'grok-custom';
+            providerType = 'grok-web';
         } else if (provider.FORWARD_API_KEY) {
             providerType = 'forward-api';
         }

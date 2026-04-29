@@ -64,7 +64,7 @@ export const MODEL_PROVIDER = {
     IFLOW_API: 'openai-iflow',
     CODEX_API: 'openai-codex-oauth',
     FORWARD_API: 'forward-api',
-    GROK_CUSTOM: 'grok-custom',
+    GROK_WEB: 'grok-web',
     AUTO: 'auto',
 };
 

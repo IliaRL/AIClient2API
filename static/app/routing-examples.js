@@ -233,11 +233,11 @@ function getAvailableRoutes() {
             badgeClass: 'responses'
         },
         {
-            provider: 'grok-custom',
+            provider: 'grok-web',
             name: t('dashboard.routing.nodeName.grok'),
             paths: {
-                openai: '/grok-custom/v1/chat/completions',
-                claude: '/grok-custom/v1/messages'
+                openai: '/grok-web/v1/chat/completions',
+                claude: '/grok-web/v1/messages'
             },
             description: t('dashboard.routing.free'),
             badge: t('dashboard.routing.free'),
@@ -404,7 +404,7 @@ async function copyCurlExample(provider, options = {}) {
   }'`;
             }
             break;
-        case 'grok-custom':
+        case 'grok-web':
             if (protocol === 'openai') {
                 curlCommand = `curl ${hostname}${path} \\
   -H "Content-Type: application/json" \\
@@ -479,7 +479,7 @@ function renderRoutingExamples(providerConfigs) {
         'openaiResponses-custom': 'fa-comment-alt',
         'openai-iflow': 'fa-wind',
         'openai-codex-oauth': 'fa-keyboard',
-        'grok-custom': 'fa-search'
+        'grok-web': 'fa-search'
     };
 
     // 默认模型映射 (用于 curl 示例)
@@ -492,7 +492,7 @@ function renderRoutingExamples(providerConfigs) {
         'openai-qwen-oauth': 'qwen3-coder-plus',
         'openai-iflow': 'qwen3-max',
         'openai-codex-oauth': 'gpt-5',
-        'grok-custom': 'grok-4.1-mini',
+        'grok-web': 'grok-4.1-mini',
         'openaiResponses-custom': 'gpt-4o'
     };
 
