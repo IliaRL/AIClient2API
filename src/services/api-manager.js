@@ -8,6 +8,12 @@ import {
 } from '../utils/common.js';
 import { getProviderPoolManager, getApiServiceWithFallback } from './service-manager.js';
 import logger from '../utils/logger.js';
+import busboy from 'busboy';
+import { IMAGE_MODELS as SUPPORTED_IMAGE_MODELS } from '../providers/openai/codex-core.js';
+
+const IMAGE_GEN_MAX_N = 4;
+const VALID_RESPONSE_FORMATS = new Set(['b64_json', 'url']);
+
 /**
  * Handle API authentication and routing
  * @param {string} method - The HTTP method
@@ -35,9 +41,13 @@ export async function handleAPIRequests(method, path, req, res, currentConfig, a
         }
     }
 
-    // Route image generation requests
+    // Route image generation/editing requests
     if (method === 'POST' && path === '/v1/images/generations') {
         await handleImageGenerationRequest(req, res, currentConfig, providerPoolManager);
+        return true;
+    }
+    if (method === 'POST' && path === '/v1/images/edits') {
+        await handleImageEditsRequest(req, res, currentConfig, providerPoolManager);
         return true;
     }
 
@@ -84,9 +94,9 @@ export function initializeAPIManagement(services) {
                 // For pooled providers, refreshToken should be handled by individual instances
                 // For single instances, this remains relevant
                 if (serviceAdapter.config?.uuid && providerPoolManager) {
-                    providerPoolManager._enqueueRefresh(serviceAdapter.config.MODEL_PROVIDER, { 
-                        config: serviceAdapter.config, 
-                        uuid: serviceAdapter.config.uuid 
+                    providerPoolManager._enqueueRefresh(serviceAdapter.config.MODEL_PROVIDER, {
+                        config: serviceAdapter.config,
+                        uuid: serviceAdapter.config.uuid
                     });
                 } else {
                     await serviceAdapter.refreshToken();
@@ -113,7 +123,6 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
     const maxRetries = retryContext?.maxRetries ?? 3;
     const currentRetry = retryContext?.currentRetry ?? 0;
     const CONFIG = retryContext?.CONFIG ?? currentConfig;
-
     let slotProviderType = null;
     let slotUuid = null;
     let model, n, response_format, size, codexRequestBody;
@@ -129,6 +138,12 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
             // cap n：至少 1，最多 IMAGE_GEN_MAX_N，非数字降级为 1
             n = Math.min(Math.max(1, parseInt(body.n) || 1), IMAGE_GEN_MAX_N);
             const prompt = body.prompt;
+
+            if (!SUPPORTED_IMAGE_MODELS.has(model)) {
+                res.writeHead(400, {'Content-Type': 'application/json'});
+                res.end(JSON.stringify({error: {message: `model '${model}' is not supported; supported image models: ${[...SUPPORTED_IMAGE_MODELS].join(', ')}`, type: 'invalid_request_error'}}));
+                return;
+            }
 
             if (!prompt) {
                 res.writeHead(400, {'Content-Type': 'application/json'});
@@ -195,9 +210,16 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
         }
 
         if (data.length === 0) {
-            logger.error('[Image Generation] No image found in response output');
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: 'Image generation failed: no image in response', type: 'server_error' } }));
+            const rejectionText = extractRejectionMessage(completedEvents);
+            if (rejectionText) {
+                logger.warn(`[Image Generation] Content policy rejection: ${rejectionText.slice(0, 100)}`);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { code: 'content_policy_violation', message: rejectionText, type: 'invalid_request_error' } }));
+            } else {
+                logger.error('[Image Generation] No image found in response output');
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Image generation failed: no image in response', type: 'server_error' } }));
+            }
             return;
         }
 
@@ -252,6 +274,210 @@ async function handleImageGenerationRequest(req, res, currentConfig, providerPoo
         }
     } finally {
         // 确保并发槽在请求结束后归还（与 handleStreamRequest/handleUnaryRequest 保持一致）
+        if (providerPoolManager && slotProviderType && slotUuid) {
+            providerPoolManager.releaseSlot(slotProviderType, slotUuid);
+        }
+    }
+}
+
+/**
+ * Extract assistant rejection text from Codex output items.
+ * Returns the text if a policy/safety rejection message is found, otherwise null.
+ */
+function extractRejectionMessage(completedEvents) {
+    for (const completedEvent of completedEvents) {
+        const output = completedEvent?.response?.output || [];
+        for (const item of output) {
+            if (item.type === 'message' && item.role === 'assistant') {
+                const textPart = (item.content || []).find(c => c.type === 'output_text' && c.text);
+                if (textPart?.text) return textPart.text;
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * Parse multipart/form-data from a raw http.IncomingMessage via busboy.
+ * Returns { fields: {key: string}, files: {key: {buffer, mimetype}} }
+ * File buffers are collected in memory; mask field is accepted but ignored.
+ */
+function parseMultipartForm(req) {
+    return new Promise((resolve, reject) => {
+        const contentType = req.headers['content-type'] || '';
+        if (!contentType.includes('multipart/form-data')) {
+            return reject(new Error('Content-Type must be multipart/form-data'));
+        }
+
+        const bb = busboy({ headers: req.headers, limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB cap
+        const fields = {};
+        const files = {};
+
+        let settled = false;
+        const rejectOnce = (err) => {
+            if (!settled) {
+                settled = true;
+                reject(err);
+            }
+        };
+        const resolveOnce = (val) => {
+            if (!settled) {
+                settled = true;
+                resolve(val);
+            }
+        };
+
+        bb.on('field', (name, value) => { fields[name] = value; });
+
+        bb.on('file', (name, stream, info) => {
+            const chunks = [];
+            stream.on('data', chunk => chunks.push(chunk));
+            stream.on('end', () => { files[name] = { buffer: Buffer.concat(chunks), mimetype: info.mimeType }; });
+            stream.on('error', rejectOnce);
+        });
+
+        bb.on('close', () => resolveOnce({fields, files}));
+        bb.on('error', rejectOnce);
+
+        // 客户端提前断连时 req 不会触发 'end'，需要主动拒绝，否则 Promise 永远挂起
+        req.on('aborted', () => rejectOnce(new Error('Request aborted by client')));
+        req.on('close', () => {
+            if (!req.complete) {
+                rejectOnce(new Error('Request connection closed before body was fully received'));
+            }
+        });
+
+        req.pipe(bb);
+    });
+}
+
+/**
+ * Handle POST /v1/images/edits - OpenAI 标准改图接口
+ * Accepts multipart/form-data: image (required), prompt (required),
+ * mask (ignored), model, n, size, response_format
+ */
+async function handleImageEditsRequest(req, res, currentConfig, providerPoolManager) {
+    let slotProviderType = null;
+    let slotUuid = null;
+
+    try {
+        const { fields, files } = await parseMultipartForm(req);
+
+        const model = fields.model || 'gpt-image-2';
+        const prompt = fields.prompt;
+        const response_format = fields.response_format || 'b64_json';
+        const size = fields.size;
+        const n = Math.min(Math.max(1, parseInt(fields.n) || 1), IMAGE_GEN_MAX_N);
+
+        // 兼容 image[] 字段名（LiteLLM 发送的是 image[]，OpenAI 标准是 image）
+        const imageFile = files.image || files['image[]'];
+
+        logger.info(`[Image Edits] Received request: model=${model}, n=${n}, response_format=${response_format}, hasPrompt=${!!prompt}, hasImage=${!!imageFile}${size ? `, size=${size}` : ''}, fields=${JSON.stringify(Object.keys(fields))}, fileKeys=${JSON.stringify(Object.keys(files))}`);
+
+        if (!SUPPORTED_IMAGE_MODELS.has(model)) {
+            logger.warn(`[Image Edits] Unsupported model: ${model}`);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: `model '${model}' is not supported; supported image models: ${[...SUPPORTED_IMAGE_MODELS].join(', ')}`, type: 'invalid_request_error' } }));
+            return;
+        }
+
+        if (!prompt) {
+            logger.warn(`[Image Edits] Missing required field: prompt`);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'prompt is required', type: 'invalid_request_error' } }));
+            return;
+        }
+
+        if (!imageFile) {
+            logger.warn(`[Image Edits] Missing required field: image (received file keys: ${JSON.stringify(Object.keys(files))})`);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'image is required', type: 'invalid_request_error' } }));
+            return;
+        }
+
+        if (!VALID_RESPONSE_FORMATS.has(response_format)) {
+            logger.warn(`[Image Edits] Invalid response_format: ${response_format}`);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: `response_format must be 'b64_json' or 'url'`, type: 'invalid_request_error' } }));
+            return;
+        }
+
+        const {buffer, mimetype} = imageFile;
+        const imageUrl = `data:${mimetype || 'image/png'};base64,${buffer.toString('base64')}`;
+
+        // 构造 Codex 请求：input_image + input_text，prepareRequestBody 自动处理 gpt-image-2 → gpt-5.4 + image_generation tool
+        const codexRequestBody = {
+            model,
+            input: [{
+                type: 'message',
+                role: 'user',
+                content: [
+                    { type: 'input_image', image_url: imageUrl },
+                    { type: 'input_text', text: prompt }
+                ]
+            }],
+            ...(size ? { _imageSize: size } : {})
+        };
+
+        const shouldUsePool = !!(providerPoolManager && currentConfig.providerPools);
+        const result = await getApiServiceWithFallback(currentConfig, model, { acquireSlot: shouldUsePool });
+        const service = result.service;
+
+        if (!service) {
+            res.writeHead(503, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'No service available for image editing', type: 'server_error' } }));
+            return;
+        }
+
+        if (shouldUsePool && result.uuid) {
+            slotProviderType = result.actualProviderType || currentConfig.MODEL_PROVIDER;
+            slotUuid = result.uuid;
+        }
+
+        logger.info(`[Image Edits] model=${model}, n=${n}, response_format=${response_format}, imageSize=${Math.round(buffer.length / 1024)}KB${size ? `, size=${size}` : ''}`);
+
+        const imageRequests = Array.from({ length: n }, () =>
+            service.generateContent(model, { ...codexRequestBody })
+        );
+        const completedEvents = await Promise.all(imageRequests);
+
+        const data = [];
+        for (const completedEvent of completedEvents) {
+            const output = completedEvent?.response?.output || [];
+            for (const item of output) {
+                if (item.type === 'image_generation_call' && item.result) {
+                    const dataItem = response_format === 'url'
+                        ? { url: `data:image/${item.output_format || 'png'};base64,${item.result}` }
+                        : { b64_json: item.result };
+                    if (item.revised_prompt) dataItem.revised_prompt = item.revised_prompt;
+                    data.push(dataItem);
+                }
+            }
+        }
+
+        if (data.length === 0) {
+            const rejectionText = extractRejectionMessage(completedEvents);
+            if (rejectionText) {
+                logger.warn(`[Image Edits] Content policy rejection: ${rejectionText.slice(0, 100)}`);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { code: 'content_policy_violation', message: rejectionText, type: 'invalid_request_error' } }));
+            } else {
+                logger.error('[Image Edits] No image found in response output');
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'Image editing failed: no image in response', type: 'server_error' } }));
+            }
+            return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ created: Math.floor(Date.now() / 1000), data }));
+    } catch (error) {
+        logger.error('[Image Edits] Error:', error.message);
+        if (!res.writableEnded) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: error.message, type: 'server_error' } }));
+        }
+    } finally {
         if (providerPoolManager && slotProviderType && slotUuid) {
             providerPoolManager.releaseSlot(slotProviderType, slotUuid);
         }
