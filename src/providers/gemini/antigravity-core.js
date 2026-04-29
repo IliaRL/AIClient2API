@@ -957,6 +957,7 @@ export class AntigravityApiService {
             // Check if we already have a project ID from the response
             if (loadResponse.cloudaicompanionProject) {
                 logger.info(`[Antigravity] Discovered existing Project ID: ${loadResponse.cloudaicompanionProject}`);
+                this.projectId = loadResponse.cloudaicompanionProject;
                 // 获取可用模型
                 await this.fetchAvailableModels();
                 return loadResponse.cloudaicompanionProject;
@@ -990,6 +991,7 @@ export class AntigravityApiService {
 
             const discoveredProjectId = lroResponse.response?.cloudaicompanionProject?.id || initialProjectId;
             logger.info(`[Antigravity] Onboarded and discovered Project ID: ${discoveredProjectId}`);
+            this.projectId = discoveredProjectId;
             // 获取可用模型
             await this.fetchAvailableModels();
             return discoveredProjectId;
@@ -998,6 +1000,7 @@ export class AntigravityApiService {
             logger.info('[Antigravity] Falling back to generated Project ID as last resort...');
             const fallbackProjectId = generateProjectID();
             logger.info(`[Antigravity] Generated fallback Project ID: ${fallbackProjectId}`);
+            this.projectId = fallbackProjectId;
             // 获取可用模型
             await this.fetchAvailableModels();
             return fallbackProjectId;
@@ -1018,7 +1021,7 @@ export class AntigravityApiService {
                         'User-Agent': this.userAgent
                     },
                     responseType: 'json',
-                    body: JSON.stringify({})
+                    body: JSON.stringify(this.projectId ? { project: this.projectId } : {})
                 };
 
                 const res = await this.authClient.request(requestOptions);
@@ -1312,6 +1315,7 @@ export class AntigravityApiService {
     }
 
     async generateContent(model, requestBody) {
+        if (!this.isInitialized) await this.initialize();
         logger.info(`[Antigravity Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
 
         // 临时存储 monitorRequestId
@@ -1390,6 +1394,7 @@ export class AntigravityApiService {
     }
 
     async * generateContentStream(model, requestBody) {
+        if (!this.isInitialized) await this.initialize();
         logger.info(`[Antigravity Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
 
         // 临时存储 monitorRequestId

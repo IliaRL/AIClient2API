@@ -222,6 +222,18 @@ export class CodexConverter extends BaseConverter {
                 return item;
             });
         }
+        // 确保 text.format 是对象而非字符串
+        if (codexRequest.text?.format && typeof codexRequest.text.format === 'string') {
+            const fmt = codexRequest.text.format;
+            if (fmt === 'json_object') {
+                delete codexRequest.text.format;
+            } else {
+                codexRequest.text.format = { type: fmt };
+            }
+        }
+        if (codexRequest.text && Object.keys(codexRequest.text).length === 0) {
+            delete codexRequest.text;
+        }
     
         return codexRequest;
     }
@@ -248,12 +260,15 @@ export class CodexConverter extends BaseConverter {
             include: ['reasoning.encrypted_content']
         };
 
-        // 保留监控相关字段
+        // 保留监控和图片相关字段
         if (data._monitorRequestId) {
             codexRequest._monitorRequestId = data._monitorRequestId;
         }
         if (data._requestBaseUrl) {
             codexRequest._requestBaseUrl = data._requestBaseUrl;
+        }
+        if (data._imageSize) {
+            codexRequest._imageSize = data._imageSize;
         }
 
         codexRequest.service_tier = data.service_tier || 'default';
@@ -607,6 +622,14 @@ export class CodexConverter extends BaseConverter {
      * 转换响应格式
      */
     convertResponseFormat(responseFormat) {
+        if (!responseFormat) return null;
+
+        // 如果是字符串（可能是图像接口透传过来的 'url' 或 'b64_json'），忽略它
+        // 因为 Codex 的 text.format 期望的是一个对象（如 {type: "text"}）
+        if (typeof responseFormat === 'string') {
+            return null;
+        }
+
         if (responseFormat.type === 'json_schema') {
             return {
                 type: 'json_schema',

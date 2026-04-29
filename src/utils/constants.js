@@ -67,3 +67,11 @@ export const MODEL_PROVIDER = {
     GROK_CUSTOM: 'grok-custom',
     AUTO: 'auto',
 };
+
+// 图像生成模型常量
+export const SUPPORTED_IMAGE_MODELS = new Set([
+    'gpt-image-2',
+    'grok-imagine-1.0',
+    'grok-imagine-1.0-edit',
+    'gemini-3.1-flash-image'
+]);
