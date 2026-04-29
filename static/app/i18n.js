@@ -818,6 +818,7 @@ const translations = {
         'playground.systemRole': '系统设定 (System Role)',
         'playground.systemRolePlaceholder': '在此定义 AI 的角色、语气和背景知识...',
         'playground.hyperparameters': '超参数调优 (Hyperparameters)',
+        'playground.thinking': '思考过程',
         'playground.status.ready': '已就绪',
         'playground.status.unready': '未就绪',
 
@@ -1929,6 +1930,7 @@ const translations = {
         'playground.systemRole': 'System Role',
         'playground.systemRolePlaceholder': 'Define AI role, tone, and background here...',
         'playground.hyperparameters': 'Hyperparameters',
+        'playground.thinking': 'Thinking',
         'playground.status.ready': 'Ready',
         'playground.status.unready': 'Not Ready',
 

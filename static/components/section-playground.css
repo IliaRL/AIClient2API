@@ -524,6 +524,42 @@
     padding: 0.5rem 0;
 }
 
+.pg-reasoning {
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--primary-color);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    opacity: 0.9;
+    border: 1px solid var(--border-color);
+    border-left-width: 4px;
+}
+
+.pg-reasoning-title {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.pg-reasoning-title i {
+    color: var(--primary-color);
+    font-size: 0.8rem;
+}
+
+.pg-reasoning-content {
+    line-height: 1.6;
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+}
+
 .pg-thinking span {
     width: 6px;
     height: 6px;

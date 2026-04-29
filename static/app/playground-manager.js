@@ -251,10 +251,6 @@ async function imageResponse(provider, model, prompt, files, bubble, interfaceTy
     const msgWrapper = bubble.closest('.pg-message');
     if (msgWrapper) msgWrapper.style.display = 'flex'; // Image response doesn't need to hide
 
-    // const cursor = document.createElement('span');
-    // cursor.className = 'pg-cursor';
-    // bubble.appendChild(cursor);
-
     let errorMsg = '';
     try {
         const imageFiles = files.filter(f => f.type.startsWith('image/'));
@@ -302,7 +298,6 @@ async function imageResponse(provider, model, prompt, files, bubble, interfaceTy
     } catch (e) {
         errorMsg = e.message || t('playground.reqFailed');
     } finally {
-        cursor.remove();
         if (errorMsg) {
             bubble.textContent = errorMsg;
             bubble.closest('.pg-message')?.classList.add('error');
@@ -317,12 +312,12 @@ async function streamResponse(provider, model, bubble, params) {
     isStreaming = true;
     updateInputState();
 
-    // const cursor = document.createElement('span');
-    // cursor.className = 'pg-cursor';
-    // bubble.appendChild(cursor);
-
+    const cursor = document.createElement('span');
+    cursor.className = 'pg-cursor';
+    
     currentAbortController = new AbortController();
     let accumulated = '';
+    let accumulatedReasoning = '';
     let errorMsg = '';
 
     try {
@@ -368,15 +363,43 @@ async function streamResponse(provider, model, bubble, params) {
                 try {
                     const json = JSON.parse(data);
                     if (json.error) throw new Error(json.error.message || t('playground.reqFailed'));
-                    const delta = json.choices?.[0]?.delta?.content || '';
-                    if (delta) {
-                        if (!accumulated) {
+                    
+                    const delta = json.choices?.[0]?.delta;
+                    const content = delta?.content || '';
+                    const reasoning = delta?.reasoning_content || delta?.thinking || '';
+                    
+                    if (content || reasoning) {
+                        if (!accumulated && !accumulatedReasoning) {
                             const msgWrapper = bubble.closest('.pg-message');
                             if (msgWrapper) msgWrapper.style.display = 'flex';
                         }
-                        accumulated += delta;
-                        bubble.textContent = accumulated;
-                        bubble.appendChild(cursor);
+                        
+                        if (reasoning) accumulatedReasoning += reasoning;
+                        if (content) accumulated += content;
+                        
+                        let html = '';
+                        if (accumulatedReasoning) {
+                            html += `<div class="pg-reasoning">
+                                <div class="pg-reasoning-title"><i class="fas fa-brain"></i>${t('playground.thinking')}</div>
+                                <div class="pg-reasoning-content"></div>
+                            </div>`;
+                        }
+                        
+                        bubble.innerHTML = html;
+                        if (accumulatedReasoning) {
+                            const resContent = bubble.querySelector('.pg-reasoning-content');
+                            resContent.textContent = accumulatedReasoning;
+                            if (!accumulated) {
+                                resContent.appendChild(cursor);
+                            }
+                        }
+                        
+                        if (accumulated || !accumulatedReasoning) {
+                            const contentSpan = document.createElement('span');
+                            contentSpan.textContent = accumulated;
+                            bubble.appendChild(contentSpan);
+                            bubble.appendChild(cursor);
+                        }
                         scrollToBottom();
                     }
                 } catch (e) {
@@ -403,8 +426,20 @@ async function streamResponse(provider, model, bubble, params) {
         if (errorMsg) {
             bubble.textContent = errorMsg;
             bubble.closest('.pg-message')?.classList.add('error');
-        } else if (accumulated) {
-            bubble.innerHTML = renderMarkdown(accumulated);
+        } else {
+            bubble.innerHTML = '';
+            if (accumulatedReasoning) {
+                const resDiv = document.createElement('div');
+                resDiv.className = 'pg-reasoning';
+                resDiv.innerHTML = `<div class="pg-reasoning-title"><i class="fas fa-brain"></i>${t('playground.thinking')}</div><div class="pg-reasoning-content"></div>`;
+                resDiv.querySelector('.pg-reasoning-content').textContent = accumulatedReasoning;
+                bubble.appendChild(resDiv);
+            }
+            if (accumulated) {
+                const contentDiv = document.createElement('div');
+                contentDiv.innerHTML = renderMarkdown(accumulated);
+                while (contentDiv.firstChild) bubble.appendChild(contentDiv.firstChild);
+            }
         }
         isStreaming = false;
         currentAbortController = null;
@@ -455,7 +490,6 @@ function appendMessage(role, text) {
     
     if (role === 'assistant' && !text) {
         bubble.innerHTML = '<div class="pg-thinking"><span></span><span></span><span></span></div>';
-        wrapper.style.display = 'none'; // Waiting state hidden until first chunk
     } else {
         bubble.textContent = text;
     }
