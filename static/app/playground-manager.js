@@ -21,6 +21,7 @@ function getModelSelect()    { return el('pg-model-select'); }
 function getInterfaceSelect(){ return el('pg-interface-select'); }
 function getInput()          { return el('pg-input'); }
 function getSendBtn()        { return el('pg-send-btn'); }
+function getStopBtn()        { return el('pg-stop-btn'); }
 function getMessages()       { return el('pg-messages'); }
 function getEmpty()          { return el('pg-empty'); }
 function getAttachPreview()  { return el('pg-attachments-preview'); }
@@ -126,6 +127,7 @@ function bindEvents() {
 
     document.addEventListener('click', (e) => {
         if (e.target.closest('#pg-send-btn')) handleSend();
+        if (e.target.closest('#pg-stop-btn')) handleStop();
         if (e.target.closest('#pg-clear-btn')) clearChat();
         if (e.target.closest('#pg-attach-btn')) el('pg-file-input')?.click();
     });
@@ -165,8 +167,20 @@ function updateInputState() {
 
     const input = getInput();
     const sendBtn = getSendBtn();
-    if (input) input.disabled = !ready;
-    if (sendBtn) sendBtn.disabled = !ready;
+    const stopBtn = getStopBtn();
+    
+    if (input) input.disabled = isStreaming || !(provider && model);
+    
+    if (isStreaming) {
+        if (sendBtn) sendBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'flex';
+    } else {
+        if (sendBtn) {
+            sendBtn.style.display = 'flex';
+            sendBtn.disabled = !ready;
+        }
+        if (stopBtn) stopBtn.style.display = 'none';
+    }
 
     // Update status indicator
     const indicator = el('pg-active-indicator');
@@ -243,6 +257,13 @@ async function handleSend() {
     }
 }
 
+function handleStop() {
+    if (currentAbortController) {
+        currentAbortController.abort();
+        currentAbortController = null;
+    }
+}
+
 function buildUserContent(text, files) {
     if (files.length === 0) return text;
     const parts = [];
@@ -268,6 +289,8 @@ async function imageResponse(provider, model, prompt, files, bubble, interfaceTy
     isStreaming = true;
     updateInputState();
     
+    currentAbortController = new AbortController();
+
     const msgWrapper = bubble.closest('.pg-message');
     if (msgWrapper) msgWrapper.style.display = 'flex'; // Image response doesn't need to hide
 
@@ -291,13 +314,15 @@ async function imageResponse(provider, model, prompt, files, bubble, interfaceTy
             response = await fetch('/v1/images/edits', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${apiKey}`, 'model-provider': provider },
-                body: formData
+                body: formData,
+                signal: currentAbortController.signal
             });
         } else {
             response = await fetch('/v1/images/generations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, 'model-provider': provider },
-                body: JSON.stringify({model, prompt, response_format: 'b64_json'})
+                body: JSON.stringify({model, prompt, response_format: 'b64_json'}),
+                signal: currentAbortController.signal
             });
         }
 
@@ -316,13 +341,18 @@ async function imageResponse(provider, model, prompt, files, bubble, interfaceTy
         }).join('');
 
     } catch (e) {
-        errorMsg = e.message || t('playground.reqFailed');
+        if (e.name === 'AbortError') {
+            errorMsg = t('playground.aborted');
+        } else {
+            errorMsg = e.message || t('playground.reqFailed');
+        }
     } finally {
         if (errorMsg) {
             bubble.textContent = errorMsg;
             bubble.closest('.pg-message')?.classList.add('error');
         }
         isStreaming = false;
+        currentAbortController = null;
         updateInputState();
         scrollToBottom();
     }
@@ -331,6 +361,8 @@ async function imageResponse(provider, model, prompt, files, bubble, interfaceTy
 async function unaryResponse(provider, model, bubble, params) {
     isStreaming = true;
     updateInputState();
+    
+    currentAbortController = new AbortController();
 
     let errorMsg = '';
     try {
@@ -347,7 +379,8 @@ async function unaryResponse(provider, model, bubble, params) {
                 temperature: params.temperature,
                 max_tokens: params.max_tokens,
                 stream: false
-            })
+            }),
+            signal: currentAbortController.signal
         });
 
         if (!response.ok) {
@@ -364,10 +397,7 @@ async function unaryResponse(provider, model, bubble, params) {
         if (msgWrapper) msgWrapper.style.display = 'flex';
 
         if (reasoning) {
-            const resDiv = document.createElement('div');
-            resDiv.className = 'pg-reasoning';
-            resDiv.innerHTML = `<div class="pg-reasoning-title"><i class="fas fa-brain"></i>${t('playground.thinking')}</div><div class="pg-reasoning-content"></div>`;
-            resDiv.querySelector('.pg-reasoning-content').textContent = reasoning;
+            const resDiv = createReasoningBlock(reasoning);
             bubble.appendChild(resDiv);
         }
 
@@ -381,8 +411,12 @@ async function unaryResponse(provider, model, bubble, params) {
         }
 
     } catch (e) {
-        console.error('[Playground] Unary error:', e.message);
-        errorMsg = e.message || t('playground.reqFailed');
+        if (e.name === 'AbortError') {
+            errorMsg = t('playground.aborted');
+        } else {
+            console.error('[Playground] Unary error:', e.message);
+            errorMsg = e.message || t('playground.reqFailed');
+        }
     } finally {
         if (errorMsg) {
             bubble.textContent = errorMsg;
@@ -391,6 +425,7 @@ async function unaryResponse(provider, model, bubble, params) {
             if (msgWrapper) msgWrapper.style.display = 'flex';
         }
         isStreaming = false;
+        currentAbortController = null;
         updateInputState();
         scrollToBottom();
     }
@@ -517,10 +552,7 @@ async function streamResponse(provider, model, bubble, params) {
         } else {
             bubble.innerHTML = '';
             if (accumulatedReasoning) {
-                const resDiv = document.createElement('div');
-                resDiv.className = 'pg-reasoning';
-                resDiv.innerHTML = `<div class="pg-reasoning-title"><i class="fas fa-brain"></i>${t('playground.thinking')}</div><div class="pg-reasoning-content"></div>`;
-                resDiv.querySelector('.pg-reasoning-content').textContent = accumulatedReasoning;
+                const resDiv = createReasoningBlock(accumulatedReasoning);
                 bubble.appendChild(resDiv);
             }
             if (accumulated) {
@@ -601,6 +633,18 @@ function appendMessage(role, text) {
                 icon.className = 'fas fa-check';
                 setTimeout(() => icon.className = oldClass, 2000);
             }
+        });
+        contentWrapper.appendChild(actions);
+    } else if (role === 'user') {
+        const actions = document.createElement('div');
+        actions.className = 'pg-message-actions';
+        actions.innerHTML = `
+            <div class="pg-action-link btn-retry-msg" title="重试此对话">
+                <i class="fas fa-sync-alt"></i>
+            </div>
+        `;
+        actions.querySelector('.btn-retry-msg').addEventListener('click', () => {
+            retryMessage(wrapper, text);
         });
         contentWrapper.appendChild(actions);
     }
@@ -714,6 +758,66 @@ function renderMarkdown(text) {
 }
 
 // ── File handling ─────────────────────────────────────────────────────────────
+
+function retryMessage(messageWrapper, originalDisplayText) {
+    if (isStreaming) return;
+
+    const container = getMessages();
+    const allWrappers = Array.from(container.querySelectorAll('.pg-message'));
+    const index = allWrappers.indexOf(messageWrapper);
+
+    if (index === -1) return;
+
+    // Extract original text from history if possible (to avoid [Attachment: ...] markers)
+    let retryText = originalDisplayText;
+    const historyMsg = messages[index];
+    if (historyMsg && historyMsg.role === 'user') {
+        if (typeof historyMsg.content === 'string') {
+            retryText = historyMsg.content;
+        } else if (Array.isArray(historyMsg.content)) {
+            const textPart = historyMsg.content.find(p => p.type === 'text');
+            if (textPart) retryText = textPart.text;
+        }
+    }
+
+    // 1. Remove all subsequent messages from DOM
+    for (let i = allWrappers.length - 1; i >= index; i--) {
+        allWrappers[i].remove();
+    }
+
+    // 2. Remove from messages array
+    messages.splice(index);
+
+    // 3. Put text back to input and trigger send
+    const input = getInput();
+    if (input) {
+        input.value = retryText;
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 240) + 'px';
+        input.disabled = false;
+        input.focus();
+        
+        // Show empty state if no messages left
+        if (messages.length === 0) {
+            const empty = getEmpty();
+            if (empty) empty.style.display = 'flex';
+        }
+        
+        handleSend();
+    }
+}
+
+function createReasoningBlock(content, collapsed = true) {
+    const resDiv = document.createElement('div');
+    resDiv.className = 'pg-reasoning' + (collapsed ? ' collapsed' : '');
+    resDiv.innerHTML = `<div class="pg-reasoning-title"><i class="fas fa-brain"></i>${t('playground.thinking')}</div><div class="pg-reasoning-content"></div>`;
+    resDiv.querySelector('.pg-reasoning-content').textContent = content;
+    resDiv.addEventListener('click', (e) => {
+        e.stopPropagation();
+        resDiv.classList.toggle('collapsed');
+    });
+    return resDiv;
+}
 
 async function handleFiles(fileList) {
     if (!fileList?.length) return;
