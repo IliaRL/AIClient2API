@@ -533,6 +533,47 @@ async function copyToClipboard(text) {
     }
 }
 
+/**
+ * 只为元素绑定一次事件
+ * @param {HTMLElement|null} element - 需要绑定事件的元素
+ * @param {string} eventName - 事件名称
+ * @param {Function} handler - 事件处理函数
+ * @param {string} key - 绑定标识，避免同一元素重复绑定同一类事件
+ * @returns {boolean} 是否完成了本次绑定
+ */
+function bindOnce(element, eventName, handler, key = eventName) {
+    if (!element) {
+        return false;
+    }
+
+    if (!markOnce(element, key)) {
+        return false;
+    }
+
+    element.addEventListener(eventName, handler);
+    return true;
+}
+
+/**
+ * 为元素记录一次性初始化状态
+ * @param {HTMLElement|null} element - 需要标记的元素
+ * @param {string} key - 标识名称
+ * @returns {boolean} 是否是首次标记
+ */
+function markOnce(element, key) {
+    if (!element) {
+        return false;
+    }
+
+    const boundKey = `bound${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+    if (element.dataset[boundKey]) {
+        return false;
+    }
+
+    element.dataset[boundKey] = 'true';
+    return true;
+}
+
 // 导出所有工具函数
 export {
     formatUptime,
@@ -544,5 +585,7 @@ export {
     getBaseProviderConfigs,
     getProviderStats,
     apiRequest,
-    copyToClipboard
+    copyToClipboard,
+    bindOnce,
+    markOnce
 };

@@ -1,6 +1,7 @@
 // Playground 管理模块
 
 import { getAuthHeaders } from './auth.js';
+import { markOnce } from './utils.js';
 import { t } from './i18n.js';
 
 let providerModels = {};   // { providerType: [model1, model2, ...] }
@@ -34,8 +35,11 @@ function getStreamCheckbox() { return el('pg-stream-checkbox'); }
 // ── Initialisation ───────────────────────────────────────────────────────────
 
 export function initPlaygroundManager() {
-    loadProviderData();
     bindEvents();
+}
+
+export async function loadPlaygroundData() {
+    return loadProviderData();
 }
 
 async function loadProviderData() {
@@ -82,6 +86,10 @@ function renderProviderOptions(providers) {
 // ── Events ───────────────────────────────────────────────────────────────────
 
 function bindEvents() {
+    if (!markOnce(document.body, 'playgroundEvents')) {
+        return;
+    }
+
     document.addEventListener('change', (e) => {
         if (e.target.id === 'pg-provider-select') onProviderChange(e.target.value);
     });

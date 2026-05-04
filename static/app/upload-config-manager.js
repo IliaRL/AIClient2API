@@ -1,6 +1,6 @@
 // 配置管理功能模块
 
-import { showToast } from './utils.js';
+import { showToast, bindOnce } from './utils.js';
 import { t } from './i18n.js';
 
 let allConfigs = []; // 存储所有配置数据
@@ -1002,65 +1002,45 @@ function initUploadConfigManager() {
     const refreshBtn = document.getElementById('refreshConfigList');
     const downloadAllBtn = document.getElementById('downloadAllConfigs');
 
-    if (searchInput) {
-        searchInput.addEventListener('input', debounce(() => {
-            const searchTerm = searchInput.value.trim();
-            const currentStatusFilter = statusFilter?.value || '';
-            const currentProviderFilter = providerFilter?.value || '';
-            searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
-        }, 300));
-    }
+    bindOnce(searchInput, 'input', debounce(() => {
+        const searchTerm = searchInput.value.trim();
+        const currentStatusFilter = statusFilter?.value || '';
+        const currentProviderFilter = providerFilter?.value || '';
+        searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
+    }, 300), 'configSearch');
 
-    if (searchBtn) {
-        searchBtn.addEventListener('click', () => {
-            const searchTerm = searchInput?.value.trim() || '';
-            const currentStatusFilter = statusFilter?.value || '';
-            const currentProviderFilter = providerFilter?.value || '';
-            // 点击搜索按钮时，调接口刷新数据
-            loadConfigList(searchTerm, currentStatusFilter, currentProviderFilter);
-        });
-    }
+    bindOnce(searchBtn, 'click', () => {
+        const searchTerm = searchInput?.value.trim() || '';
+        const currentStatusFilter = statusFilter?.value || '';
+        const currentProviderFilter = providerFilter?.value || '';
+        // 点击搜索按钮时，调接口刷新数据
+        loadConfigList(searchTerm, currentStatusFilter, currentProviderFilter);
+    }, 'configSearchButton');
 
-    if (statusFilter) {
-        statusFilter.addEventListener('change', () => {
-            const searchTerm = searchInput?.value.trim() || '';
-            const currentStatusFilter = statusFilter.value;
-            const currentProviderFilter = providerFilter?.value || '';
-            searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
-        });
-    }
+    bindOnce(statusFilter, 'change', () => {
+        const searchTerm = searchInput?.value.trim() || '';
+        const currentStatusFilter = statusFilter.value;
+        const currentProviderFilter = providerFilter?.value || '';
+        searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
+    }, 'configStatusFilter');
 
-    if (providerFilter) {
-        providerFilter.addEventListener('change', () => {
-            const searchTerm = searchInput?.value.trim() || '';
-            const currentStatusFilter = statusFilter?.value || '';
-            const currentProviderFilter = providerFilter.value;
-            searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
-        });
-    }
+    bindOnce(providerFilter, 'change', () => {
+        const searchTerm = searchInput?.value.trim() || '';
+        const currentStatusFilter = statusFilter?.value || '';
+        const currentProviderFilter = providerFilter.value;
+        searchConfigs(searchTerm, currentStatusFilter, currentProviderFilter);
+    }, 'configProviderFilter');
 
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => loadConfigList());
-    }
-
-    if (downloadAllBtn) {
-        downloadAllBtn.addEventListener('click', downloadAllConfigs);
-    }
+    bindOnce(refreshBtn, 'click', () => loadConfigList(), 'refreshConfigList');
+    bindOnce(downloadAllBtn, 'click', downloadAllConfigs, 'downloadAllConfigs');
 
     // 批量关联配置按钮
     const batchLinkBtn = document.getElementById('batchLinkKiroBtn') || document.getElementById('batchLinkProviderBtn');
-    if (batchLinkBtn) {
-        batchLinkBtn.addEventListener('click', batchLinkProviderConfigs);
-    }
+    bindOnce(batchLinkBtn, 'click', batchLinkProviderConfigs, 'batchLinkProvider');
 
     // 删除未绑定配置按钮
     const deleteUnboundBtn = document.getElementById('deleteUnboundBtn');
-    if (deleteUnboundBtn) {
-        deleteUnboundBtn.addEventListener('click', deleteUnboundConfigs);
-    }
-
-    // 初始加载配置列表
-    loadConfigList();
+    bindOnce(deleteUnboundBtn, 'click', deleteUnboundConfigs, 'deleteUnboundConfigs');
 }
 
 /**

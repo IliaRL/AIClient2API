@@ -1,6 +1,6 @@
 // 用量管理模块
 
-import { showToast } from './utils.js';
+import { showToast, bindOnce } from './utils.js';
 import { getAuthHeaders } from './auth.js';
 import { t, getCurrentLanguage } from './i18n.js';
 
@@ -15,6 +15,7 @@ const PROVIDERS_WITHOUT_USAGE_DISPLAY = [
 
 // 提供商配置缓存
 let currentProviderConfigs = null;
+let usagePageDataPromise = null;
 
 /**
  * 更新提供商配置
@@ -22,9 +23,6 @@ let currentProviderConfigs = null;
  */
 export function updateUsageProviderConfigs(configs) {
     currentProviderConfigs = configs;
-    // 重新触发列表加载，以应用最新的可见性过滤、名称和图标
-    loadSupportedProviders();
-    loadUsage();
 }
 
 /**
@@ -41,13 +39,22 @@ function shouldShowUsage(providerType) {
  */
 export function initUsageManager() {
     const refreshBtn = document.getElementById('refreshUsageBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', refreshUsage);
+    bindOnce(refreshBtn, 'click', refreshUsage, 'refreshUsage');
+}
+
+export function loadUsagePageData() {
+    if (usagePageDataPromise) {
+        return usagePageDataPromise;
     }
-    
-    // 初始化时自动加载缓存数据
-    loadUsage();
-    loadSupportedProviders();
+
+    usagePageDataPromise = Promise.all([
+        loadUsage(),
+        loadSupportedProviders()
+    ]).finally(() => {
+        usagePageDataPromise = null;
+    });
+
+    return usagePageDataPromise;
 }
 
 /**

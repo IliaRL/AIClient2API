@@ -1,7 +1,7 @@
 /**
  * AIClient2API 文档数据与格式化中心 (全量版)
  * 确保命令行 (CLI) 和远程 API 返回完全一致且详尽的数据结果
- */
+ */ 
 
 export const HELP_DATA = {
     project: "AIClient2API",
@@ -26,19 +26,21 @@ export const HELP_DATA = {
         { flag: "--log-prompts", default: "none", desc: "提示词日志模式 (console/file/none)" },
         { flag: "--prompt-log-base-name", default: "prompt_log", desc: "日志文件前缀" },
         { flag: "--request-max-retries", default: "3", desc: "API 请求最大重试次数" },
-        { flag: "--cron-refresh-token", default: "false", desc: "是否开启令牌自动刷新" },
-        { flag: "--provider-pools-file", default: "configs/provider_pools.json", desc: "号池配置文件路径" },
-        { flag: "--max-error-count", default: "10", desc: "账号最大连续错误次数" },
-        { flag: "--rate-limit-cooldown-enabled", default: "false", desc: "是否启用 429 冷却" },
-        { flag: "--rate-limit-cooldown-ms", default: "30000", desc: "默认冷却时长 (ms)" },
-        { flag: "--scheduled-health-check-enabled", default: "false", desc: "是否开启定时健康检查" },
-        { flag: "--scheduled-health-check-interval", default: "600000", desc: "检查间隔 (ms)" }
+        { flag: "--cron-near-minutes", default: "15", desc: "Token 自动刷新检查间隔 (分钟)" },
+        { flag: "--cron-refresh-token", default: "false", desc: "是否开启令牌自动刷新任务" },
+        { flag: "--provider-pools-file", default: "configs/provider_pools.json", desc: "提供商号池配置文件路径" },
+        { flag: "--custom-models-file", default: "configs/custom_models.json", desc: "自定义模型映射文件路径" },
+        { flag: "--max-error-count", default: "10", desc: "单个账号最大连续错误重置次数" },
+        { flag: "--rate-limit-cooldown-enabled", default: "false", desc: "是否启用 429 频率限制冷却" },
+        { flag: "--rate-limit-cooldown-ms", default: "30000", desc: "基础冷却时长 (ms)" },
+        { flag: "--scheduled-health-check-enabled", default: "false", desc: "是否开启定时自动健康检查" },
+        { flag: "--scheduled-health-check-interval", default: "600000", desc: "自动检查间隔时间 (ms)" }
     ],
     remote_docs: [
         { path: "/api/help", desc: "获取启动帮助信息 (JSON/Text)" },
         { path: "/api/example", desc: "获取 API 资源指南 (JSON/Text)" }
     ],
-    docker: "docker run -d -p 3000:3000 -v \"$(pwd)/configs:/app/configs\" justlikemaki/aiclient2api"
+    docker: "docker run -d -p 3000:3000 -v \"$(pwd)/configs:/app/configs\" justlikemaki/aiclient-2-api"
 };
 
 export const API_GUIDE_DATA = [
@@ -60,7 +62,7 @@ export const API_GUIDE_DATA = [
         { method: 'GET',    path: '/health',                      desc: '基础健康检查' },
         { method: 'GET',    path: '/api/system',                  desc: '服务器运行状态统计' },
         { method: 'GET',    path: '/api/service-mode',            desc: '获取运行模式 (Standalone/Master)' },
-        { method: 'GET',    path: '/api/access-info',             desc: '获取接入指南概览' }
+        { method: 'GET',    path: '/api/access-info',             desc: '获取 API 接入配置与账号状态汇总' }
     ]},
     { group: '3. 配置管理与维护 (Configuration)', routes: [
         { method: 'GET',    path: '/api/config',                  desc: '获取全量配置内容' },
@@ -72,40 +74,50 @@ export const API_GUIDE_DATA = [
         { method: 'POST',   path: '/api/system/clear-log',        desc: '清除今日运行日志' }
     ]},
     { group: '4. 提供商账号池管理 (Provider Pool)', routes: [
-        { method: 'GET',    path: '/api/providers',               desc: '获取所有提供商及账号状态' },
-        { method: 'POST',   path: '/api/providers',               desc: '新增提供商账号' },
-        { method: 'GET',    path: '/api/providers/supported',     desc: '查看系统支持的类型' },
-        { method: 'GET',    path: '/api/providers/{type}',        desc: '获取特定类型的账号列表' },
-        { method: 'PUT',    path: '/api/providers/{type}/{uuid}', desc: '更新指定账号详情' },
-        { method: 'DELETE', path: '/api/providers/{type}/{uuid}', desc: '从池中删除特定账号' },
-        { method: 'POST',   path: '/api/providers/{type}/health-check', desc: '触发该类型全量检查' },
-        { method: 'POST',   path: '/api/providers/{type}/{uuid}/health-check', desc: '触发单账号检查' },
-        { method: 'POST',   path: '/api/providers/{type}/reset-health', desc: '重置该类型健康状态' },
-        { method: 'POST',   path: '/api/providers/{type}/{uuid}/detect-models', desc: '探测账号可用模型' },
-        { method: 'POST',   path: '/api/providers/{type}/{uuid}/enable', desc: '启用特定账号' },
-        { method: 'POST',   path: '/api/providers/{type}/{uuid}/disable', desc: '禁用特定账号' },
-        { method: 'POST',   path: '/api/providers/{type}/{uuid}/refresh-uuid', desc: '刷新账号 UUID' },
-        { method: 'GET',    path: '/api/provider-models',         desc: '获取所有可用模型汇总' },
-        { method: 'GET',    path: '/provider_health',             desc: '账号池健康度聚合统计' }
+        { method: 'GET',    path: '/api/providers',               desc: '获取所有提供商及账号状态汇总' },
+        { method: 'POST',   path: '/api/providers',               desc: '新增提供商账号配置' },
+        { method: 'GET',    path: '/api/providers/supported',     desc: '获取系统支持的模型提供商类型' },
+        { method: 'GET',    path: '/api/providers/{type}',        desc: '获取指定类型的账号池列表' },
+        { method: 'PUT',    path: '/api/providers/{type}/{uuid}', desc: '更新指定账号的详细配置' },
+        { method: 'DELETE', path: '/api/providers/{type}/{uuid}', desc: '从账号池中删除特定账号' },
+        { method: 'DELETE', path: '/api/providers/{type}/delete-unhealthy', desc: '删除该类型下所有不健康的账号' },
+        { method: 'POST',   path: '/api/providers/{type}/health-check', desc: '触发该类型下所有账号的健康检查' },
+        { method: 'POST',   path: '/api/providers/{type}/{uuid}/health-check', desc: '触发单个账号的健康检查' },
+        { method: 'POST',   path: '/api/providers/{type}/reset-health', desc: '重置该类型下所有账号的健康状态' },
+        { method: 'POST',   path: '/api/providers/{type}/{uuid}/detect-models', desc: '探测特定账号支持的模型列表' },
+        { method: 'POST',   path: '/api/providers/{type}/refresh-unhealthy-uuids', desc: '刷新该类型下所有不健康账号的 UUID' },
+        { method: 'POST',   path: '/api/providers/{type}/{uuid}/enable', desc: '启用特定的账号节点' },
+        { method: 'POST',   path: '/api/providers/{type}/{uuid}/disable', desc: '禁用特定的账号节点' },
+        { method: 'POST',   path: '/api/providers/{type}/{uuid}/refresh-uuid', desc: '刷新特定账号的 UUID' },
+        { method: 'GET',    path: '/api/provider-models',         desc: '获取所有已配置账号支持的模型汇总' },
+        { method: 'GET',    path: '/api/usage',                   desc: '获取全量提供商配额使用统计' },
+        { method: 'GET',    path: '/api/usage/supported-providers', desc: '获取支持配额查询的提供商列表' },
+        { method: 'GET',    path: '/api/usage/{type}',            desc: '获取指定提供商类型的配额详情' },
+        { method: 'GET',    path: '/provider_health',             desc: '账号池整体健康度聚合统计' }
     ]},
     { group: '5. 凭据管理与自动化工具 (Credentials)', routes: [
-        { method: 'GET',    path: '/api/upload-configs',          desc: '列出 configs 目录下的文件' },
-        { method: 'POST',   path: '/api/upload-oauth-credentials', desc: '上传新的 OAuth 凭据' },
-        { method: 'GET',    path: '/api/upload-configs/view/{file}', desc: '查看特定凭据文件内容' },
-        { method: 'DELETE', path: '/api/upload-configs/delete/{file}', desc: '删除特定凭据文件' },
-        { method: 'GET',    path: '/api/upload-configs/download-all', desc: '打包下载所有配置' },
-        { method: 'POST',   path: '/api/quick-link-provider',     desc: '自动关联本地凭据到账号池' },
-        { method: 'POST',   path: '/api/providers/{type}/generate-auth-url', desc: '生成 OAuth 授权链接' },
-        { method: 'POST',   path: '/api/{type}/batch-import-tokens', desc: '批量导入 Refresh Tokens (SSE)' }
+        { method: 'GET',    path: '/api/upload-configs',          desc: '列出 configs 目录下的所有配置文件' },
+        { method: 'POST',   path: '/api/upload-oauth-credentials', desc: '上传新的 OAuth 凭据 (JSON)' },
+        { method: 'GET',    path: '/api/upload-configs/view/{file}', desc: '查看特定凭据文件的内容' },
+        { method: 'GET',    path: '/api/upload-configs/download/{file}', desc: '下载特定的凭据文件' },
+        { method: 'DELETE', path: '/api/upload-configs/delete/{file}', desc: '删除特定的凭据文件' },
+        { method: 'DELETE', path: '/api/upload-configs/delete-unbound', desc: '清理未被账号池绑定的凭据文件' },
+        { method: 'GET',    path: '/api/upload-configs/download-all', desc: '打包下载所有配置文件 (ZIP)' },
+        { method: 'POST',   path: '/api/quick-link-provider',     desc: '自动将本地凭据关联到账号池' },
+        { method: 'POST',   path: '/api/oauth/manual-callback',   desc: '手动提交 OAuth 授权回调数据' },
+        { method: 'POST',   path: '/api/providers/{type}/generate-auth-url', desc: '生成 OAuth 授权引导链接' },
+        { method: 'POST',   path: '/api/kiro/import-aws-credentials', desc: '导入 AWS SSO 凭据 (Kiro)' },
+        { method: 'POST',   path: '/api/{type}/batch-import-tokens', desc: '批量导入 Refresh Tokens (SSE 模式)' }
     ]},
     { group: '6. 插件、更新与扩展 (Plugin & Update)', routes: [
-        { method: 'GET',    path: '/api/plugins',                 desc: '列出所有已加载的插件' },
-        { method: 'POST',   path: '/api/plugins/{name}/toggle',   desc: '启用或禁用特定插件' },
-        { method: 'GET',    path: '/api/custom-models',           desc: '获取自定义模型映射' },
-        { method: 'POST',   path: '/api/custom-models',           desc: '新增自定义模型映射' },
-        { method: 'PUT/DEL', path: '/api/custom-models/{id}',      desc: '更新或删除模型映射' },
-        { method: 'GET',    path: '/api/check-update',            desc: '检查 GitHub 远程更新' },
-        { method: 'POST',   path: '/api/update',                  desc: '执行版本自动更新' }
+        { method: 'GET',    path: '/api/plugins',                 desc: '列出系统已加载的所有插件' },
+        { method: 'POST',   path: '/api/plugins/{name}/toggle',   desc: '启用或禁用特定的插件' },
+        { method: 'GET',    path: '/api/custom-models',           desc: '获取已配置的自定义模型映射' },
+        { method: 'POST',   path: '/api/custom-models',           desc: '新增自定义模型映射规则' },
+        { method: 'PUT',    path: '/api/custom-models/{id}',      desc: '更新指定的模型映射规则' },
+        { method: 'DELETE', path: '/api/custom-models/{id}',      desc: '删除指定的模型映射规则' },
+        { method: 'GET',    path: '/api/check-update',            desc: '检查 GitHub 仓库的远程更新' },
+        { method: 'POST',   path: '/api/update',                  desc: '执行系统版本自动更新' }
     ]},
     { group: '7. 远程文档与自发现接口 (Remote Docs)', routes: [
         { method: 'GET',    path: '/api/help',                    desc: '获取启动帮助信息 (JSON/Text)' },

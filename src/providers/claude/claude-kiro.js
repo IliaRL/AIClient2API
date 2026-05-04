@@ -48,6 +48,23 @@ const KIRO_CONSTANTS = {
     TOTAL_CONTEXT_TOKENS: 200000, // Claude Sonnet 4.5 actual context is 200K
 };
 
+function normalizeKiroToolInput(input) {
+    if (input === undefined || input === null) {
+        return '';
+    }
+    if (typeof input === 'string') {
+        return input;
+    }
+    if (typeof input === 'object') {
+        try {
+            return JSON.stringify(input);
+        } catch (e) {
+            return String(input);
+        }
+    }
+    return String(input);
+}
+
 // Per-model context window sizes for accurate token estimation
 const MODEL_CONTEXT_TOKENS = {
     "claude-opus-4-7": 1000000,
@@ -1496,7 +1513,7 @@ async saveCredentialsToFile(filePath, newData) {
                             };
                         }
                         if (eventData.input) {
-                            currentToolCallDict.function.arguments += eventData.input;
+                            currentToolCallDict.function.arguments += normalizeKiroToolInput(eventData.input);
                         }
                         if (eventData.stop) {
                             try {
@@ -1967,28 +1984,9 @@ async saveCredentialsToFile(filePath, newData) {
         let searchStart = 0;
         
         while (true) {
-            // 查找真正的 JSON payload 起始位置
-            // AWS Event Stream 包含二进制头部，我们只搜索有效的 JSON 模式
-            // Kiro 返回格式: {"content":"..."} 或 {"name":"xxx","toolUseId":"xxx",...} 或 {"followupPrompt":"..."}
-            
-            // 搜索所有可能的 JSON payload 开头模式
-            // Kiro 返回的 toolUse 可能分多个事件：
-            // 1. {"name":"xxx","toolUseId":"xxx"} - 开始
-            // 2. {"input":"..."} - input 数据（可能多次）
-            // 3. {"stop":true} - 结束
-            // 4. {"contextUsagePercentage":...} - 上下文使用百分比（最后一条消息）
-            const contentStart = remaining.indexOf('{"content":', searchStart);
-            const nameStart = remaining.indexOf('{"name":', searchStart);
-            const followupStart = remaining.indexOf('{"followupPrompt":', searchStart);
-            const inputStart = remaining.indexOf('{"input":', searchStart);
-            const stopStart = remaining.indexOf('{"stop":', searchStart);
-            const contextUsageStart = remaining.indexOf('{"contextUsagePercentage":', searchStart);
-            
-            // 找到最早出现的有效 JSON 模式
-            const candidates = [contentStart, nameStart, followupStart, inputStart, stopStart, contextUsageStart].filter(pos => pos >= 0);
-            if (candidates.length === 0) break;
-            
-            const jsonStart = Math.min(...candidates);
+            // 查找真正的 JSON payload 起始位置。AWS Event Stream 包含二进制头部，
+            // payload 对象里的 key 顺序不稳定，所以不能依赖 {"input": 这类固定开头。
+            const jsonStart = remaining.indexOf('{', searchStart);
             if (jsonStart < 0) break;
             
             // 正确处理嵌套的 {} - 使用括号计数法
@@ -2052,17 +2050,18 @@ async saveCredentialsToFile(filePath, newData) {
                         data: {
                             name: parsed.name,
                             toolUseId: parsed.toolUseId,
-                            input: parsed.input || '',
+                            input: normalizeKiroToolInput(parsed.input),
                             stop: parsed.stop || false
                         }
                     });
                 }
-                // 处理工具调用的 input 续传事件（只有 input 字段）
+                // 处理工具调用的 input 续传事件（可能包含 toolUseId，且 key 顺序不固定）
                 else if (parsed.input !== undefined && !parsed.name) {
                     events.push({
                         type: 'toolUseInput',
                         data: {
-                            input: parsed.input
+                            toolUseId: parsed.toolUseId,
+                            input: normalizeKiroToolInput(parsed.input)
                         }
                     });
                 }
@@ -2085,7 +2084,9 @@ async saveCredentialsToFile(filePath, newData) {
                     });
                 }
             } catch (e) {
-                // JSON 解析失败，跳过这个位置继续搜索
+                // JSON 解析失败，跳过这个 "{" 继续搜索，避免二进制头部中的偶然字符阻塞后续 payload
+                searchStart = jsonStart + 1;
+                continue;
             }
             
             searchStart = jsonEnd + 1;
@@ -2620,20 +2621,21 @@ async saveCredentialsToFile(filePath, newData) {
                     }
                 } else if (event.type === 'toolUseInput') {
                     // 工具调用的 input 续传事件
+                    const inputDelta = normalizeKiroToolInput(event.input);
                     // 统计 input 内容到 totalContent（用于 token 计算）
-                    if (event.input) {
-                        totalContent += event.input;
+                    if (inputDelta) {
+                        totalContent += inputDelta;
                     }
                     if (currentToolCall) {
-                        currentToolCall.input += event.input || '';
+                        currentToolCall.input += inputDelta;
                         const blockIndex = toolUseBlockIndexes.get(currentToolCall.toolUseId);
-                        if (blockIndex != null && event.input) {
+                        if (blockIndex != null && inputDelta) {
                             yield* pushEvents([{
                                 type: "content_block_delta",
                                 index: blockIndex,
                                 delta: {
                                     type: "input_json_delta",
-                                    partial_json: event.input
+                                    partial_json: inputDelta
                                 }
                             }]);
                         }

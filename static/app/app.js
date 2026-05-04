@@ -19,7 +19,8 @@ import {
 } from './file-upload.js';
 
 import { 
-    initNavigation 
+    initNavigation,
+    setSectionLoaders
 } from './navigation.js';
 
 import {
@@ -38,6 +39,7 @@ import {
     loadSystemInfo,
     updateTimeDisplay,
     loadProviders,
+    loadProvidersPageData,
     openProviderManager,
     showAuthModal,
     executeGenerateAuthUrl,
@@ -77,6 +79,7 @@ import {
 
 import {
     initUsageManager,
+    loadUsagePageData,
     refreshUsage
 } from './usage-manager.js';
 
@@ -86,6 +89,7 @@ import {
 
 import {
     initPluginManager,
+    loadPlugins,
     togglePlugin
 } from './plugin-manager.js';
 
@@ -98,8 +102,11 @@ import {
 } from './custom-models-manager.js';
 
 import {
-    initPlaygroundManager
+    initPlaygroundManager,
+    loadPlaygroundData
 } from './playground-manager.js';
+
+let isAppInitialized = false;
 
 /**
  * 加载初始数据
@@ -107,17 +114,17 @@ import {
 function loadInitialData() {
     loadSystemInfo();
     loadProviders();
-    loadConfiguration();
-    loadAccessInfo();
-    if (window.customModelsManager) {
-        window.customModelsManager.load();
-    }
 }
 
 /**
  * 初始化应用
  */
 function initApp() {
+    if (isAppInitialized) {
+        return;
+    }
+    isAppInitialized = true;
+
     // 设置数据加载器
     setDataLoaders(loadInitialData, saveConfiguration);
     
@@ -129,7 +136,21 @@ function initApp() {
     
     // 设置配置加载器
     setConfigLoaders(loadConfigList);
+
+    setSectionLoaders({
+        access: loadAccessInfo,
+        config: loadConfiguration,
+        providers: loadProvidersPageData,
+        'custom-models': () => window.customModelsManager?.load(),
+        'upload-config': loadConfigList,
+        usage: loadUsagePageData,
+        plugins: loadPlugins,
+        playground: loadPlaygroundData
+    });
     
+    // 初始化自定义模型管理
+    window.customModelsManager = new CustomModelsManager();
+
     // 初始化各个模块
     initNavigation();
     initEventListeners();
@@ -142,10 +163,6 @@ function initApp() {
     initPluginManager(); // 初始化插件管理功能
     initTutorialManager(); // 初始化教程管理功能
     initPlaygroundManager(); // 初始化 Playground
-    
-    // 初始化自定义模型管理
-    window.customModelsManager = new CustomModelsManager();
-    
     initMobileMenu(); // 初始化移动端菜单
     loadInitialData();
     

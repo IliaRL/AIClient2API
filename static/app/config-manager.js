@@ -1,9 +1,9 @@
 // 配置管理模块
 
-import { showToast, formatUptime, copyToClipboard } from './utils.js';
+import { showToast, formatUptime, copyToClipboard, bindOnce } from './utils.js';
 import { handleProviderChange, handleGeminiCredsTypeChange, handleKiroCredsTypeChange } from './event-handlers.js';
-import { loadProviders } from './provider-manager.js';
 import { t } from './i18n.js';
+import { loadSectionIfActive } from './navigation.js';
 
 // 提供商配置缓存
 let currentProviderConfigs = null;
@@ -72,18 +72,12 @@ function initConfigPageHelpers() {
     }
 
     const openAccessBtn = document.getElementById('configOpenQuickAccess');
-    if (openAccessBtn && !openAccessBtn.dataset.bound) {
-        openAccessBtn.addEventListener('click', () => navigateToSection('access'));
-        openAccessBtn.dataset.bound = 'true';
-    }
+    bindOnce(openAccessBtn, 'click', () => navigateToSection('access'), 'configOpenQuickAccess');
 
     const saveAndAccessBtn = document.getElementById('configSaveAndAccess');
-    if (saveAndAccessBtn && !saveAndAccessBtn.dataset.bound) {
-        saveAndAccessBtn.addEventListener('click', async () => {
-            await saveConfiguration({ navigateToAccess: true });
-        });
-        saveAndAccessBtn.dataset.bound = 'true';
-    }
+    bindOnce(saveAndAccessBtn, 'click', async () => {
+        await saveConfiguration({ navigateToAccess: true });
+    }, 'configSaveAndAccess');
 }
 
 /**
@@ -116,9 +110,6 @@ function updateConfigProviderConfigs(configs) {
     if (scheduledHealthCheckProvidersEl) {
         renderProviderTags(scheduledHealthCheckProvidersEl, configs, false);
     }
-    
-    // 重新加载当前配置以恢复选中状态
-    loadConfiguration();
 }
 
 /**
@@ -660,10 +651,8 @@ async function saveConfiguration(options = {}) {
         updateConfigHandoffSummary();
         
         // 检查当前是否在提供商池管理页面，如果是则刷新数据
-        const providersSection = document.getElementById('providers');
-        if (providersSection && providersSection.classList.contains('active')) {
-            // 当前在提供商池页面，刷新数据
-            await loadProviders();
+        const refreshedProviders = await loadSectionIfActive('providers');
+        if (refreshedProviders) {
             showToast(t('common.success'), t('common.providerPoolRefreshed'), 'success');
         }
 

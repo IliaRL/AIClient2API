@@ -4,6 +4,7 @@ import { elements, autoScroll, setAutoScroll, clearLogs } from './constants.js';
 import { showToast } from './utils.js';
 import { t } from './i18n.js';
 import { checkUpdate, performUpdate, loadProviders } from './provider-manager.js';
+import { switchSectionIfActive } from './navigation.js';
 
 /**
  * 初始化所有事件监听器
@@ -447,17 +448,7 @@ function handleProviderPoolsConfigChange(event) {
         if (providersMenuItem) providersMenuItem.style.display = 'none';
         
         // 如果当前在提供商池页面，切换到仪表盘
-        if (providersMenuItem && providersMenuItem.classList.contains('active')) {
-            const dashboardItem = document.querySelector('.nav-item[data-section="dashboard"]');
-            const dashboardSection = document.getElementById('dashboard');
-            
-            // 更新导航状态
-            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-            document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
-            
-            if (dashboardItem) dashboardItem.classList.add('active');
-            if (dashboardSection) dashboardSection.classList.add('active');
-        }
+        switchSectionIfActive('providers', 'dashboard');
     }
 }
 

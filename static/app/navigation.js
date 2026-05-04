@@ -2,6 +2,32 @@
 
 import { elements } from './constants.js';
 
+let sectionLoaders = {};
+
+function setSectionLoaders(loaders = {}) {
+    sectionLoaders = loaders;
+}
+
+function isSectionActive(sectionId) {
+    return document.getElementById(sectionId)?.classList.contains('active') === true;
+}
+
+function loadSection(sectionId) {
+    if (typeof sectionLoaders[sectionId] !== 'function') {
+        return Promise.resolve(false);
+    }
+
+    return Promise.resolve(sectionLoaders[sectionId]()).then(() => true);
+}
+
+function loadSectionIfActive(sectionId) {
+    if (!isSectionActive(sectionId)) {
+        return Promise.resolve(false);
+    }
+
+    return loadSection(sectionId);
+}
+
 /**
  * 初始化导航功能
  */
@@ -74,10 +100,10 @@ function activateSection(sectionId, options = {}) {
         window.location.hash = sectionId;
     }
 
-    // 只有在哈希不改变时（例如初始加载、hashchange 事件触发、或点击当前已激活的项）才调用 loadAccessInfo
-    // 这样可以防止在 hashchange 触发时产生重复请求
-    if (sectionId === 'access' && !hashWillChange && typeof window.loadAccessInfo === 'function') {
-        window.loadAccessInfo();
+    // Hash changes will re-enter activateSection through hashchange, so load only when
+    // the current activation is final.
+    if (!hashWillChange) {
+        loadSection(sectionId);
     }
 }
 
@@ -87,6 +113,15 @@ function activateSection(sectionId, options = {}) {
  */
 function switchToSection(sectionId) {
     activateSection(sectionId, { updateHash: true });
+}
+
+function switchSectionIfActive(currentSectionId, targetSectionId) {
+    if (isSectionActive(currentSectionId)) {
+        switchToSection(targetSectionId);
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -119,6 +154,9 @@ function switchToProviders() {
 
 export {
     initNavigation,
+    setSectionLoaders,
+    loadSectionIfActive,
+    switchSectionIfActive,
     switchToSection,
     switchToDashboard,
     switchToProviders

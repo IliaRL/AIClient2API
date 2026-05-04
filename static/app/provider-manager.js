@@ -1,7 +1,7 @@
 // 提供商管理功能模块
 
 import { providerStats, updateProviderStats } from './constants.js';
-import { showToast, formatUptime, getProviderConfigs, getBaseProviderConfigs } from './utils.js';
+import { showToast, formatUptime, getProviderConfigs, getBaseProviderConfigs, bindOnce } from './utils.js';
 import { fileUploadHandler } from './file-upload.js';
 import { t, getCurrentLanguage } from './i18n.js';
 import { renderRoutingExamples } from './routing-examples.js';
@@ -32,16 +32,10 @@ function navigateToSection(sectionId) {
 
 function initProvidersPageHelpers() {
     const openAccessBtn = document.getElementById('providersOpenQuickAccess');
-    if (openAccessBtn && !openAccessBtn.dataset.bound) {
-        openAccessBtn.addEventListener('click', () => navigateToSection('access'));
-        openAccessBtn.dataset.bound = 'true';
-    }
+    bindOnce(openAccessBtn, 'click', () => navigateToSection('access'), 'providersOpenQuickAccess');
 
     const openConfigBtn = document.getElementById('providersOpenConfig');
-    if (openConfigBtn && !openConfigBtn.dataset.bound) {
-        openConfigBtn.addEventListener('click', () => navigateToSection('config'));
-        openConfigBtn.dataset.bound = 'true';
-    }
+    bindOnce(openConfigBtn, 'click', () => navigateToSection('config'), 'providersOpenConfig');
 }
 
 function updateProvidersHandoffSummary(providers = {}, supportedProviders = []) {
@@ -299,9 +293,16 @@ async function loadProviders(forceRefreshSupported = false) {
         }
 
         renderProviders(providers, cachedSupportedProviders);
-        await refreshProvidersHandoffSummary(providers, cachedSupportedProviders);
+        return data;
     } catch (error) {
         console.error('Failed to load providers:', error);
+    }
+}
+
+async function loadProvidersPageData(forceRefreshSupported = false) {
+    const data = await loadProviders(forceRefreshSupported);
+    if (data?.providers) {
+        await refreshProvidersHandoffSummary(data.providers, data.supportedProviders || cachedSupportedProviders || []);
     }
 }
 
@@ -4015,6 +4016,7 @@ export {
     loadSystemInfo,
     updateTimeDisplay,
     loadProviders,
+    loadProvidersPageData,
     openProviderManager,
     showAuthModal,
     executeGenerateAuthUrl,
