@@ -366,7 +366,7 @@ async function _handleUpdateConfig(req, res, currentConfig, body) {
                 SCHEDULED_HEALTH_CHECK: currentConfig.SCHEDULED_HEALTH_CHECK
             };
 
-            await atomicWriteFile(configPath, JSON.stringify(configToSave, null, 2), 'utf-8');
+            await atomicWriteFile(configPath, JSON.stringify(configToSave, null, 2), { encoding: 'utf-8', mode: 0o600 });
             logger.info('[UI API] Configuration saved to configs/config.json');
             
             // 广播更新事件
@@ -487,7 +487,7 @@ export async function handleUpdateAdminPassword(req, res) {
 
         // 使用文件锁和原子化写入
         await withFileLock(pwdFilePath, async () => {
-            await atomicWriteFile(pwdFilePath, stored, 'utf-8');
+            await atomicWriteFile(pwdFilePath, stored, { encoding: 'utf-8', mode: 0o600 });
         });
 
         logger.info('[UI API] Admin password updated successfully');

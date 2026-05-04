@@ -3,9 +3,10 @@
  * 使用内存缓存 + 写锁 + 定期持久化，解决并发安全问题
  */
 
+import { atomicWriteFile, atomicWriteFileSync } from '../../utils/file-lock.js';
 import { promises as fs } from 'fs';
 import logger from '../../utils/logger.js';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { RateManager } from '../../utils/rate-tracker.js';
@@ -233,7 +234,7 @@ function syncWriteToFile() {
         if (!existsSync(dir)) {
             mkdirSync(dir, { recursive: true });
         }
-        writeFileSync(KEYS_STORE_FILE, JSON.stringify(keyStore, null, 2), 'utf8');
+        atomicWriteFileSync(KEYS_STORE_FILE, JSON.stringify(keyStore, null, 2), { encoding: 'utf8', mode: 0o600 });
     } catch (error) {
         logger.error('[API Potluck] Sync write failed:', error.message);
     }
@@ -250,10 +251,8 @@ async function persistIfDirty() {
         if (!existsSync(dir)) {
             await fs.mkdir(dir, { recursive: true });
         }
-        // 写入临时文件再重命名，防止写入中断导致文件损坏
-        const tempFile = KEYS_STORE_FILE + '.tmp';
-        await fs.writeFile(tempFile, JSON.stringify(keyStore, null, 2), 'utf8');
-        await fs.rename(tempFile, KEYS_STORE_FILE);
+        // 写入临时文件再重命名，并确保刷盘
+        await atomicWriteFile(KEYS_STORE_FILE, JSON.stringify(keyStore, null, 2), { encoding: 'utf8', mode: 0o600 });
         isDirty = false;
     } catch (error) {
         logger.error('[API Potluck] Persist failed:', error.message);

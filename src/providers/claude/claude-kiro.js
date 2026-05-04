@@ -1,3 +1,4 @@
+import { atomicWriteFile } from '../../utils/file-lock.js';
 import axios from 'axios';
 import logger from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -716,7 +717,7 @@ async saveCredentialsToFile(filePath, newData) {
         }
     }
     const mergedData = { ...existingData, ...newData };
-    await fs.writeFile(filePath, JSON.stringify(mergedData, null, 2), 'utf8');
+    await atomicWriteFile(filePath, JSON.stringify(mergedData, null, 2), { encoding: 'utf8', mode: 0o600 });
     logger.info(`[Kiro Auth] Updated token file: ${filePath}`);
 };
 

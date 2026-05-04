@@ -1912,8 +1912,11 @@ async function resetAllProvidersHealth(providerType) {
         if (response.success) {
             showToast(t('common.success'), t('modal.provider.resetHealth.success', { count: response.resetCount }), 'success');
             
-            // 重新加载配置
-            await window.apiClient.post('/reload-config');
+            // 只有当确实有节点的健康状态被重置时，才重新加载配置以刷新适配器实例
+            if (response.resetCount > 0) {
+                console.log(`[UI] ${response.resetCount} node(s) health status reset, reloading configuration...`);
+                await window.apiClient.post('/reload-config');
+            }
             
             // 刷新提供商配置显示
             await refreshProviderConfig(providerType);
@@ -1955,10 +1958,13 @@ async function performHealthCheck(providerType) {
             
             showToast(t('common.info'), message, failCount > 0 ? 'warning' : 'success');
             
-            // 重新加载配置
-            await window.apiClient.post('/reload-config');
+            // 只有当有节点从不健康恢复为健康时，才需要重新加载配置以刷新适配器实例
+            if (successCount > 0) {
+                console.log(`[UI] ${successCount} node(s) recovered, reloading configuration...`);
+                await window.apiClient.post('/reload-config');
+            }
             
-            // 刷新提供商配置显示
+            // 无论如何都要刷新显示
             await refreshProviderConfig(providerType);
         } else {
             showToast(t('common.error'), t('modal.provider.healthCheck') + ' ' + t('common.error'), 'error');
@@ -1996,6 +2002,8 @@ async function performSingleHealthCheck(uuid, event) {
 
         showToast(t('common.info'), t('modal.provider.healthCheck') + '...', 'info');
 
+        const isCurrentlyHealthy = providerDetail.classList.contains('healthy');
+
         const response = await window.apiClient.post(
             `/providers/${encodeURIComponent(providerType)}/${uuid}/health-check`,
             {}
@@ -2018,7 +2026,12 @@ async function performSingleHealthCheck(uuid, event) {
             response.healthy ? 'success' : 'warning'
         );
 
-        await window.apiClient.post('/reload-config');
+        // 只有当健康状态确实发生变化时才重新加载配置
+        if (isCurrentlyHealthy !== response.healthy) {
+            console.log(`[UI] Provider ${uuid} health status changed (from ${isCurrentlyHealthy} to ${response.healthy}), reloading configuration...`);
+            await window.apiClient.post('/reload-config');
+        }
+        
         await refreshProviderConfig(providerType);
     } catch (error) {
         console.error('Single provider health check failed:', error);

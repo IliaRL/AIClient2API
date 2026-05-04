@@ -1,3 +1,4 @@
+import { atomicWriteFile } from '../../utils/file-lock.js';
 import axios from 'axios';
 import logger from '../../utils/logger.js';
 import crypto from 'crypto';
@@ -569,7 +570,7 @@ export class CodexApiService {
         }
 
         await fs.mkdir(credsDir, {recursive: true});
-        await fs.writeFile(
+        await atomicWriteFile(
             credsPath,
             JSON.stringify(
                 {
@@ -585,7 +586,7 @@ export class CodexApiService {
                 null,
                 2
             ),
-            {mode: 0o600}
+            { encoding: 'utf8', mode: 0o600 }
         );
 
         // 更新缓存路径（例如首次无 credsPath 兜底生成了新文件）

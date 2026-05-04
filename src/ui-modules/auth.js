@@ -1,3 +1,4 @@
+import { atomicWriteFile } from '../utils/file-lock.js';
 import { existsSync } from 'fs';
 import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
@@ -137,7 +138,7 @@ async function readTokenStore() {
  */
 async function writeTokenStore(tokenStore) {
     try {
-        await fs.writeFile(TOKEN_STORE_FILE, JSON.stringify(tokenStore, null, 2), 'utf8');
+        await atomicWriteFile(TOKEN_STORE_FILE, JSON.stringify(tokenStore, null, 2), { encoding: 'utf8', mode: 0o600 });
     } catch (error) {
         logger.error('[Token Store] Failed to write token store file:', error);
     }

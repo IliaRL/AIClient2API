@@ -16,6 +16,7 @@
  * - DeepSeek R1: 内置推理能力
  */
 
+import { atomicWriteFile } from '../../utils/file-lock.js';
 import axios from 'axios';
 import logger from '../../utils/logger.js';
 import * as http from 'http';
@@ -134,7 +135,7 @@ async function saveTokenToFile(filePath, tokenStorage, uuid = null) {
             logger.error('[iFlow] WARNING: Attempting to save token file with empty apiKey!');
         }
 
-        await fs.writeFile(absolutePath, JSON.stringify(json, null, 2), 'utf-8');
+        await atomicWriteFile(absolutePath, JSON.stringify(json, null, 2), { encoding: 'utf-8', mode: 0o600 });
 
         logger.info(`[iFlow] Token saved to: ${filePath} (refresh_token: ${json.refresh_token ? json.refresh_token.substring(0, 8) + '...' : 'EMPTY'})`);
     } catch (error) {

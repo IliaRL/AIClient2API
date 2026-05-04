@@ -1,5 +1,5 @@
 import logger from './logger.js';
-import { writeFileSync, renameSync, unlinkSync, promises as pfs } from 'fs';
+import { writeFileSync, renameSync, unlinkSync, openSync, fsyncSync, closeSync, promises as pfs } from 'fs';
 
 /**
  * 文件锁管理器：支持按文件路径隔离的异步锁
@@ -109,14 +109,27 @@ export function withFileLock(filePath, fn) {
 
 /**
  * 原子化写入文件：先写临时文件，成功后再 rename
+ * @param {string} filePath - 目标路径
+ * @param {string|Buffer} data - 数据
+ * @param {string|Object} options - 编码字符串或选项对象 { encoding, mode }
  */
-export function atomicWriteFileSync(filePath, data, encoding = 'utf-8') {
+export function atomicWriteFileSync(filePath, data, options = 'utf-8') {
+    const encoding = typeof options === 'string' ? options : (options?.encoding || 'utf-8');
+    const mode = typeof options === 'object' ? options.mode : undefined;
     const tempPath = `${filePath}.${Date.now()}.${Math.random().toString(36).substring(2, 7)}.tmp`;
+    let fd;
     try {
-        writeFileSync(tempPath, data, encoding);
+        fd = openSync(tempPath, 'w', mode);
+        writeFileSync(fd, data, encoding);
+        fsyncSync(fd);
+        closeSync(fd);
+        fd = null;
         renameSync(tempPath, filePath);
     } catch (error) {
         logger.error(`[FileLock] Atomic write failed for ${filePath}:`, error.message);
+        if (fd) {
+            try { closeSync(fd); } catch (e) {}
+        }
         try { unlinkSync(tempPath); } catch (e) {}
         throw error;
     }
@@ -124,14 +137,27 @@ export function atomicWriteFileSync(filePath, data, encoding = 'utf-8') {
 
 /**
  * 原子化写入文件（异步版，带 Windows 重试支持）
+ * @param {string} filePath - 目标路径
+ * @param {string|Buffer} data - 数据
+ * @param {string|Object} options - 编码字符串或选项对象 { encoding, mode }
  */
-export async function atomicWriteFile(filePath, data, encoding = 'utf-8') {
+export async function atomicWriteFile(filePath, data, options = 'utf-8') {
+    const encoding = typeof options === 'string' ? options : (options?.encoding || 'utf-8');
+    const mode = typeof options === 'object' ? options.mode : undefined;
     const tempPath = `${filePath}.${Date.now()}.${Math.random().toString(36).substring(2, 7)}.tmp`;
+    let handle;
     try {
-        await pfs.writeFile(tempPath, data, encoding);
+        handle = await pfs.open(tempPath, 'w', mode);
+        await handle.writeFile(data, encoding);
+        await handle.sync();
+        await handle.close();
+        handle = null;
         await retryRename(tempPath, filePath);
     } catch (error) {
         logger.error(`[FileLock] Atomic write (async) failed for ${filePath}:`, error.message);
+        if (handle) {
+            try { await handle.close(); } catch (e) {}
+        }
         try { await pfs.unlink(tempPath); } catch (e) {}
         throw error;
     }

@@ -1,3 +1,4 @@
+import { atomicWriteFile } from '../utils/file-lock.js';
 import { existsSync } from 'fs';
 import logger from '../utils/logger.js';
 import { promises as fs } from 'fs';
@@ -29,7 +30,7 @@ export async function readUsageCache() {
  */
 export async function writeUsageCache(usageData) {
     try {
-        await fs.writeFile(USAGE_CACHE_FILE, JSON.stringify(usageData, null, 2), 'utf8');
+        await atomicWriteFile(USAGE_CACHE_FILE, JSON.stringify(usageData, null, 2), { encoding: 'utf8', mode: 0o600 });
         logger.info('[Usage Cache] Usage data cached to', USAGE_CACHE_FILE);
     } catch (error) {
         logger.error('[Usage Cache] Failed to write usage cache:', error.message);

@@ -1,4 +1,5 @@
 
+import { atomicWriteFile } from '../../utils/file-lock.js';
 import { OAuth2Client } from 'google-auth-library';
 import logger from '../../utils/logger.js';
 import * as http from 'http';
@@ -921,7 +922,7 @@ export class AntigravityApiService {
      */
     async _saveCredentialsToFile(filePath, credentials) {
         try {
-            await fs.writeFile(filePath, JSON.stringify(credentials, null, 2));
+            await atomicWriteFile(filePath, JSON.stringify(credentials, null, 2), { mode: 0o600 });
             logger.info(`[Antigravity Auth] Credentials saved to ${filePath}`);
         } catch (error) {
             logger.error(`[Antigravity Auth] Failed to save credentials to ${filePath}: ${error.message}`);

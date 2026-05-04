@@ -1,3 +1,4 @@
+import { atomicWriteFile } from '../../utils/file-lock.js';
 import axios from 'axios';
 import logger from '../../utils/logger.js';
 import crypto from 'crypto';
@@ -570,7 +571,7 @@ export class QwenApiService {
         try {
             await fs.mkdir(path.dirname(filePath), { recursive: true });
             const credString = JSON.stringify(credentials, null, 2);
-            await fs.writeFile(filePath, credString);
+            await atomicWriteFile(filePath, credString, { mode: 0o600 });
             logger.info(`[Qwen Auth] Credentials cached to ${filePath}`);
         } catch (error) {
             logger.error(`[Qwen Auth] Failed to cache credentials to ${filePath}: ${error.message}`);
@@ -1080,7 +1081,7 @@ class SharedTokenManager {
     async saveCredentialsToFile(context, credentials) {
         try {
             await fs.mkdir(path.dirname(context.credentialFilePath), { recursive: true, mode: 0o700 });
-            await fs.writeFile(context.credentialFilePath, JSON.stringify(credentials, null, 2), { mode: 0o600 });
+            await atomicWriteFile(context.credentialFilePath, JSON.stringify(credentials, null, 2), { mode: 0o600 });
             const stats = await fs.stat(context.credentialFilePath);
             context.memoryCache.fileModTime = stats.mtimeMs;
         } catch (error) {

@@ -2360,7 +2360,7 @@ export class ProviderPoolManager {
                 }
 
                 // 一次性写入文件（使用原子化写入）
-                await atomicWriteFile(filePath, JSON.stringify(currentPools, null, 2), 'utf8');
+                await atomicWriteFile(filePath, JSON.stringify(currentPools, null, 2), { encoding: 'utf8', mode: 0o600 });
 
                 this._log('info', `configs/provider_pools.json updated successfully for types: ${typesToSave.join(', ')}`);
             } catch (error) {

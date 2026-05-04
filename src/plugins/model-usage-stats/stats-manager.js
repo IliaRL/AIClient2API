@@ -1,5 +1,6 @@
+import { atomicWriteFile, atomicWriteFileSync } from '../../utils/file-lock.js';
 import { promises as fs } from 'fs';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
 import path from 'path';
 import logger from '../../utils/logger.js';
 import { RateManager } from '../../utils/rate-tracker.js';
@@ -165,7 +166,7 @@ export function syncWriteToFile() {
         if (!existsSync(dir)) {
             mkdirSync(dir, { recursive: true });
         }
-        writeFileSync(STATS_STORE_FILE, JSON.stringify(statsStore, null, 2), 'utf8');
+        atomicWriteFileSync(STATS_STORE_FILE, JSON.stringify(statsStore, null, 2), { encoding: 'utf8', mode: 0o600 });
         isDirty = false;
         logger.info('[Model Usage Stats] Sync persisted stats store');
     } catch (error) {
@@ -193,9 +194,8 @@ async function persistIfDirty() {
             while (isDirty) {
                 const versionAtStart = mutationVersion;
                 const snapshot = JSON.stringify(statsStore, null, 2);
-                const tempFile = STATS_STORE_FILE + '.tmp';
-                await fs.writeFile(tempFile, snapshot, 'utf8');
-                await fs.rename(tempFile, STATS_STORE_FILE);
+                
+                await atomicWriteFile(STATS_STORE_FILE, snapshot, { encoding: 'utf8', mode: 0o600 });
 
                 if (mutationVersion === versionAtStart) {
                     isDirty = false;
