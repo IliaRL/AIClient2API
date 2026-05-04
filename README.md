@@ -2,7 +2,7 @@
 
 <img src="src/img/logo-mid.webp" alt="logo"  style="width: 128px; height: 128px;margin-bottom: 3px;">
 
-# AIClient-2-API（A2）🚀
+# AIClient2API（A2）🚀
 
 **A powerful proxy that can unify the requests of various client-only large model APIs (Gemini CLI, Antigravity, Codex, Grok, Kiro ...), simulate requests, and encapsulate them into a local OpenAI-compatible interface.**
 
@@ -23,6 +23,9 @@
 [**🔧 OpenClaw Config**](./docs/OPENCLAW_CONFIG_GUIDE.md) | [中文](./README-ZH.md) | [**👉 English**](./README.md) | [日本語](./README-JA.md) | [**📚 Documentation**](https://aiproxy.justlikemaki.vip/en/)
 
 </div>
+
+---
+
 
 ## 💎 Sponsors
 
@@ -46,7 +49,7 @@
       </a>
     </td>
     <td width="75%" align="left" valign="middle">
-      Thanks to AICodeMirror for sponsoring this project! AICodeMirror provides official high-stability relay services for Claude Code / Codex / Gemini CLI, with enterprise-grade concurrency, fast invoicing, and 24/7 dedicated technical support. Claude Code / Codex / Gemini official channels at 38% / 2% / 9% of original price, with extra discounts on top-ups! AICodeMirror offers special benefits for AIClient-2-API users: <a href="https://www.aicodemirror.com/register?invitecode=5BUE62">register via this link</a> to enjoy <strong>20% off</strong> your first top-up, and enterprise customers can get up to 25% off!
+      Thanks to AICodeMirror for sponsoring this project! AICodeMirror provides official high-stability relay services for Claude Code / Codex / Gemini CLI, with enterprise-grade concurrency, fast invoicing, and 24/7 dedicated technical support. Claude Code / Codex / Gemini official channels at 38% / 2% / 9% of original price, with extra discounts on top-ups! AICodeMirror offers special benefits for AIClient2API users: <a href="https://www.aicodemirror.com/register?invitecode=5BUE62">register via this link</a> to enjoy <strong>20% off</strong> your first top-up, and enterprise customers can get up to 25% off!
     </td>
   </tr>
   <tr>
@@ -56,7 +59,7 @@
       </a>
     </td>
     <td width="75%" align="left" valign="middle">
-      Poixe AI provides reliable LLM API services. You can leverage the platform's API endpoints to seamlessly build AI-powered products. Additionally, you can become a vendor by providing AI API resources to the platform and earn revenue. <a href="https://poixe.com/i/ebmvga">Register through the exclusive AIClient-2-API referral link</a> and receive a bonus of <strong>$5 USD</strong> on your first top-up.
+      Poixe AI provides reliable LLM API services. You can leverage the platform's API endpoints to seamlessly build AI-powered products. Additionally, you can become a vendor by providing AI API resources to the platform and earn revenue. <a href="https://poixe.com/i/ebmvga">Register through the exclusive AIClient2API referral link</a> and receive a bonus of <strong>$5 USD</strong> on your first top-up.
     </td>
   </tr>
   <tr>
@@ -106,6 +109,7 @@
 > <details>
 > <summary>Click to expand detailed version history</summary>
 > 
+> - **2026.05.04 (v3.0.0)** - **Milestone Update: Deep AI Integration & Self-Discovery Architecture**. Added automated Skill guides and remote `/api/help`, `/api/example` endpoints, enabling AI agents to seamlessly understand and operate 50+ full API endpoints; achieved full unification of CLI and REST API output results with enhanced structured JSON support.
 > - **2026.04.29** - Comprehensive support for OpenAI standard Image Generation (`/v1/images/generations`) and Image Editing (`/v1/images/edits`) interfaces. Supports automatic conversion from OpenAI format to native image generation protocols of various models, fully compatible with provider pool polling and retry mechanisms, significantly improving the stability of multimodal creation.
 > - **2026.03.02** - Added Grok protocol support, supporting access to xAI Grok series models (Grok 3/4) via Cookie/SSO, supporting multimodal input, image/video generation, automatic token refresh and streaming output
 > - **2026.01.26** - Added Codex protocol support: supports OpenAI Codex OAuth authorization access
@@ -130,6 +134,16 @@
 ---
 
 ## 💡 Core Advantages
+
+### 🤖 AI Interaction & Skill Guide
+
+> **AI-First Design**: This project natively supports efficient interaction with AI Agents (e.g., Claude Code, Cursor, OpenCode).
+>
+> **💡 Quick Command**: You can tell the AI this sentence directly, and it will automatically master all usage of this project:
+> 
+> ```text
+> Please load and learn the Skill in https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md to master all startup parameters and 50+ API endpoints of AIClient2API.
+> ```
 
 ### 🎯 Unified Access, One-Stop Management
 *   **Multi-Model Unified Interface**: Through standard OpenAI-compatible protocol, configure once to access mainstream large models including Gemini, Claude, Grok, Codex, Kimi K2, MiniMax M2
@@ -176,7 +190,7 @@
 
 ### 🚀 Quick Start
 
-The most recommended way to use AIClient-2-API is to start it through an automated script and configure it visually directly in the **Web UI console**.
+The most recommended way to use AIClient2API is to start it through an automated script and configure it visually directly in the **Web UI console**.
 
 #### 🐳 Docker Quick Start (Recommended)
 
@@ -210,12 +224,18 @@ To build from source instead of using the pre-built image, edit `docker-compose.
 *   **Linux/macOS**: `chmod +x install-and-run.sh && ./install-and-run.sh`
 *   **Windows**: Double-click `install-and-run.bat`
 
-> **💡 If the script fails, you can try manually installing dependencies and starting:**
+> **💡 Manual installation and startup (supports custom parameters):**
 > ```bash
 > npm install
+> # Default startup
 > npm start
+> # Show help information
+> npm run help
+> # Show API calling examples
+> npm run example:api
+> # Backend-only mode (disable frontend management UI)
+> npm start -- --no-ui
 > ```
-
 
 #### 2. Access the console
 After the server starts, open your browser and visit:
@@ -229,7 +249,7 @@ Go to the **"Configuration"** page, you can:
 *   ✅ Switch default model providers in real-time
 *   ✅ Monitor health status and real-time request logs
 
-#### 4. Local Environment Preparation (Non-Docker Users)
+#### 4. Local Environment Preparation (Non-Docker Users)s
 If you are running directly on your local machine (via script or Node.js) and need to bypass TLS detection for services like Grok, please ensure:
 *   ✅ **Install Go Language**: Go to the [official Go website](https://go.dev/) to download and install (1.20+).
 *   ✅ **Manually Compile Sidecar**: Execute the following command to compile the TLS proxy component:
@@ -328,7 +348,7 @@ In the Web UI management interface, you can complete authorization configuration
 4. **Important Notice**: Kiro service usage policy has been updated, please visit the official website for the latest usage restrictions and terms
 
 #### Kiro Extended Thinking (Claude Models)
-AIClient-2-API supports Kiro extended thinking when using Claude-compatible requests (`/v1/messages`) or OpenAI-compatible requests (`/v1/chat/completions`) routed to `claude-kiro-oauth`.
+AIClient2API supports Kiro extended thinking when using Claude-compatible requests (`/v1/messages`) or OpenAI-compatible requests (`/v1/chat/completions`) routed to `claude-kiro-oauth`.
 
 **Claude-compatible (`/v1/messages`)**:
 ```bash
@@ -749,7 +769,7 @@ The development of this project was greatly inspired by the official Google Gemi
 
 ### Contributor List
 
-Thanks to all the developers who contributed to the AIClient-2-API project:
+Thanks to all the developers who contributed to the AIClient2API project:
 
 [![Contributors](https://contrib.rocks/image?repo=justlovemaki/AIClient-2-API)](https://github.com/justlovemaki/AIClient-2-API/graphs/contributors)
 
@@ -764,7 +784,7 @@ Thanks to all the developers who contributed to the AIClient-2-API project:
 ## ⚠️ Disclaimer
 
 ### Usage Risk Warning
-This project (AIClient-2-API) is for learning and research purposes only. Users assume all risks when using this project. The author is not responsible for any direct, indirect, or consequential losses resulting from the use of this project.
+This project (AIClient2API) is for learning and research purposes only. Users assume all risks when using this project. The author is not responsible for any direct, indirect, or consequential losses resulting from the use of this project.
 
 ### Third-Party Service Responsibility Statement
 This project is an API proxy tool and does not provide any AI model services. All AI model services are provided by their respective third-party providers (such as Google, OpenAI, Anthropic, etc.). Users should comply with the terms of service and policies of each third-party service when accessing them through this project. The author is not responsible for the availability, quality, security, or legality of third-party services.

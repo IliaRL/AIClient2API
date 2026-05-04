@@ -116,7 +116,8 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         TLS_SIDECAR_ENABLED_PROVIDERS: [], // 启用 TLS Sidecar 的提供商列表
         TLS_SIDECAR_PORT: 9090,     // sidecar 监听端口
         TLS_SIDECAR_BINARY_PATH: null, // 自定义二进制路径（默认自动搜索）
-        TLS_SIDECAR_PROXY_URL: null    // TLS Sidecar 专用的上游代理地址
+        TLS_SIDECAR_PROXY_URL: null,    // TLS Sidecar 专用的上游代理地址
+        UI_ENABLED: true           // 是否启用前端管理界面
     };
 
     let currentConfig = { ...defaultConfig };
@@ -160,6 +161,8 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         { flag: '--login-min-interval',   configKey: 'LOGIN_MIN_INTERVAL',     type: 'int' },
         { flag: '--scheduled-health-check-enabled', configKey: 'SCHEDULE_HEALTH_CHECK_ENABLED', type: 'bool' },
         { flag: '--scheduled-health-check-interval', configKey: 'SCHEDULE_HEALTH_CHECK_INTERVAL', type: 'int' },
+        { flag: '--no-ui',                configKey: 'UI_ENABLED',            type: 'flag', value: false },
+        { flag: '--ui',                   configKey: 'UI_ENABLED',            type: 'bool' }
     ];
 
     // Parse command-line arguments using definitions
@@ -168,13 +171,16 @@ export async function initializeConfig(args = process.argv.slice(2), configFileP
         const def = flagMap.get(args[i]);
         if (!def) continue;
 
-        if (i + 1 >= args.length) {
+        if (def.type !== 'flag' && i + 1 >= args.length) {
             logger.warn(`[Config Warning] ${def.flag} flag requires a value.`);
             continue;
         }
 
-        const rawValue = args[++i];
+        const rawValue = def.type === 'flag' ? null : args[++i];
         switch (def.type) {
+            case 'flag':
+                currentConfig[def.configKey] = def.value;
+                break;
             case 'string':
                 currentConfig[def.configKey] = rawValue;
                 break;
