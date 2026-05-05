@@ -563,10 +563,12 @@ export async function getProviderStatus(config, options = {}) {
         logger.warn('[API Service] Failed to load provider pools:', error.message);
     }
 
-    // providerPoolsSlim 只保留顶级 key 及部分字段，过滤 isDisabled 为 true 的元素
+    // providerPoolsSlim 只保留顶级 key 及部分字段
     const slimFields = [
+        'uuid',
         'customName',
         'isHealthy',
+        'isDisabled',
         'lastErrorTime',
         'lastErrorMessage',
         'needsRefresh'
@@ -620,8 +622,8 @@ export async function getProviderStatus(config, options = {}) {
                 }
                 // identify 字段
                 if (identifyField && item.hasOwnProperty(identifyField)) {
-                    let tmpCustomName = item.customName ? `${item.customName}` : 'NoCustomName';
-                    let identifyStr = `${tmpCustomName}::${key}::${item[identifyField]}`;
+                    let tmpCustomName = item.customName ? `${item.customName}` : (item.uuid || 'NoUUID');
+                    let identifyStr = `${tmpCustomName}::${key}`;
                     slim.identify = identifyStr;
                 } else {
                     slim.identify = null;

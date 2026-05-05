@@ -142,8 +142,12 @@
 > **💡 クイックコマンド**：AI に直接以下の文章を伝えると、本プロジェクトのすべての使用方法を自动的にマスターします：
 > 
 > ```text
-> https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md にある Skill をロードして学習し、AIClient2API のすべての起動パラメータと 50 以上の API エンドポイントの使用方法をマスターしてください。
+> https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md にある Skill をロードして学習し（サービスアドレス：実際のドメインまたは IP、ログインパスワード：実際のパスワード）、AIClient2API のすべての使用方法をマスターしてください。
 > ```
+> - **リモートデプロイ**:
+>   ```text
+>   https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md にある Skill をロードして学習し（サービスアドレス：実際のドメインまたは IP、ログインパスワード：admin123）、AIClient2API のすべての使用方法をマスターしてください。
+>   ```
 
 ### 🎯 統一アクセス、ワンストップ管理
 *   **マルチモデル統一インターフェース**：標準OpenAI互換プロトコルを通じて、一度の設定でGemini、Claude、Grok、Codex、 K2、MiniMax M2などの主流大規模モデルにアクセス

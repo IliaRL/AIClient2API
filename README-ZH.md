@@ -140,7 +140,7 @@
 > **💡 快速指令**：你可以直接对 AI 说下面这句话，它将自动掌握本项目的所有用法：
 > 
 > ```text
-> 请加载并学习 https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md 中的 Skill，以掌握 AIClient2API 的所有启动参数和 50+ 个 API 接口用法。
+> 请加载并学习 https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md 中的 Skill（服务地址为你的实际域名或 IP，登录密码为你的实际密码），以掌握 AIClient2API 的所有用法。
 > ```
 
 ### 🎯 统一接入，一站式管理

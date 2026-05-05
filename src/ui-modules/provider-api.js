@@ -32,9 +32,9 @@ function sanitizeProviderData(provider, maskSensitive = false) {
             const val = sanitized[key];
             if (typeof val !== 'string' || !val) continue;
 
-            // 识别敏感字段：包含 KEY, TOKEN, SECRET, PASSWORD, CLEARANCE 等关键词
+            // 识别敏感字段：包含 KEY, TOKEN, SSO, SECRET, PASSWORD, CLEARANCE 等关键词
             // 同时排除包含 PATH, URL, DIR, ENDPOINT 等关键词的路径/地址字段
-            const isSensitive = /API_KEY|TOKEN|SECRET|PASSWORD|CLEARANCE|ACCESS_KEY|credentials/i.test(key);
+            const isSensitive = /API_KEY|TOKEN|SSO|SECRET|PASSWORD|CLEARANCE|ACCESS_KEY|credentials/i.test(key);
             const isPath = /PATH|URL|DIR|ENDPOINT|REGION/i.test(key);
 
             if (isSensitive && !isPath) {

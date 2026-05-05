@@ -10,16 +10,19 @@ This skill provides instructions for AI agents to interact with the AIClient2API
 
 ## Self-Discovery Modes
 
-### 1. Local Mode (CLI)
-Use these when you have shell access to the server environment:
-- **Help**: `npm run help` (Add `--json` for structured data)
-- **API Guide**: `npm run example:api` (Add `--json` for structured data)
+**CRITICAL**: Regardless of how you access the service, using REST APIs (for management or AI tasks) requires the `Server Address` and appropriate credentials. **Always ask the user for the `Server Address` (use `http://localhost:3000` as default for local) and `Admin Password` before attempting API-based tasks.**
 
-### 2. Remote Mode (REST API)
-Use these when interacting with a running instance over HTTP. **Ask the user for the `Server Address`. Credential requirements vary by category (see below).**
+### 1. Local Mode (CLI & REST API)
+Use these when you have shell access to the server environment. In this mode, you can use both local CLI tools and REST APIs:
+- **CLI Help**: `npm run help` (Add `--json` for structured data)
+- **CLI API Guide**: `npm run example:api` (Add `--json` for structured data)
+- **REST API**: You can access all endpoints via `http://localhost:<PORT>` (Default: 3000).
+
+### 2. Remote Mode (REST API Only)
+Use these when interacting with a running instance over the network without shell access:
 - **Help JSON**: `GET <SERVER_ADDR>/api/help` (Public, No Auth)
 - **API Guide JSON**: `GET <SERVER_ADDR>/api/example` (Public, No Auth)
-- **Plain Text**: Append `?format=text` to either endpoint (e.g., `GET <SERVER_ADDR>/api/help?format=text`)
+- **REST API**: Use the user-provided `Server Address`.
 
 ## When to Use
 - When you need to understand, configure, or call the AIClient2API service.
@@ -28,6 +31,13 @@ Use these when interacting with a running instance over HTTP. **Ask the user for
 
 ## Core API Categories (AI vs. Management)
 
+### 0. Public Endpoints (No Auth Required)
+Use these for self-discovery or system monitoring:
+- `GET /api/help`: Get full API help documentation (JSON).
+- `GET /api/example`: Get API calling examples (JSON).
+- `GET /provider_health`: Detailed health status of all model providers.
+- `POST /api/login`: Exchange `Admin Password` for a dynamic `Token`.
+
 ### 1. AI Business Path (`/v1/*`, `/v1beta/*`, `/count_tokens`)
 - **Purpose**: AI model inference (chat, image, token counting).
 - **Auth**: Static `API Key`. **Ask the user for this if not provided.**
@@ -35,7 +45,7 @@ Use these when interacting with a running instance over HTTP. **Ask the user for
 
 ### 2. Management Path (`/api/*`, `/health`, `/provider_health`)
 - **Purpose**: Server config, node pool management, logs, stats.
-- **Auth**: Dynamic `Token` via `/api/login`. **Ask the user for the `Admin Password`.**
+- **Auth**: Dynamic `Token` via `/api/login`. **Ask the user for the `Server Address` and `Admin Password`.**
 - **Header**: `Authorization: Bearer <ADMIN_TOKEN>` (Except for `/api/login` and public health checks).
 
 ## Advanced Patterns
@@ -50,12 +60,13 @@ Subscribe to `GET /api/events` via `EventSource` for live system output.
 
 ## Quick Reference
 
-| Mode | Command/Endpoint | Format |
-|------|------------------|--------|
-| Local | `npm run help -- --json` | JSON |
-| Local | `npm run example:api` | Text |
-| Remote | `GET <SERVER_ADDR>/api/help` | JSON |
-| Remote | `GET <SERVER_ADDR>/api/example?format=text` | Text |
+| Mode | Method | Command/Endpoint | Format |
+|------|--------|------------------|--------|
+| Local | CLI | `npm run help -- --json` | JSON |
+| Local | CLI | `npm run example:api` | Text |
+| Local | REST | `GET http://localhost:3000/api/help` | JSON |
+| Remote | REST | `GET <SERVER_ADDR>/api/help` | JSON |
+| Remote | REST | `GET <SERVER_ADDR>/api/example?format=text` | Text |
 
 ## Common Mistakes
 - **Wrong Key**: Using the static AI Key for management APIs (causes 401).

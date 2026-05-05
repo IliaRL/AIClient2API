@@ -142,7 +142,7 @@
 > **💡 Quick Command**: You can tell the AI this sentence directly, and it will automatically master all usage of this project:
 > 
 > ```text
-> Please load and learn the Skill in https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md to master all startup parameters and 50+ API endpoints of AIClient2API.
+> Please load and learn the Skill in https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md (Service Address: your actual domain or IP, Login Password: your actual password) to master all usage of AIClient2API.
 > ```
 
 ### 🎯 Unified Access, One-Stop Management
