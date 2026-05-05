@@ -135,15 +135,21 @@
 
 ## 💡 Core Advantages
 
-### 🤖 AI Interaction & Skill Guide
+### 🤖 AI-First, Agent Interaction Support
 
-> **AI-First Design**: This project natively supports efficient interaction with AI Agents (e.g., Claude Code, Cursor, OpenCode).
+> **AI-First Design**: This project natively supports efficient interaction with mainstream AI Agents such as OpenClaw, Hermes, and Claude Code.
 >
 > **💡 Quick Command**: You can tell the AI this sentence directly, and it will automatically master all usage of this project:
-> 
-> ```text
-> Please load and learn the Skill in https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md (Service Address: your actual domain or IP, Login Password: your actual password) to master all usage of AIClient2API.
-> ```
+>
+> - **Remote Deployment**:
+>   ```text
+>   Please load and learn the Skill in https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md (Service Address: your actual domain or IP, Login Password: your actual password) to master all usage of AIClient2API.
+>   ```
+> - **Local Mode**:
+>   If you are running the AI agent directly in your local environment, just send:
+>   ```text
+>   Please load and learn the Skill in docs/skills/aiclient-cli-usage.md to help me start, configure, and manage the AIClient2API service locally.
+>   ```
 
 ### 🎯 Unified Access, One-Stop Management
 *   **Multi-Model Unified Interface**: Through standard OpenAI-compatible protocol, configure once to access mainstream large models including Gemini, Claude, Grok, Codex, Kimi K2, MiniMax M2

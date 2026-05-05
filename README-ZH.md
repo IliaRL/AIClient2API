@@ -133,15 +133,21 @@
 
 ## 💡 核心优势
 
-### 🤖 AI 交互与 Skill 指南
+### 🤖 AI 优先，Agent 交互支持
 
-> **AI 优先设计**：本项目原生支持与 AI Agent（如 Claude Code, Cursor, OpenCode）的高效交互。
+> **AI 优先设计**：本项目原生支持与 OpenClaw, Hermes, Claude Code 等主流 AI Agent 的高效交互。
 >
 > **💡 快速指令**：你可以直接对 AI 说下面这句话，它将自动掌握本项目的所有用法：
-> 
-> ```text
-> 请加载并学习 https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md 中的 Skill（服务地址为你的实际域名或 IP，登录密码为你的实际密码），以掌握 AIClient2API 的所有用法。
-> ```
+>
+> - **远程部署**：
+>   ```text
+>   请加载并学习 https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md 中的 Skill（服务地址为你的实际域名或 IP，登录密码为你的实际密码），以掌握 AIClient2API 的所有用法。
+>   ```
+> - **本地模式**：
+>   如果你在本地环境直接运行 AI 代理，可以直接发送：
+>   ```text
+>   请加载并学习本项目的 docs/skills/aiclient-cli-usage.md 这一 Skill，以协助我本地启动、配置并管理 AIClient2API 服务。
+>   ```
 
 ### 🎯 统一接入，一站式管理
 *   **多模型统一接口**：通过标准 OpenAI 兼容协议，一次配置即可接入 Gemini、Claude、Grok、Codex、Kimi K2、MiniMax M2 等主流大模型

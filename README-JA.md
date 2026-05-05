@@ -135,18 +135,20 @@
 
 ## 💡 コアアドバンテージ
 
-### 🤖 AI 連携と Skill ガイド
+### 🤖 AI 優先、Agent 連携サポート
 
-> **AI 優先設計**：本プロジェクトは、AI Agent（Claude Code, Cursor, OpenCode など）との効率的な連携をネイティブにサポートしています。
+> **AI 優先設計**：本プロジェクトは、OpenClaw, Hermes, Claude Code などの主要な AI Agent との効率的な連携をネイティブにサポートしています。
 >
 > **💡 クイックコマンド**：AI に直接以下の文章を伝えると、本プロジェクトのすべての使用方法を自动的にマスターします：
-> 
-> ```text
-> https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md にある Skill をロードして学習し（サービスアドレス：実際のドメインまたは IP、ログインパスワード：実際のパスワード）、AIClient2API のすべての使用方法をマスターしてください。
-> ```
-> - **リモートデプロイ**:
+>
+> - **リモートデプロイ**：
 >   ```text
->   https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md にある Skill をロードして学習し（サービスアドレス：実際のドメインまたは IP、ログインパスワード：admin123）、AIClient2API のすべての使用方法をマスターしてください。
+>   https://raw.githubusercontent.com/justlovemaki/AIClient2API/main/docs/skills/aiclient-cli-usage.md にある Skill をロードして学習し（サービスアドレス：実際のドメインまたは IP、ログインパスワード：実際のパスワード）、AIClient2API のすべての使用方法をマスターしてください。
+>   ```
+> - **ローカルモード**：
+>   ローカル環境で AI 代理を直接実行している場合は、以下を送信してください：
+>   ```text
+>   docs/skills/aiclient-cli-usage.md にある Skill をロードして学習し、AIClient2API サービスのローカルでの起動、設定、管理をサポートしてください。
 >   ```
 
 ### 🎯 統一アクセス、ワンストップ管理
