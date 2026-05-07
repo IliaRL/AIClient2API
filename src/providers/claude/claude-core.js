@@ -3,7 +3,7 @@ import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
-import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
+import { isRetryableNetworkError, MODEL_PROVIDER, getRetryAfterMs } from '../../utils/common.js';
 
 /**
  * Claude API Core Service Class.
@@ -107,12 +107,19 @@ export class ClaudeApiService {
                 throw error;
             }
 
-            // 处理 429 (Too Many Requests) 与指数退避
-            if (status === 429 && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                logger.info(`[Claude API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(endpoint, body, isRetry, retryCount + 1);
+            // 处理 429 (Too Many Requests)
+            if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[Claude API] Received 429 with Retry-After: ${retryAfter}ms. Throwing to upper layer.`);
+                    throw error;
+                }
+                if (retryCount < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    logger.info(`[Claude API] Received 429 (Too Many Requests). No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return this.callApi(endpoint, body, isRetry, retryCount + 1);
+                }
             }
 
             // 处理其他可重试错误 (5xx 服务器错误)
@@ -203,13 +210,20 @@ export class ClaudeApiService {
                 throw error;
             }
 
-            // 处理 429 (Too Many Requests) 与指数退避
-            if (status === 429 && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                logger.info(`[Claude API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
-                return;
+            // 处理 429 (Too Many Requests)
+            if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[Claude API] Received 429 with Retry-After: ${retryAfter}ms during stream. Throwing to upper layer.`);
+                    throw error;
+                }
+                if (retryCount < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    logger.info(`[Claude API] Received 429 (Too Many Requests) during stream. No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
+                    return;
+                }
             }
 
             // 处理其他可重试错误 (5xx 服务器错误)

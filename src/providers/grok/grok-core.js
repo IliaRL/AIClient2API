@@ -3,7 +3,7 @@ import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { v4 as uuidv4 } from 'uuid';
-import { MODEL_PROTOCOL_PREFIX, isRetryableNetworkError } from '../../utils/common.js';
+import { MODEL_PROTOCOL_PREFIX, isRetryableNetworkError, getRetryAfterMs } from '../../utils/common.js';
 import { getProviderModels } from '../provider-models.js';
 import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER } from '../../utils/common.js';
@@ -1482,12 +1482,19 @@ export class GrokApiService {
                 }
             }
 
-            if (status === 429 && canRetryInRequest) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                logger.info(`[Grok API] Received 429 during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                yield* this.generateContentStream(model, requestBody, retryCount + 1);
-                return;
+            if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[Grok API] Received 429 with Retry-After: ${retryAfter}ms during stream. Throwing to upper layer.`);
+                    throw error;
+                }
+                if (canRetryInRequest) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    logger.info(`[Grok API] Received 429 (Too Many Requests) during stream. No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    yield* this.generateContentStream(model, requestBody, retryCount + 1);
+                    return;
+                }
             }
 
             if (status >= 500 && status < 600 && canRetryInRequest) {

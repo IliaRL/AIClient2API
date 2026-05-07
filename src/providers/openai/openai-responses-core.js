@@ -3,7 +3,7 @@ import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
-import { MODEL_PROVIDER } from '../../utils/common.js';
+import { MODEL_PROVIDER, getRetryAfterMs } from '../../utils/common.js';
 
 // OpenAI Responses API specification service for interacting with third-party models
 export class OpenAIResponsesApiService {
@@ -79,12 +79,19 @@ export class OpenAIResponsesApiService {
                 throw error;
             }
 
-            // Handle 429 (Too Many Requests) with exponential backoff
-            if (status === 429 && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                logger.info(`[API] Received 429 (Too Many Requests). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                return this.callApi(endpoint, body, isRetry, retryCount + 1);
+            // Handle 429 (Too Many Requests)
+            if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[API] Received 429 with Retry-After: ${retryAfter}ms. Throwing to upper layer.`);
+                    throw error;
+                }
+                if (retryCount < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    logger.info(`[API] Received 429 (Too Many Requests). No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return this.callApi(endpoint, body, isRetry, retryCount + 1);
+                }
             }
 
             // Handle other retryable errors (5xx server errors)
@@ -151,13 +158,20 @@ export class OpenAIResponsesApiService {
                 throw error;
             }
 
-            // Handle 429 (Too Many Requests) with exponential backoff
-            if (status === 429 && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount);
-                logger.info(`[API] Received 429 (Too Many Requests) during stream. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
-                return;
+            // Handle 429 (Too Many Requests)
+            if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[API] Received 429 with Retry-After: ${retryAfter}ms during stream. Throwing to upper layer.`);
+                    throw error;
+                }
+                if (retryCount < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    logger.info(`[API] Received 429 (Too Many Requests) during stream. No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
+                    return;
+                }
             }
 
             // Handle other retryable errors (5xx server errors)

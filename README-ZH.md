@@ -51,6 +51,7 @@
       感谢 AICodeMirror 赞助本项目！AICodeMirror 为 Claude Code / Codex / Gemini CLI 提供官方高稳定性中转服务，具备企业级并发能力、快速开票和 7/24 专属技术支持。Claude Code / Codex / Gemini 官方渠道价格仅为原价的 38% / 2% / 9%，充值还有额外优惠！AICodeMirror 为 AIClient2API 用户提供专属福利：<a href="https://www.aicodemirror.com/register?invitecode=5BUE62">通过此链接注册</a>即可享受首充 <strong>8折（20% off）</strong> 优惠，企业客户最高可享 75折（25% off）！
     </td>
   </tr>
+<!--
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://poixe.com/i/ebmvga">
@@ -61,6 +62,7 @@
       Poixe AI 提供可靠的 AI 模型接口服务，您可以使用平台提供的 LLM API 接口轻松构建 AI 产品，同时也可以成为供应商，为平台提供大模型资源以赚取收益。<a href="https://poixe.com/i/ebmvga">通过 AIClient2API 专属链接注册</a>，充值额外赠送 <strong>$5 美金</strong>。
     </td>
   </tr>
+-->
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://visioncoder.com">
@@ -71,6 +73,7 @@
       感谢 VisionCoder 对本项目的支持。VisionCoder 开发平台 是一个可靠高效的 API 中继服务提供商，提供 Claude Code、Codex、Gemini 等主流 AI 模型，帮助开发者和团队更轻松地集成 AI 功能，提升工作效率。VisionCoder 还为我们的用户提供 <a href="https://visioncoder.com">Token Plan</a> 限时活动：<strong>购买 1 个月，赠送 1 个月</strong>。
     </td>
   </tr>
+<!--
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://www.lingtrue.com/register?aff=MP34">
@@ -81,6 +84,7 @@
       感谢 LingtrueAPI 对本项目的赞助！LingtrueAPI 是一家全球大模型API中转服务平台，提供Claude opus 4.6、GPT 5.4、Gemini 3.1 pro等多种模型API调用服务，致力于让用户以低成本、高稳定性链接全球AI能力,最大化生产效率。LingtrueAPI为本软件用户提供了特别优惠：<a href="https://www.lingtrue.com/register?aff=MP34">通过此链接注册</a>并在首次充值时输入 <strong>LingtrueAPI</strong> 优惠码即可享受 <strong>9折优惠</strong>。
     </td>
   </tr>
+-->
   <tr>
     <td width="25%" align="center" valign="middle">
       <img src="static/wechat.png" alt="Sponsor Contact" width="150">

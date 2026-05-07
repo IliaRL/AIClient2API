@@ -12,7 +12,7 @@ import * as readline from 'readline';
 import { v4 as uuidv4 } from 'uuid';
 import open from 'open';
 import { configureTLSSidecar } from '../../utils/proxy-utils.js';
-import { formatExpiryTime, isRetryableNetworkError, formatExpiryLog } from '../../utils/common.js';
+import { formatExpiryTime, isRetryableNetworkError, formatExpiryLog, getRetryAfterMs } from '../../utils/common.js';
 import { getProviderModels } from '../provider-models.js';
 import { handleGeminiAntigravityOAuth } from '../../auth/oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
@@ -1139,12 +1139,17 @@ export class AntigravityApiService {
             }
 
             if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[Antigravity API] Received 429 with Retry-After: ${retryAfter}ms. Throwing to upper layer.`);
+                    throw error;
+                }
                 if (baseURLIndex + 1 < this.baseURLs.length) {
                     logger.info(`[Antigravity API] Rate limited on ${baseURL}. Trying next base URL...`);
                     return this.callApi(method, body, isRetry, retryCount, baseURLIndex + 1);
                 } else if (retryCount < maxRetries) {
                     const delay = baseDelay * Math.pow(2, retryCount);
-                    logger.info(`[Antigravity API] Rate limited. Retrying in ${delay}ms...`);
+                    logger.info(`[Antigravity API] Received 429 (Too Many Requests). No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     return this.callApi(method, body, isRetry, retryCount + 1, 0);
                 }
@@ -1242,13 +1247,18 @@ export class AntigravityApiService {
             }
 
             if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[Antigravity API] Received 429 with Retry-After: ${retryAfter}ms during stream. Throwing to upper layer.`);
+                    throw error;
+                }
                 if (baseURLIndex + 1 < this.baseURLs.length) {
                     logger.info(`[Antigravity API] Rate limited on ${baseURL}. Trying next base URL...`);
                     yield* this.streamApi(method, body, isRetry, retryCount, baseURLIndex + 1);
                     return;
                 } else if (retryCount < maxRetries) {
                     const delay = baseDelay * Math.pow(2, retryCount);
-                    logger.info(`[Antigravity API] Rate limited during stream. Retrying in ${delay}ms...`);
+                    logger.info(`[Antigravity API] Received 429 (Too Many Requests) during stream. No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     yield* this.streamApi(method, body, isRetry, retryCount + 1, 0);
                     return;

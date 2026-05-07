@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { getProviderModels } from '../provider-models.js';
 import { handleQwenOAuth } from '../../auth/oauth-handlers.js';
 import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
-import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog } from '../../utils/common.js';
+import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog, getRetryAfterMs } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 
 // --- Constants ---
@@ -778,7 +778,21 @@ export class QwenApiService {
                 throw error;
             }
 
-            if ((status === 429 || (status >= 500 && status < 600) || isRetryableNetworkError(error)) && retryCount < maxRetries) {
+            if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[QwenApiService] Received 429 with Retry-After: ${retryAfter}ms. Throwing to upper layer.`);
+                    throw error;
+                }
+                if (retryCount < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    logger.info(`[QwenApiService] Received 429 (Too Many Requests). No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return this.callApiWithAuthAndRetry(endpoint, body, isStream, retryCount + 1);
+                }
+            }
+
+            if (((status >= 500 && status < 600) || isRetryableNetworkError(error)) && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 logger.info(`[QwenApiService] Request failed (${status || errorCode}). Retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));

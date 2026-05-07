@@ -3,7 +3,7 @@ import logger from '../../utils/logger.js';
 import * as http from 'http';
 import * as https from 'https';
 import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
-import { isRetryableNetworkError, MODEL_PROVIDER } from '../../utils/common.js';
+import { isRetryableNetworkError, MODEL_PROVIDER, getRetryAfterMs } from '../../utils/common.js';
 
 /**
  * ForwardApiService - A provider that forwards requests to a specified API endpoint.
@@ -92,7 +92,21 @@ export class ForwardApiService {
                 throw error;
             }
 
-            if ((status === 429 || (status >= 500 && status < 600) || isNetworkError) && retryCount < maxRetries) {
+            if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[Forward API] Received 429 with Retry-After: ${retryAfter}ms. Throwing to upper layer.`);
+                    throw error;
+                }
+                if (retryCount < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    logger.info(`[Forward API] Received 429 (Too Many Requests). No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return this.callApi(endpoint, body, isRetry, retryCount + 1);
+                }
+            }
+
+            if (((status >= 500 && status < 600) || isNetworkError) && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 logger.info(`[Forward API] Error ${status || errorCode}. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));
@@ -148,7 +162,22 @@ export class ForwardApiService {
             const errorCode = error.code;
             const isNetworkError = isRetryableNetworkError(error);
             
-            if ((status === 429 || (status >= 500 && status < 600) || isNetworkError) && retryCount < maxRetries) {
+            if (status === 429) {
+                const retryAfter = getRetryAfterMs(error);
+                if (retryAfter !== null) {
+                    logger.warn(`[Forward API] Received 429 with Retry-After: ${retryAfter}ms during stream. Throwing to upper layer.`);
+                    throw error;
+                }
+                if (retryCount < maxRetries) {
+                    const delay = baseDelay * Math.pow(2, retryCount);
+                    logger.info(`[Forward API] Received 429 (Too Many Requests) during stream. No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    yield* this.streamApi(endpoint, body, isRetry, retryCount + 1);
+                    return;
+                }
+            }
+
+            if (((status >= 500 && status < 600) || isNetworkError) && retryCount < maxRetries) {
                 const delay = baseDelay * Math.pow(2, retryCount);
                 logger.info(`[Forward API] Stream error ${status || errorCode}. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, delay));

@@ -140,12 +140,21 @@ function getRetryDelayFromBody(errorBody) {
                 if (retryDelay !== null) return retryDelay;
             }
         }
+
+        const message = data?.error?.message;
+        if (message) {
+            const match = message.match(/after\s+([\d.]+)\s*(ms|s)?\.?/i);
+            if (match) {
+                const amount = parseFloat(match[1]);
+                return Math.max(0, Math.round(match[2]?.toLowerCase() === 'ms' ? amount : amount * 1000));
+            }
+        }
     } catch {}
 
     return null;
 }
 
-function getRetryAfterMs(error, now = Date.now()) {
+export function getRetryAfterMs(error, now = Date.now()) {
     const headerDelay = parseRetryAfterMs(getHeaderValue(error?.response?.headers, 'retry-after'), now);
     if (headerDelay !== null) return headerDelay;
 
@@ -1777,6 +1786,15 @@ export function extractSystemPromptFromRequestBody(requestBody, provider) {
                 const userMessage = requestBody.messages.find(m => m.role === 'user');
                 if (userMessage) {
                     incomingSystemText = userMessage.content;
+                }
+            }
+            if (typeof incomingSystemText === 'object' && incomingSystemText !== null) {
+                if (Array.isArray(incomingSystemText)) {
+                    incomingSystemText = incomingSystemText
+                        .map(item => (typeof item === 'string' ? item : item.text || JSON.stringify(item)))
+                        .join('\n');
+                } else {
+                    incomingSystemText = JSON.stringify(incomingSystemText);
                 }
             }
             break;

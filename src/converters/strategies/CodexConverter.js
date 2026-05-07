@@ -673,7 +673,10 @@ export class CodexConverter extends BaseConverter {
             usage: {
                 prompt_tokens: response.usage?.input_tokens || 0,
                 completion_tokens: response.usage?.output_tokens || 0,
-                total_tokens: response.usage?.total_tokens || 0
+                total_tokens: response.usage?.total_tokens || 0,
+                prompt_tokens_details: {
+                    cached_tokens: response.usage?.input_tokens_details?.cached_tokens || 0
+                }
             }
         };
 
@@ -827,6 +830,9 @@ export class CodexConverter extends BaseConverter {
                 input_tokens: response.usage?.input_tokens || 0,
                 output_tokens: response.usage?.output_tokens || 0,
                 total_tokens: response.usage?.total_tokens || 0,
+                input_tokens_details: {
+                    cached_tokens: response.usage?.input_tokens_details?.cached_tokens || 0
+                },
                 output_tokens_details: {
                     reasoning_tokens: response.usage?.output_tokens_details?.reasoning_tokens || 0
                 }
@@ -893,7 +899,8 @@ export class CodexConverter extends BaseConverter {
             usageMetadata: {
                 promptTokenCount: response.usage?.input_tokens || 0,
                 candidatesTokenCount: response.usage?.output_tokens || 0,
-                totalTokenCount: response.usage?.total_tokens || 0
+                totalTokenCount: response.usage?.total_tokens || 0,
+                cachedContentTokenCount: response.usage?.input_tokens_details?.cached_tokens || 0
             },
             modelVersion: response.model || model,
             responseId: response.id
@@ -959,7 +966,8 @@ export class CodexConverter extends BaseConverter {
             stop_reason: stopReason,
             usage: {
                 input_tokens: response.usage?.input_tokens || 0,
-                output_tokens: response.usage?.output_tokens || 0
+                output_tokens: response.usage?.output_tokens || 0,
+                cache_read_input_tokens: response.usage?.input_tokens_details?.cached_tokens || 0
             }
         };
     }
@@ -1154,7 +1162,10 @@ export class CodexConverter extends BaseConverter {
             template.usage = {
                 prompt_tokens: chunk.response.usage?.input_tokens || 0,
                 completion_tokens: chunk.response.usage?.output_tokens || 0,
-                total_tokens: chunk.response.usage?.total_tokens || 0
+                total_tokens: chunk.response.usage?.total_tokens || 0,
+                prompt_tokens_details: {
+                    cached_tokens: chunk.response.usage?.input_tokens_details?.cached_tokens || 0
+                }
             };
             if (chunk.response.usage?.output_tokens_details?.reasoning_tokens) {
                 template.usage.completion_tokens_details = {
@@ -1259,7 +1270,13 @@ export class CodexConverter extends BaseConverter {
             completedEvent.response.usage = {
                 input_tokens: chunk.response.usage?.input_tokens || 0,
                 output_tokens: chunk.response.usage?.output_tokens || 0,
-                total_tokens: chunk.response.usage?.total_tokens || 0
+                total_tokens: chunk.response.usage?.total_tokens || 0,
+                input_tokens_details: {
+                    cached_tokens: chunk.response.usage?.input_tokens_details?.cached_tokens || 0
+                },
+                output_tokens_details: {
+                    reasoning_tokens: chunk.response.usage?.output_tokens_details?.reasoning_tokens || 0
+                }
             };
             events.push(completedEvent);
             this.streamParams.delete(resId);
@@ -1345,7 +1362,8 @@ export class CodexConverter extends BaseConverter {
             template.usageMetadata = {
                 promptTokenCount: chunk.response.usage?.input_tokens || 0,
                 candidatesTokenCount: chunk.response.usage?.output_tokens || 0,
-                totalTokenCount: chunk.response.usage?.total_tokens || 0
+                totalTokenCount: chunk.response.usage?.total_tokens || 0,
+                cachedContentTokenCount: chunk.response.usage?.input_tokens_details?.cached_tokens || 0
             };
             this.streamParams.delete(resId);
             return template;
@@ -1586,7 +1604,8 @@ export class CodexConverter extends BaseConverter {
                     delta: { stop_reason: "end_turn" },
                     usage: {
                         input_tokens: chunk.response.usage?.input_tokens || 0,
-                        output_tokens: chunk.response.usage?.output_tokens || 0
+                        output_tokens: chunk.response.usage?.output_tokens || 0,
+                        cache_read_input_tokens: chunk.response.usage?.input_tokens_details?.cached_tokens || 0
                     }
                 },
                 { type: "message_stop" }
