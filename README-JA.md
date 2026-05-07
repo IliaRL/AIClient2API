@@ -42,6 +42,7 @@
       PackyCode は信頼性が高く効率的な API リレーサービスプロバイダーであり、Claude Code、Codex、Gemini などのリレーサービス提供しています。PackyCode は当ソフトウェアユーザーに特别割引を提供しています：<a href="https://www.packyapi.com/register?aff=AIClient2API">このリンクから登録</a>し、チャージ時に <strong>AIClient2API</strong> プロモーションコードを入力すると <strong>10% オフ</strong>になります。
     </td>
   </tr>
+<!--
   <tr>
     <td width="25%" align="center" valign="middle">
       <a href="https://www.aicodemirror.com/register?invitecode=5BUE62">
@@ -52,6 +53,7 @@
       AICodeMirror の本プロジェクトへのスポンサーシップに感謝します！AICodeMirror は、Claude Code / Codex / Gemini CLI 向けに公式の高安定性リレーサービスを提供しており、企業レベルの同時実行性、迅速な請求書発行、24時間365日の専用技術サポートを備えています。Claude Code / Codex / Gemini の公式チャンネルを、元の価格の 38% / 2% / 9% で利用でき、チャージ時にはさらなる割引もあります！AICodeMirror は AIClient2API ユーザーに特別な特典を提供しています：<a href="https://www.aicodemirror.com/register?invitecode=5BUE62">このリンクから登録</a>すると、初回チャージが <strong>20% オフ</strong>になり、法人のお客様は最大 25% オフになります！
     </td>
   </tr>
+-->
 <!--
   <tr>
     <td width="25%" align="center" valign="middle">
