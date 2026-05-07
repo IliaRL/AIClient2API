@@ -415,6 +415,7 @@ export async function handleDetectProviderModels(req, res, currentConfig, provid
             MODEL_PROVIDER: providerType,
             uuid: detectionUuid
         };
+        delete tempConfig.providerPools;
 
         let models = [];
         try {

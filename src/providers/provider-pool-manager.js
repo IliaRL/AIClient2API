@@ -471,6 +471,7 @@ export class ProviderPoolManager {
                 ...config,
                 MODEL_PROVIDER: providerType
             };
+            delete tempConfig.providerPools;
             const serviceAdapter = getServiceAdapter(tempConfig);
             
             // 调用适配器的 refreshToken 方法（内部封装了具体的刷新逻辑）
@@ -1454,6 +1455,7 @@ export class ProviderPoolManager {
                             ...targetConfig,
                             MODEL_PROVIDER: providerType
                         };
+                        delete tempConfig.providerPools;
                         const serviceAdapter = getServiceAdapter(tempConfig);
                         
                         if (typeof serviceAdapter.listModels === 'function') {
