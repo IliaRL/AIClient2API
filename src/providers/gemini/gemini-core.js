@@ -45,6 +45,23 @@ function applyGeminiCLIHeaders(headers, model) {
     headers['X-Goog-Api-Client'] = GEMINI_CLI_API_CLIENT_HEADER;
 }
 
+function is_anti_truncation_model(model) {
+    if (!model) return false;
+    return ANTI_TRUNCATION_MODELS.some(antiModel => model.includes(antiModel));
+}
+
+// 从防截断模型名中提取实际模型名
+function extract_model_from_anti_model(model) {
+    if (!model) return model;
+    if (model.startsWith('anti-')) {
+        const originalModel = model.substring(5); // 移除 'anti-' 前缀
+        if (GEMINI_MODELS.includes(originalModel)) {
+            return originalModel;
+        }
+    }
+    return model; // 如果不是anti-前缀或不在原模型列表中，则返回原模型名
+}
+
 
 function modelSupportsThinking(modelName) {
     if (!modelName) return false;
