@@ -87,6 +87,10 @@ function normalizeUsageCandidate(candidate) {
     const cachedTokens = toNumber(
         candidate.cached_tokens ??
         usage?.cached_tokens ??
+        candidate.prompt_tokens_details?.cached_tokens ??
+        candidate.input_tokens_details?.cached_tokens ??
+        usage?.prompt_tokens_details?.cached_tokens ??
+        usage?.input_tokens_details?.cached_tokens ??
         usage?.cache_read_input_tokens ??
         usage?.cachedContentTokenCount
     );
