@@ -3701,6 +3701,44 @@ function showRestartRequiredModal(version) {
 }
 
 /**
+ * 比较两个版本号
+ * @param {string} v1 - 版本号1
+ * @param {string} v2 - 版本号2
+ * @returns {number} 1: v1 > v2, -1: v1 < v2, 0: v1 == v2
+ */
+function compareVersions(v1, v2) {
+    if (!v1 || !v2) return 0;
+    const s1 = v1.replace(/^v/, '').split('.');
+    const s2 = v2.replace(/^v/, '').split('.');
+    for (let i = 0; i < Math.max(s1.length, s2.length); i++) {
+        const n1 = parseInt(s1[i] || 0, 10);
+        const n2 = parseInt(s2[i] || 0, 10);
+        if (n1 > n2) return 1;
+        if (n1 < n2) return -1;
+    }
+    return 0;
+}
+
+/**
+ * 根据所选版本更新更新按钮文字
+ * @param {string} selectedVersion - 所选版本
+ * @param {string} localVersion - 本地版本
+ */
+function updateUpdateBtnText(selectedVersion, localVersion) {
+    const updateBtn = document.getElementById('performUpdateBtn');
+    if (!updateBtn || !selectedVersion || !localVersion) return;
+    
+    const span = updateBtn.querySelector('span');
+    if (!span) return;
+    
+    if (compareVersions(selectedVersion, localVersion) < 0) {
+        span.textContent = t('dashboard.update.downgrade');
+    } else {
+        span.textContent = t('dashboard.update.perform');
+    }
+}
+
+/**
  * 检查更新
  * @param {boolean} silent - 是否静默检查（不显示 Toast）
  */
@@ -3743,10 +3781,24 @@ async function checkUpdate(silent = false) {
             });
             
             if (versionSelectWrapper) versionSelectWrapper.style.display = 'block';
+            
+            // 更新本地版本数据集，确保监听器能拿到最新值
+            if (versionSelect) {
+                versionSelect.dataset.localVersion = data.localVersion;
+            }
+
             if (updateBtn) {
                 updateBtn.style.display = 'inline-flex';
-                // 如果是回退，修改按钮文字
-                updateBtn.querySelector('span').textContent = t('dashboard.update.perform');
+                // 初始化按钮文字
+                updateUpdateBtnText(versionSelect.value, data.localVersion);
+            }
+            
+            // 绑定版本切换事件
+            if (versionSelect && !versionSelect.dataset.listenerAdded) {
+                versionSelect.addEventListener('change', () => {
+                    updateUpdateBtnText(versionSelect.value, versionSelect.dataset.localVersion);
+                });
+                versionSelect.dataset.listenerAdded = 'true';
             }
         }
 
@@ -3757,6 +3809,7 @@ async function checkUpdate(silent = false) {
             // 如果有新版本且未选择特定版本，默认选中最新
             if (versionSelect && data.latestVersion) {
                 versionSelect.value = data.latestVersion;
+                updateUpdateBtnText(versionSelect.value, data.localVersion);
             }
 
             if (!silent) {
@@ -3827,7 +3880,7 @@ async function performUpdate() {
         if (updateBtn) {
             updateBtn.disabled = false;
             if (updateBtnIcon) updateBtnIcon.className = 'fas fa-download';
-            if (updateBtnText) updateBtnText.textContent = t('dashboard.update.perform');
+            updateUpdateBtnText(versionSelect.value, versionSelect.dataset.localVersion);
         }
     }
 }

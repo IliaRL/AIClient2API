@@ -1300,19 +1300,24 @@ export class AntigravityApiService {
             crlfDelay: Infinity
         });
 
+        const sseFields = /^(data|event|id|retry):/i;
         let buffer = [];
         for await (let line of rl) {
-            if (line.startsWith('data: ')) {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('data: ')) {
                 // 过滤 usageMetadata（仅在最终块中保留）
-                line = filterSSEUsageMetadata(line);
-                buffer.push(line.slice(6));
-            } else if (line === '' && buffer.length > 0) {
+                const processedLine = filterSSEUsageMetadata(trimmedLine);
+                buffer.push(processedLine.slice(6));
+            } else if (trimmedLine === '' && buffer.length > 0) {
                 try {
                     yield JSON.parse(buffer.join('\n'));
                 } catch (e) {
-                    logger.error('[Antigravity Stream] Failed to parse JSON chunk:', buffer.join('\n'));
+                    logger.error('[Antigravity Stream] Failed to parse JSON chunk:', buffer.join('\n'), 'Error:', e.message);
                 }
                 buffer = [];
+            } else if (trimmedLine && !trimmedLine.startsWith(':') && !sseFields.test(trimmedLine) && buffer.length > 0) {
+                // 处理不带 SSE 字段前缀且不是注释的后续行（可能是由于换行符导致的分割）
+                buffer.push(trimmedLine);
             }
         }
 
@@ -1320,7 +1325,7 @@ export class AntigravityApiService {
             try {
                 yield JSON.parse(buffer.join('\n'));
             } catch (e) {
-                logger.error('[Antigravity Stream] Failed to parse final JSON chunk:', buffer.join('\n'));
+                logger.error('[Antigravity Stream] Failed to parse final JSON chunk:', buffer.join('\n'), 'Error:', e.message);
             }
         }
     }

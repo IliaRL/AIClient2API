@@ -1526,14 +1526,8 @@ async saveCredentialsToFile(filePath, newData) {
                             currentToolCallDict = null;
                         }
                     } else if (!eventData.followupPrompt && eventData.content) {
-                        // 处理内容，移除转义字符
-                        let decodedContent = eventData.content;
-                        // 处理常见的转义序列
-                        decodedContent = decodedContent.replace(/(?<!\\)\\n/g, '\n');
-                        // decodedContent = decodedContent.replace(/(?<!\\)\\t/g, '\t');
-                        // decodedContent = decodedContent.replace(/\\"/g, '"');
-                        // decodedContent = decodedContent.replace(/\\\\/g, '\\');
-                        fullContent += decodedContent;
+                        // 处理内容，保留原始转义序列以便后续解析工具调用
+                        fullContent += eventData.content;
                     }
                     break;
                 } catch (e) {
@@ -1559,7 +1553,7 @@ async saveCredentialsToFile(filePath, newData) {
                 const pattern = new RegExp(`\\[Called\\s+${escapedName}\\s+with\\s+args:\\s*\\{[^}]*(?:\\{[^}]*\\}[^}]*)*\\}\\]`, 'gs');
                 fullContent = fullContent.replace(pattern, '');
             }
-            fullContent = fullContent.replace(/\s+/g, ' ').trim();
+            fullContent = fullContent.trim();
         }
 
         const uniqueToolCalls = deduplicateToolCalls(toolCalls);
@@ -1925,8 +1919,11 @@ async saveCredentialsToFile(filePath, newData) {
                 const pattern = new RegExp(`\\[Called\\s+${escapedName}\\s+with\\s+args:\\s*\\{[^}]*(?:\\{[^}]*\\}[^}]*)*\\}\\]`, 'gs');
                 fullResponseText = fullResponseText.replace(pattern, '');
             }
-            fullResponseText = fullResponseText.replace(/\s+/g, ' ').trim();
+            fullResponseText = fullResponseText.trim();
         }
+        
+        // 5. Final content cleanup: convert escaped newlines to literal newlines
+        fullResponseText = fullResponseText.replace(/(?<!\\)\\n/g, '\n');
         
         //logger.info(`[Kiro] Final response text after tool call cleanup: ${fullResponseText}`);
         //logger.info(`[Kiro] Final tool calls after deduplication: ${JSON.stringify(uniqueToolCalls)}`);
@@ -2355,10 +2352,12 @@ async saveCredentialsToFile(filePath, newData) {
             if (!text) return [];
             const events = [];
             events.push(...ensureBlockStart('text'));
+            // 将转义的换行符转换为真实换行符，确保流式输出显示正常
+            const decodedText = text.replace(/(?<!\\)\\n/g, '\n');
             events.push({
                 type: "content_block_delta",
                 index: streamState.textBlockIndex,
-                delta: { type: "text_delta", text }
+                delta: { type: "text_delta", text: decodedText }
             });
             return events;
         };
@@ -2366,10 +2365,12 @@ async saveCredentialsToFile(filePath, newData) {
         const createThinkingDeltaEvents = (thinking) => {
             const events = [];
             events.push(...ensureBlockStart('thinking'));
+            // 将转义的换行符转换为真实换行符
+            const decodedThinking = thinking.replace(/(?<!\\)\\n/g, '\n');
             events.push({
                 type: "content_block_delta",
                 index: streamState.thinkingBlockIndex,
-                delta: { type: "thinking_delta", thinking }
+                delta: { type: "thinking_delta", thinking: decodedThinking }
             });
             return events;
         };
@@ -2416,7 +2417,13 @@ async saveCredentialsToFile(filePath, newData) {
                     totalContent += event.content;
 
                     if (!thinkingRequested) {
-                        yield* pushEvents(createTextDeltaEvents(event.content));
+                        streamState.buffer += event.content;
+                        // 确保不切断转义序列 \\n（如果以 \ 结尾，可能后面跟着 n）
+                        if (streamState.buffer.endsWith('\\')) {
+                            continue;
+                        }
+                        yield* pushEvents(createTextDeltaEvents(streamState.buffer));
+                        streamState.buffer = '';
                         continue;
                     }
 
@@ -2713,6 +2720,10 @@ async saveCredentialsToFile(filePath, newData) {
                     if (remaining) yield* pushEvents(createTextDeltaEvents(remaining));
                     streamState.buffer = '';
                 }
+            } else if (!thinkingRequested && streamState.buffer) {
+                // 处理非思考模式下剩余的缓冲区数据
+                yield* pushEvents(createTextDeltaEvents(streamState.buffer));
+                streamState.buffer = '';
             }
 
             yield* pushEvents(stopBlock(streamState.textBlockIndex));
