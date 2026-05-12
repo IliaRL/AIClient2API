@@ -28,7 +28,7 @@ import * as crypto from 'crypto';
 import { configureAxiosProxy } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog, getRetryAfterMs } from '../../utils/common.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
-import { getProviderModels } from '../provider-models.js';
+import { getStaticProviderModels as getProviderModels } from '../provider-models.js';
 
 // iFlow API 端点
 const IFLOW_API_BASE_URL = 'https://apis.iflow.cn/v1';

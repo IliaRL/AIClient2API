@@ -44,11 +44,11 @@ export function parseProxyUrl(proxyUrl) {
                 proxyType: 'http'
             };
         } else {
-            logger.warn(`[Proxy] Unsupported proxy protocol: ${protocol}`);
+            logger.warn(`[Proxy] Unsupported proxy protocol for ${trimmedUrl}: ${protocol}. Proxy will not be used.`);
             return null;
         }
     } catch (error) {
-        logger.error(`[Proxy] Failed to parse proxy URL: ${error.message}`);
+        logger.error(`[Proxy] Failed to parse proxy URL '${trimmedUrl}': ${error.message}. Proxy will not be used.`);
         return null;
     }
 }

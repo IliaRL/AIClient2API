@@ -4,7 +4,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { v4 as uuidv4 } from 'uuid';
 import { MODEL_PROTOCOL_PREFIX, isRetryableNetworkError, getRetryAfterMs } from '../../utils/common.js';
-import { getProviderModels } from '../provider-models.js';
+import { getStaticProviderModels as getProviderModels } from '../provider-models.js';
 import { configureAxiosProxy, configureTLSSidecar, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER } from '../../utils/common.js';
 import { ConverterFactory } from '../../converters/ConverterFactory.js';

@@ -1,45 +1,27 @@
 import { convertData } from '../convert/convert.js';
 import { MODEL_PROVIDER } from '../utils/common.js';
 import { CONFIG } from '../core/config-manager.js';
+import logger from '../utils/logger.js';
+// Note: adapter.js is lazy-imported inside fetchModelsFromApi() to break the circular import
+// (adapter.js → gemini-core.js → provider-models.js → adapter.js). Without lazy-loading, every
+// const at this module scope sits in the TDZ when gemini-core's top-level
+// `const GEMINI_MODELS = getStaticProviderModels(...)` runs during the partial-evaluation phase.
 
-/**
- * 获取模型配置元数据
- * @param {string} modelId - 模型 ID 或别名
- * @param {string|null} provider - 自定义模型归属的提供商
- * @returns {Object|null} 模型配置
- */
-export function getCustomModelConfig(modelId, provider = null) {
-    if (!CONFIG.customModels || !Array.isArray(CONFIG.customModels)) {
-        return null;
-    }
+// Providers that expose a usable /v1/models endpoint — we'll merge fetched IDs
+// into the cached list when present, falling back to the static catalog otherwise.
+const MANAGED_MODEL_LIST_PROVIDERS = [
+    'openai-custom',
+    'openaiResponses-custom',
+    'claude-custom',
+    'nvidia-nim',
+    'github-models'
+];
 
-    let targetProvider = provider && provider !== MODEL_PROVIDER.AUTO ? provider : null;
-    let targetModelId = modelId;
-
-    if (typeof modelId === 'string' && modelId.includes(':')) {
-        const [prefix, ...modelParts] = modelId.split(':');
-        targetProvider = prefix;
-        targetModelId = modelParts.join(':');
-    }
-
-    if (!targetProvider) {
-        return CONFIG.customModels.find(m =>
-            !m.provider &&
-            (m.id === targetModelId || m.alias === targetModelId)
-        ) || null;
-    }
-
-    return CONFIG.customModels.find(m =>
-        m.provider === targetProvider &&
-        (m.id === targetModelId || m.alias === targetModelId)
-    ) || null;
-}
-
-/**
- * 各提供商支持的模型列表
- * 用于前端UI选择不支持的模型
- */
-export const PROVIDER_MODELS = {
+// Module-level static catalog — defined BEFORE the singleton so getStaticProviderModels()
+// can resolve at module-import time (e.g. when gemini-core does `const GEMINI_MODELS = ...`).
+// Referencing the singleton from a top-level helper hits a TDZ via the circular import chain
+// adapter.js → gemini-core.js → provider-models.js.
+const STATIC_PROVIDER_MODELS = {
     'gemini-cli-oauth': [
         'gemini-2.5-flash',
         'gemini-2.5-flash-lite',
@@ -85,9 +67,7 @@ export const PROVIDER_MODELS = {
         'qwen3-coder-flash',
     ],
     'openai-iflow': [
-        // iFlow 特有模型
         'iflow-rome-30ba3b',
-        // Qwen 模型
         'qwen3-coder-plus',
         'qwen3-max',
         'qwen3-vl-plus',
@@ -96,16 +76,12 @@ export const PROVIDER_MODELS = {
         'qwen3-235b-a22b-thinking-2507',
         'qwen3-235b-a22b-instruct',
         'qwen3-235b',
-        // Kimi 模型
         'kimi-k2-0905',
         'kimi-k2',
-        // GLM 模型
         'glm-4.6',
-        // DeepSeek 模型
         'deepseek-v3.2',
         'deepseek-r1',
         'deepseek-v3',
-        // 手动定义
         'glm-4.7',
         'glm-5',
         'kimi-k2.5',
@@ -134,32 +110,301 @@ export const PROVIDER_MODELS = {
         'grok-imagine-1.0-edit',
         'grok-imagine-1.0-fast',
         'grok-imagine-1.0-fast-edit',
-    ]
+    ],
+    'nvidia-nim': [],
+    'github-models': []
 };
 
-export const MANAGED_MODEL_LIST_PROVIDERS = [
-    'openai-custom',
-    'openaiResponses-custom',
-    'claude-custom'
-];
+/**
+ * 动态提供商模型管理
+ * 用于在运行时获取、缓存和管理不同提供商支持的模型列表
+ */
+class DynamicProviderModels {
+    constructor() {
+        // Static catalog lives at module scope (STATIC_PROVIDER_MODELS) so getStaticProviderModels()
+        // can resolve without going through the singleton (which would TDZ during circular imports).
+        this._staticProviderModels = STATIC_PROVIDER_MODELS;
+        this._dynamicProviderModels = {}; // 存储动态获取的模型列表
+        // Cache TTL — 6 hours. Provider model catalogs change rarely; a long TTL avoids
+        // repeated /v1/models round-trips, especially on slow providers like GitHub Models.
+        // Override via DYNAMIC_MODELS_CACHE_TTL_MS env var (milliseconds).
+        this._cacheTTL = Number(process.env.DYNAMIC_MODELS_CACHE_TTL_MS) || (6 * 60 * 60 * 1000);
+        this._lastFetchTime = {};       // 记录上次获取时间
+        this._fetchPromises = {};       // 避免重复获取的 Promise 缓存
+    }
 
-export function getManagedModelListProviderType(providerType) {
-    return MANAGED_MODEL_LIST_PROVIDERS.find(baseType =>
-        providerType === baseType || providerType.startsWith(baseType + '-')
+    /**
+     * 判断一个提供商类型是否使用“托管”模型列表（即可以从 API 动态获取）
+     * @param {string} providerType
+     * @returns {boolean}
+     */
+    usesManagedModelList(providerType) {
+        // Bug fix: Array.prototype.find returns the match or `undefined` (never `null`),
+        // so the previous `!== null` check was always true and every providerType qualified.
+        // We genuinely want a membership check here — switch to `.some()`.
+        if (!providerType) return false;
+        return MANAGED_MODEL_LIST_PROVIDERS.some(baseType =>
+            providerType === baseType || providerType.startsWith(baseType + '-')
+        );
+    }
+
+    /**
+     * 规范化模型ID列表，去重并排序
+     * @param {Array<string>} models
+     * @returns {Array<string>}
+     */
+    normalizeModelIds(models = []) {
+        return [...new Set(
+            (Array.isArray(models) ? models : [])
+                .filter(model => typeof model === 'string')
+                .map(model => model.trim())
+                .filter(Boolean)
+        )].sort((a, b) => a.localeCompare(b));
+    }
+
+    /**
+     * 提取模型ID，支持多种响应结构
+     * @param {object|Array} modelList - API 返回的模型列表数据
+     * @returns {Array<string>}
+     */
+    extractModelIdsFromListShape(modelList) {
+        if (!modelList) {
+            return [];
+        }
+
+        if (Array.isArray(modelList)) {
+            return modelList.map(item => {
+                if (typeof item === 'string') return item;
+                return item?.id || item?.name || item?.model || null;
+            }).filter(Boolean);
+        }
+
+        if (Array.isArray(modelList.data)) {
+            return modelList.data.map(item => item?.id || item?.name || item?.model || null).filter(Boolean);
+        }
+
+        if (Array.isArray(modelList.models)) {
+            return modelList.models.map(item => {
+                if (typeof item === 'string') return item;
+                return item?.id || item?.name || item?.model || null;
+            }).filter(Boolean);
+        }
+
+        return [];
+    }
+
+    /**
+     * 从 native list 提取模型 ID，并进行协议转换（如果需要）
+     * @param {object|Array} modelList - 原始模型列表
+     * @param {string} providerType - 提供商类型
+     * @returns {Array<string>}
+     */
+    extractModelIdsFromNativeList(modelList, providerType) {
+        let convertedModelList = modelList;
+
+        // 只有在提供商类型与目标类型协议不同时才尝试转换
+        if (providerType !== MODEL_PROVIDER.OPENAI_CUSTOM && !providerType.startsWith(MODEL_PROVIDER.OPENAI_CUSTOM + '-')) {
+            try {
+                convertedModelList = convertData(modelList, 'modelList', providerType, MODEL_PROVIDER.OPENAI_CUSTOM);
+            } catch {
+                convertedModelList = modelList;
+            }
+        }
+
+        const convertedIds = this.normalizeModelIds(this.extractModelIdsFromListShape(convertedModelList));
+        if (convertedIds.length > 0) {
+            return convertedIds;
+        }
+
+        return this.normalizeModelIds(this.extractModelIdsFromListShape(modelList));
+    }
+
+    /**
+     * 动态获取指定提供商的模型列表
+     * @param {string} providerType - 提供商类型
+     * @param {object} providerConfig - 提供商配置（包含 API Key 等）
+     * @returns {Promise<Array<string>>}
+     */
+    async fetchModelsFromApi(providerType, providerConfig) {
+        // 如果有正在进行的获取请求，等待其完成
+        if (this._fetchPromises[providerType]) {
+            return this._fetchPromises[providerType];
+        }
+
+        // 检查缓存是否有效
+        if (this._dynamicProviderModels[providerType] &&
+            (Date.now() - this._lastFetchTime[providerType] < this._cacheTTL)) {
+            logger.debug(`[DynamicProviderModels] Using cached models for ${providerType}`);
+            return this._dynamicProviderModels[providerType];
+        }
+
+        logger.info(`[DynamicProviderModels] Fetching models from API for ${providerType}...`);
+
+        const fetchPromise = (async () => {
+            try {
+                const tempConfig = {
+                    ...CONFIG, // 使用全局配置作为基础
+                    ...providerConfig, // 覆盖 providerConfig 中的特定设置（如 API Key）
+                    MODEL_PROVIDER: providerType // 确保适配器知道当前提供商类型
+                };
+                // 避免循环引用或不必要的数据
+                delete tempConfig.providerPools;
+                delete tempConfig.customModels;
+
+                // Lazy-load adapter.js to avoid the circular-import TDZ (see top-of-file note).
+                const { getServiceAdapter } = await import('./adapter.js');
+                const serviceAdapter = getServiceAdapter(tempConfig);
+
+                if (typeof serviceAdapter.listModels === 'function') {
+                    const nativeModels = await serviceAdapter.listModels();
+                    const fetchedModels = this.extractModelIdsFromNativeList(nativeModels, providerType);
+
+                    this._dynamicProviderModels[providerType] = fetchedModels;
+                    this._lastFetchTime[providerType] = Date.now();
+                    logger.info(`[DynamicProviderModels] Successfully fetched ${fetchedModels.length} models for ${providerType}.`);
+                    return fetchedModels;
+                } else {
+                    logger.warn(`[DynamicProviderModels] listModels method not available for ${providerType}.`);
+                }
+            } catch (error) {
+                logger.error(`[DynamicProviderModels] Failed to fetch models for ${providerType}: ${error.message}`);
+            } finally {
+                // 清除 Promise 缓存
+                delete this._fetchPromises[providerType];
+            }
+            return []; // 获取失败返回空数组
+        })();
+
+        this._fetchPromises[providerType] = fetchPromise;
+        return fetchPromise;
+    }
+
+    /**
+     * 获取指定提供商支持的模型列表 (合并静态、动态、自定义配置)
+     * @param {string} providerType - 提供商类型
+     * @param {object} providerConfig - 提供商配置（主要用于传递 API Key 等给动态获取方法）
+     * @returns {Promise<Array<string>>}
+     */
+    async getProviderModels(providerType, providerConfig = {}) {
+        let models = [];
+
+        // 1. 获取静态配置模型
+        if (this._staticProviderModels[providerType]) {
+            models = [...this._staticProviderModels[providerType]];
+        } else {
+            // 尝试前缀匹配
+            for (const key of Object.keys(this._staticProviderModels)) {
+                if (providerType.startsWith(key + '-')) {
+                    models = [...this._staticProviderModels[key]];
+                    break;
+                }
+            }
+        }
+
+        // 2. 如果是托管模型，尝试动态获取并合并
+        if (this.usesManagedModelList(providerType)) {
+            const dynamicModels = await this.fetchModelsFromApi(providerType, providerConfig);
+            models = [...new Set([...models, ...dynamicModels])];
+        }
+
+        // 3. 注入自定义模型 (来自 CONFIG.customModels)
+        if (CONFIG.customModels && Array.isArray(CONFIG.customModels)) {
+            CONFIG.customModels.forEach(m => {
+                const listProvider = getCustomModelListProvider(m);
+                if (listProvider && (listProvider === providerType || providerType.startsWith(listProvider + '-'))) {
+                    if (!models.includes(m.id)) {
+                        models.push(m.id);
+                    }
+                }
+            });
+        }
+
+        return this.normalizeModelIds(models);
+    }
+
+    /**
+     * 获取所有提供商的模型列表
+     * @returns {Promise<Object>} 所有提供商的模型映射
+     */
+    async getAllProviderModels() {
+        const allModels = {};
+
+        // 合并静态模型到 allModels
+        for (const provider in this._staticProviderModels) {
+            allModels[provider] = [...this._staticProviderModels[provider]];
+        }
+
+        // 合并动态获取的模型 (如果存在)
+        for (const provider in this._dynamicProviderModels) {
+            if (allModels[provider]) {
+                allModels[provider] = [...new Set([...allModels[provider], ...this._dynamicProviderModels[provider]])];
+            } else {
+                allModels[provider] = [...this._dynamicProviderModels[provider]];
+            }
+        }
+
+        // 注入自定义模型
+        if (CONFIG.customModels && Array.isArray(CONFIG.customModels)) {
+            CONFIG.customModels.forEach(m => {
+                const targetProvider = getCustomModelListProvider(m) || 'custom-auto';
+
+                if (!allModels[targetProvider]) {
+                    allModels[targetProvider] = [];
+                }
+
+                if (!allModels[targetProvider].includes(m.id)) {
+                    allModels[targetProvider].push(m.id);
+                }
+            });
+        }
+
+        // 对每个列表进行排序和规范化
+        for (const provider in allModels) {
+            allModels[provider] = this.normalizeModelIds(allModels[provider]);
+        }
+
+        return allModels;
+    }
+}
+
+// 导出单例
+export const dynamicProviderModels = new DynamicProviderModels();
+
+// ===========================================
+// 以下是兼容旧代码的导出函数，将内部逻辑委托给 DynamicProviderModels 实例
+// ===========================================
+
+/**
+ * 获取模型配置元数据
+ * @param {string} modelId - 模型 ID 或别名
+ * @param {string|null} provider - 自定义模型归属的提供商
+ * @returns {Object|null} 模型配置
+ */
+export function getCustomModelConfig(modelId, provider = null) {
+    if (!CONFIG.customModels || !Array.isArray(CONFIG.customModels)) {
+        return null;
+    }
+
+    let targetProvider = provider && provider !== MODEL_PROVIDER.AUTO ? provider : null;
+    let targetModelId = modelId;
+
+    if (typeof modelId === 'string' && modelId.includes(':')) {
+        const [prefix, ...modelParts] = modelId.split(':');
+        targetProvider = prefix;
+        targetModelId = modelParts.join(':');
+    }
+
+    if (!targetProvider) {
+        return CONFIG.customModels.find(m =>
+            !m.provider &&
+            (m.id === targetModelId || m.alias === targetModelId)
+        ) || null;
+    }
+
+    return CONFIG.customModels.find(m =>
+        m.provider === targetProvider &&
+        (m.id === targetModelId || m.alias === targetModelId)
     ) || null;
-}
-
-export function usesManagedModelList(providerType) {
-    return getManagedModelListProviderType(providerType) !== null;
-}
-
-export function normalizeModelIds(models = []) {
-    return [...new Set(
-        (Array.isArray(models) ? models : [])
-            .filter(model => typeof model === 'string')
-            .map(model => model.trim())
-            .filter(Boolean)
-    )].sort((a, b) => a.localeCompare(b));
 }
 
 export function getCustomModelActualProvider(modelConfig) {
@@ -181,128 +426,61 @@ export function customModelMatchesProvider(modelConfig, providerType) {
     return listProvider === providerType || (listProvider && providerType.startsWith(listProvider + '-'));
 }
 
-function extractModelIdsFromListShape(modelList) {
-    if (!modelList) {
+export function getConfiguredSupportedModels(providerType, providerConfig = {}) {
+    if (!dynamicProviderModels.usesManagedModelList(providerType)) {
         return [];
     }
 
-    if (Array.isArray(modelList)) {
-        return modelList.map(item => {
-            if (typeof item === 'string') return item;
-            return item?.id || item?.name || item?.model || null;
-        }).filter(Boolean);
-    }
+    return dynamicProviderModels.normalizeModelIds(providerConfig?.supportedModels);
+}
 
-    if (Array.isArray(modelList.data)) {
-        return modelList.data.map(item => item?.id || item?.name || item?.model || null).filter(Boolean);
-    }
+/**
+ * 获取指定提供商类型支持的模型列表 (兼容旧代码，委托给单例)
+ * @param {string} providerType - 提供商类型
+ * @param {object} providerConfig - 提供商配置
+ * @returns {Promise<Array<string>>} 模型列表
+ */
+export async function getProviderModels(providerType, providerConfig = {}) {
+    return dynamicProviderModels.getProviderModels(providerType, providerConfig);
+}
 
-    if (Array.isArray(modelList.models)) {
-        return modelList.models.map(item => {
-            if (typeof item === 'string') return item;
-            return item?.id || item?.name || item?.model || null;
-        }).filter(Boolean);
-    }
+/**
+ * 获取所有提供商的模型列表 (兼容旧代码，委托给单例)
+ * @returns {Promise<Object>} 所有提供商的模型映射
+ */
+export async function getAllProviderModels() {
+    return dynamicProviderModels.getAllProviderModels();
+}
 
-    return [];
+// Delegating wrappers — callers (ui-modules/provider-api.js, etc.) import these directly.
+// Without them the module fails to load with: "does not provide an export named 'X'".
+export function normalizeModelIds(models = []) {
+    return dynamicProviderModels.normalizeModelIds(models);
+}
+
+export function usesManagedModelList(providerType) {
+    return dynamicProviderModels.usesManagedModelList(providerType);
 }
 
 export function extractModelIdsFromNativeList(modelList, providerType) {
-    let convertedModelList = modelList;
-
-    // 只有在提供商类型与目标类型协议不同时才尝试转换
-    if (providerType !== MODEL_PROVIDER.OPENAI_CUSTOM && !providerType.startsWith(MODEL_PROVIDER.OPENAI_CUSTOM + '-')) {
-        try {
-            convertedModelList = convertData(modelList, 'modelList', providerType, MODEL_PROVIDER.OPENAI_CUSTOM);
-        } catch {
-            convertedModelList = modelList;
-        }
-    }
-
-    const convertedIds = normalizeModelIds(extractModelIdsFromListShape(convertedModelList));
-    if (convertedIds.length > 0) {
-        return convertedIds;
-    }
-
-    return normalizeModelIds(extractModelIdsFromListShape(modelList));
+    return dynamicProviderModels.extractModelIdsFromNativeList(modelList, providerType);
 }
 
-export function getConfiguredSupportedModels(providerType, providerConfig = {}) {
-    if (!usesManagedModelList(providerType)) {
-        return [];
-    }
-
-    return normalizeModelIds(providerConfig?.supportedModels);
+export function extractModelIdsFromListShape(modelList) {
+    return dynamicProviderModels.extractModelIdsFromListShape(modelList);
 }
 
 /**
- * 获取指定提供商类型支持的模型列表
- * @param {string} providerType - 提供商类型
- * @returns {Array<string>} 模型列表
+ * Synchronous static model list lookup for module-load-time callers that can't await
+ * (e.g. gemini-core uses GEMINI_MODELS as a top-level const for fast model-prefix checks).
+ * Falls back to the static catalog only — does not touch the dynamic cache.
  */
-export function getProviderModels(providerType) {
-    let models = [];
-    if (PROVIDER_MODELS[providerType]) {
-        models = [...PROVIDER_MODELS[providerType]];
-    } else {
-        // 尝试前缀匹配 (例如 openai-custom-1 -> openai-custom)
-        for (const key of Object.keys(PROVIDER_MODELS)) {
-            if (providerType.startsWith(key + '-')) {
-                models = [...PROVIDER_MODELS[key]];
-                break;
-            }
-        }
+export function getStaticProviderModels(providerType) {
+    if (!providerType) return [];
+    if (STATIC_PROVIDER_MODELS[providerType]) return [...STATIC_PROVIDER_MODELS[providerType]];
+    for (const key of Object.keys(STATIC_PROVIDER_MODELS)) {
+        if (providerType.startsWith(key + '-')) return [...STATIC_PROVIDER_MODELS[key]];
     }
-
-    // 注入自定义模型
-    if (CONFIG.customModels && Array.isArray(CONFIG.customModels)) {
-        CONFIG.customModels.forEach(m => {
-            // 匹配模型列表归属提供商或其后缀分组
-            if (customModelMatchesProvider(m, providerType)) {
-                // 注入 ID
-                if (!models.includes(m.id)) {
-                    models.push(m.id);
-                }
-            }
-        });
-    }
-
-    return normalizeModelIds(models);
+    return [];
 }
 
-/**
- * 获取所有提供商的模型列表
- * @returns {Object} 所有提供商的模型映射
- */
-export function getAllProviderModels() {
-    // 执行深拷贝，避免修改原始 PROVIDER_MODELS 对象
-    const allModels = {};
-    for (const provider in PROVIDER_MODELS) {
-        allModels[provider] = [...PROVIDER_MODELS[provider]];
-    }
-    
-    // 合并自定义模型到对应的提供商
-    if (CONFIG.customModels && Array.isArray(CONFIG.customModels)) {
-        CONFIG.customModels.forEach(m => {
-            // 如果指定了模型列表归属提供商，注入到该提供商
-            // 如果没有指定（Auto），则注入到特殊的虚拟分组
-            const targetProvider = getCustomModelListProvider(m) || 'custom-auto';
-            
-            if (!allModels[targetProvider]) {
-                allModels[targetProvider] = [];
-            }
-            
-            // 注入 ID
-            if (!allModels[targetProvider].includes(m.id)) {
-                allModels[targetProvider].push(m.id);
-            }
-        });
-    }
-    
-    // 对每个列表进行排序
-    for (const provider in allModels) {
-        allModels[provider] = normalizeModelIds(allModels[provider]);
-    }
-    
-    return allModels;
-}

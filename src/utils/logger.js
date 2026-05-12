@@ -13,7 +13,8 @@ class Logger {
             enabled: true,
             outputMode: 'all', // 'console', 'file', 'all', 'none'
             logDir: 'logs',
-            logLevel: 'info', // 'debug', 'info', 'warn', 'error'
+            // LOG_LEVEL env overrides this default. Accepts: debug | info | warn | error.
+            logLevel: (process.env.LOG_LEVEL || 'info').toLowerCase(),
             includeRequestId: true,
             includeTimestamp: true,
             maxFileSize: 10 * 1024 * 1024, // 10MB

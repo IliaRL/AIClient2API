@@ -8,8 +8,7 @@ import { convertData } from '../convert/convert.js';
 import {
     getConfiguredSupportedModels,
     getCustomModelListProvider,
-    getProviderModels,
-    normalizeModelIds
+    dynamicProviderModels
 } from './provider-models.js';
 import { broadcastEvent } from '../ui-modules/event-broadcast.js';
 import { ENDPOINT_TYPE } from '../utils/common.js';
@@ -45,6 +44,26 @@ function getCustomModelIdsForProvider(config, providerType) {
  * Manages a pool of API service providers, handling their health and selection.
  */
 export class ProviderPoolManager {
+    // Providers authenticated with a static API key (no OAuth refresh flow).
+    // Refresh attempts on these always fail with "Cannot read properties of undefined (reading 'refreshToken')".
+    static STATIC_KEY_PROVIDERS = new Set([
+        'openai-custom',
+        'openaiResponses-custom',
+        'forward-api',
+        'grok-web',
+        'nvidia-nim',
+        'github-models',
+    ]);
+
+    static isStaticKeyProvider(providerType) {
+        if (!providerType) return false;
+        if (ProviderPoolManager.STATIC_KEY_PROVIDERS.has(providerType)) return true;
+        for (const base of ProviderPoolManager.STATIC_KEY_PROVIDERS) {
+            if (providerType.startsWith(base + '-')) return true;
+        }
+        return false;
+    }
+
     // 默认健康检查模型配置
     // 键名必须与 MODEL_PROVIDER 常量值一致
     static DEFAULT_HEALTH_CHECK_MODELS = {
@@ -59,6 +78,8 @@ export class ProviderPoolManager {
         'openaiResponses-custom': 'gpt-4o-mini',
         'forward-api': 'gpt-4o-mini',
         'grok-web': 'grok-4.1-mini',
+        'nvidia-nim': 'gpt-4o-mini',
+        'github-models': 'gpt-4o-mini',
     };
 
     constructor(providerPools, options = {}) {
@@ -242,7 +263,25 @@ export class ProviderPoolManager {
      */
     _enqueueRefresh(providerType, providerStatus, force = false) {
         const uuid = providerStatus.uuid;
-        
+
+        // Static-key providers (OpenAI-compatible with bare API key) have no refresh flow.
+        // Short-circuit before any queue work so we don't spin on a refreshToken that doesn't exist.
+        if (ProviderPoolManager.isStaticKeyProvider(providerType)) {
+            if (providerStatus.config) {
+                providerStatus.config.needsRefresh = false;
+                providerStatus.config.refreshCount = 0;
+            }
+            this._log('debug', `Skipping refresh for static-key provider ${providerType}/${uuid}`);
+            return;
+        }
+
+        // Account has a dead refresh grant — operator must re-OAuth before we touch it again.
+        if (providerStatus.config?.needsReauth) {
+            providerStatus.config.needsRefresh = false;
+            this._log('debug', `Skipping refresh for ${providerType}/${uuid}: needsReauth flag set`);
+            return;
+        }
+
         // 如果节点被禁用，不进行刷新
         if (providerStatus.config.isDisabled) {
             this._log('debug', `Skipping refresh for disabled node ${uuid}`);
@@ -513,13 +552,35 @@ export class ProviderPoolManager {
 
         } catch (error) {
             this._log('error', `Token refresh failed for node ${providerStatus.uuid}: ${error.message}`);
-            
+
             // 记录错误信息
             config.lastErrorTime = new Date().toISOString();
             config.lastErrorMessage = `Refresh failed: ${error.message}`;
-            
+
             // 增加错误计数（用于普通的健康检查参考，虽然刷新错误主要参考 refreshCount）
             config.errorCount = (config.errorCount || 0) + 1;
+
+            // Detect dead refresh tokens — distinct from transient network/upstream errors.
+            // Once flagged, _enqueueRefresh / markProviderNeedRefresh / selectProvider all skip this node
+            // until the operator clears `needsReauth` (re-OAuth) so we stop hammering a dead grant.
+            const msg = String(error.message || '').toLowerCase();
+            const isDeadRefreshToken =
+                msg.includes('invalid_grant') ||
+                msg.includes('please re-authenticate') ||
+                msg.includes('failed to refresh codex token') ||
+                msg.includes('failed to refresh tokens: request failed with status code 401') ||
+                msg.includes('failed to refresh tokens: request failed with status code 400');
+            if (isDeadRefreshToken) {
+                config.needsReauth = true;
+                config.needsRefresh = false;
+                this.markProviderUnhealthyImmediately(
+                    providerType,
+                    config,
+                    `Refresh token rejected — re-authentication required: ${error.message}`
+                );
+                this._debouncedSave(providerType);
+                throw error;
+            }
 
             // 只有当刷新重试次数达到上限（5次）时，才标记为不健康
             // 注意：refreshCount 在进入本方法后的 try 块前已经自增（L466）
@@ -1012,7 +1073,7 @@ export class ProviderPoolManager {
         const minSeq = Math.min(...availableProviders.map(p => p.config._lastSelectionSeq || 0));
 
         let availableAndHealthyProviders = availableProviders.filter(p =>
-            p.config.isHealthy && !p.config.isDisabled && !p.config.needsRefresh
+            p.config.isHealthy && !p.config.isDisabled && !p.config.needsRefresh && !p.config.needsReauth
         );
 
         // 如果指定了模型，则排除不支持该模型的提供商
@@ -1159,9 +1220,9 @@ export class ProviderPoolManager {
                              const fallbackProtocol = getProtocolPrefix(fallbackType);
                              if (targetProtocol !== fallbackProtocol) continue;
                              
-                             const supportedModels = getProviderModels(fallbackType);
+                             const supportedModels = await dynamicProviderModels.getProviderModels(fallbackType);
                              if (supportedModels.length > 0 && !supportedModels.includes(targetModel)) continue;
-                             
+
                              try {
                                 const fallbackSelectedConfig = await this.acquireSlot(fallbackType, targetModel, options);
                                 if (fallbackSelectedConfig) {
@@ -1250,7 +1311,7 @@ export class ProviderPoolManager {
                 }
 
                 // 检查 fallback 类型是否支持请求的模型
-                const supportedModels = getProviderModels(currentType);
+                const supportedModels = await dynamicProviderModels.getProviderModels(currentType);
                 if (supportedModels.length > 0 && !supportedModels.includes(requestedModel)) {
                     this._log('debug', `Skipping fallback type ${currentType}: model ${requestedModel} not supported`);
                     continue;
@@ -1420,15 +1481,15 @@ export class ProviderPoolManager {
             if (this.providerStatus[providerType]) {
                 const customAliases = getCustomModelAliasesForProvider(this.globalConfig, providerType);
                 const customModelIds = getCustomModelIdsForProvider(this.globalConfig, providerType);
-                const configuredSupportedModels = normalizeModelIds(
+                const configuredSupportedModels = dynamicProviderModels.normalizeModelIds(
                     this.providerStatus[providerType].flatMap(providerStatus =>
                         getConfiguredSupportedModels(providerType, providerStatus.config)
                     )
                 );
                 let models = configuredSupportedModels.length > 0
-                    ? normalizeModelIds([...configuredSupportedModels, ...customModelIds])
-                    : normalizeModelIds([
-                        ...getProviderModels(providerType).filter(model => !customAliases.has(model)),
+                    ? dynamicProviderModels.normalizeModelIds([...configuredSupportedModels, ...customModelIds])
+                    : dynamicProviderModels.normalizeModelIds([
+                        ...(await dynamicProviderModels.getProviderModels(providerType)).filter(model => !customAliases.has(model)),
                         ...customModelIds
                     ]);
 
@@ -1534,6 +1595,12 @@ export class ProviderPoolManager {
 
         const provider = this._findProvider(providerType, providerConfig.uuid);
         if (provider) {
+            // Static-key providers and re-auth-required accounts: never refresh, never spin.
+            if (ProviderPoolManager.isStaticKeyProvider(providerType) || provider.config?.needsReauth) {
+                provider.config.needsRefresh = false;
+                return;
+            }
+
             // 防并发机制 A: 如果已经在刷新中，忽略请求
             if (this.refreshingUuids.has(provider.uuid)) {
                 this._log('info', `Provider ${providerConfig.uuid} is already in refresh queue, ignoring duplicate refresh request.`);
@@ -1969,72 +2036,63 @@ export class ProviderPoolManager {
         // 首先检查并恢复已到恢复时间的提供商
         this._checkAndRecoverScheduledProviders();
         
-        for (const providerType in this.providerStatus) {
-            // Only check selected provider types
-            if (!selectedProviderTypes.includes(providerType)) {
-                continue;
+        // Parallelize health checks across providers and across nodes within a provider.
+        // Each node hits its own API account, so there's no shared rate-limit boundary that requires
+        // serializing. Promise.allSettled keeps a slow/failing check from blocking the rest.
+        const providerTypes = Object.keys(this.providerStatus).filter(t => selectedProviderTypes.includes(t));
+
+        const checkNode = async (providerType, providerStatus) => {
+            const providerConfig = providerStatus.config;
+
+            if (providerConfig.scheduledRecoveryTime && !providerConfig.isHealthy) {
+                const recoveryTime = new Date(providerConfig.scheduledRecoveryTime);
+                if (now < recoveryTime) {
+                    this._log('debug', `Skipping health check for ${providerConfig.uuid} (${providerType}). Waiting for scheduled recovery at ${recoveryTime.toISOString()}`);
+                    return;
+                }
             }
-            
-            for (const providerStatus of this.providerStatus[providerType]) {
-                const providerConfig = providerStatus.config;
 
-                // 如果提供商有 scheduledRecoveryTime 且未到恢复时间，跳过健康检查
-                if (providerConfig.scheduledRecoveryTime && !providerConfig.isHealthy) {
-                    const recoveryTime = new Date(providerConfig.scheduledRecoveryTime);
-                    if (now < recoveryTime) {
-                        this._log('debug', `Skipping health check for ${providerConfig.uuid} (${providerType}). Waiting for scheduled recovery at ${recoveryTime.toISOString()}`);
-                        continue;
-                    }
+            if (!providerConfig.isHealthy && providerConfig.lastErrorTime &&
+                (now.getTime() - new Date(providerConfig.lastErrorTime).getTime() < this.healthCheckInterval)) {
+                this._log('debug', `Skipping health check for ${providerConfig.uuid} (${providerType}). Last error too recent.`);
+                return;
+            }
+
+            try {
+                const healthResult = await this._checkProviderHealth(providerType, providerConfig);
+
+                if (healthResult === null) {
+                    this._log('debug', `Health check for ${providerConfig.uuid} (${providerType}) skipped: Check not implemented.`);
+                    this.resetProviderCounters(providerType, providerConfig);
+                    return;
                 }
 
-                // Only attempt to health check unhealthy providers after a certain interval
-                if (!providerStatus.config.isHealthy && providerStatus.config.lastErrorTime &&
-                    (now.getTime() - new Date(providerStatus.config.lastErrorTime).getTime() < this.healthCheckInterval)) {
-                    this._log('debug', `Skipping health check for ${providerConfig.uuid} (${providerType}). Last error too recent.`);
-                    continue;
-                }
-
-                try {
-                    // Perform actual health check based on provider type
-                    const healthResult = await this._checkProviderHealth(providerType, providerConfig);
-                    
-                    if (healthResult === null) {
-                        this._log('debug', `Health check for ${providerConfig.uuid} (${providerType}) skipped: Check not implemented.`);
-                        this.resetProviderCounters(providerType, providerConfig);
-                        continue;
-                    }
-                    
-                    if (healthResult.success) {
-                        if (!providerStatus.config.isHealthy) {
-                            // Provider was unhealthy but is now healthy
-                            // 恢复健康时不重置使用计数，保持原有值
-                            this.markProviderHealthy(providerType, providerConfig, true, healthResult.modelName);
-                            this._log('info', `Health check for ${providerConfig.uuid} (${providerType}): Marked Healthy (actual check)`);
-                        } else {
-                            // Provider was already healthy and still is
-                            // 只在初始化时重置使用计数
-                            this.markProviderHealthy(providerType, providerConfig, true, healthResult.modelName);
-                            this._log('debug', `Health check for ${providerConfig.uuid} (${providerType}): Still Healthy`);
-                        }
+                if (healthResult.success) {
+                    this.markProviderHealthy(providerType, providerConfig, true, healthResult.modelName);
+                    if (!providerConfig.isHealthy) {
+                        this._log('info', `Health check for ${providerConfig.uuid} (${providerType}): Marked Healthy (actual check)`);
                     } else {
-                        // Provider is not healthy
-                        this._log('warn', `Health check for ${providerConfig.uuid} (${providerType}) failed: ${healthResult.errorMessage || 'Provider is not responding correctly.'}`);
-                        this.markProviderUnhealthy(providerType, providerConfig, healthResult.errorMessage);
-                        
-                        // 更新健康检测时间和模型（即使失败也记录）
-                        providerStatus.config.lastHealthCheckTime = new Date().toISOString();
-                        if (healthResult.modelName) {
-                            providerStatus.config.lastHealthCheckModel = healthResult.modelName;
-                        }
+                        this._log('debug', `Health check for ${providerConfig.uuid} (${providerType}): Still Healthy`);
                     }
-
-                } catch (error) {
-                    this._log('error', `Health check for ${providerConfig.uuid} (${providerType}) failed: ${error.message}`);
-                    // If a health check fails, mark it unhealthy, which will update error count and lastErrorTime
-                    this.markProviderUnhealthy(providerType, providerConfig, error.message);
+                } else {
+                    this._log('warn', `Health check for ${providerConfig.uuid} (${providerType}) failed: ${healthResult.errorMessage || 'Provider is not responding correctly.'}`);
+                    this.markProviderUnhealthy(providerType, providerConfig, healthResult.errorMessage);
+                    providerStatus.config.lastHealthCheckTime = new Date().toISOString();
+                    if (healthResult.modelName) {
+                        providerStatus.config.lastHealthCheckModel = healthResult.modelName;
+                    }
                 }
+            } catch (error) {
+                this._log('error', `Health check for ${providerConfig.uuid} (${providerType}) failed: ${error.message}`);
+                this.markProviderUnhealthy(providerType, providerConfig, error.message);
             }
-        }
+        };
+
+        await Promise.allSettled(
+            providerTypes.flatMap(providerType =>
+                (this.providerStatus[providerType] || []).map(status => checkNode(providerType, status))
+            )
+        );
     }
 
     /**
@@ -2225,16 +2283,25 @@ export class ProviderPoolManager {
     async _checkProviderHealth(providerType, providerConfig) {
         // 确定健康检查使用的模型名称
         const baseProviderType = this._getBaseProviderType(providerType);
-        const modelName = providerConfig.checkModelName ||
+        let modelName = providerConfig.checkModelName ||
                         ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[providerType] ||
                         ProviderPoolManager.DEFAULT_HEALTH_CHECK_MODELS[baseProviderType];
 
         if (!modelName) {
-            this._log('warn', `Unknown provider type for health check: ${providerType}. Please check DEFAULT_HEALTH_CHECK_MODELS.`);
-            return { 
-                success: false, 
-                modelName: null, 
-                errorMessage: `Unknown provider type '${providerType}'. No default health check model configured.` 
+            // 尝试从动态获取的模型列表中选择第一个可用的模型
+            const availableModels = await dynamicProviderModels.getProviderModels(providerType, providerConfig);
+            if (availableModels.length > 0) {
+                modelName = availableModels[0];
+                this._log('debug', `Dynamically selected health check model for ${providerType}: ${modelName}`);
+            }
+        }
+
+        if (!modelName) {
+            this._log('warn', `No model found for health check for provider type: ${providerType}. Please ensure a checkModelName is configured or models are dynamically discoverable.`);
+            return {
+                success: false,
+                modelName: null,
+                errorMessage: `No health check model configured or discoverable for '${providerType}'.`
             };
         }
 

@@ -10,7 +10,7 @@ import * as readline from 'readline';
 import open from 'open';
 import { configureTLSSidecar } from '../../utils/proxy-utils.js';
 import { API_ACTIONS, formatExpiryTime, isRetryableNetworkError, formatExpiryLog, getRetryAfterMs } from '../../utils/common.js';
-import { getProviderModels } from '../provider-models.js';
+import { getStaticProviderModels } from '../provider-models.js';
 import { handleGeminiCliOAuth } from '../../auth/oauth-handlers.js';
 import { getProxyConfigForProvider, getGoogleAuthProxyConfig, isTLSSidecarEnabledForProvider } from '../../utils/proxy-utils.js';
 import { getProviderPoolManager } from '../../services/service-manager.js';
@@ -24,7 +24,8 @@ const DEFAULT_CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 const DEFAULT_CODE_ASSIST_API_VERSION = 'v1internal';
 const OAUTH_CLIENT_ID = '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
 const OAUTH_CLIENT_SECRET = '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';
-const GEMINI_MODELS = getProviderModels(MODEL_PROVIDER.GEMINI_CLI);
+// Synchronous static list — async dynamic discovery happens later via PoolManager.
+const GEMINI_MODELS = getStaticProviderModels(MODEL_PROVIDER.GEMINI_CLI);
 const ANTI_TRUNCATION_MODELS = GEMINI_MODELS.map(model => `anti-${model}`);
 const GEMINI_CLI_VERSION = '0.31.0';
 const GEMINI_CLI_API_CLIENT_HEADER = 'google-genai-sdk/1.41.0 gl-node/v22.19.0';
@@ -294,6 +295,9 @@ export class GeminiApiService {
         }
 
         this.authClient = new OAuth2Client(oauth2Options);
+        // Note: do not fire-and-forget initialize() here. Callers (callApi/generateContent/streamGenerateContent)
+        // already await initialize() before use; a constructor-side init creates a race where the first request
+        // can run against an unloaded credential and silently swallows OAuth errors.
     }
 
     async initialize() {
@@ -583,19 +587,12 @@ export class GeminiApiService {
                 throw error;
             }
 
-            // Handle 429 (Too Many Requests)
+            // Handle 429 (Too Many Requests) — throw immediately so the pool manager can fail over to
+            // another account. Retrying the same account costs 1+2+4 = 7s of dead time per request and
+            // almost never recovers (the underlying quota is account-scoped). The pool's 30s cooldown
+            // (markProviderUnhealthyWithRecoveryTime) handles the back-pressure.
             if (status === 429) {
-                const retryAfter = getRetryAfterMs(error);
-                if (retryAfter !== null) {
-                    logger.warn(`[Gemini API] Received 429 with Retry-After: ${retryAfter}ms. Throwing to upper layer.`);
-                    throw error;
-                }
-                if (retryCount < maxRetries) {
-                    const delay = baseDelay * Math.pow(2, retryCount);
-                    logger.info(`[Gemini API] Received 429 (Too Many Requests). No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    return this.callApi(method, body, isRetry, retryCount + 1, model);
-                }
+                throw error;
             }
 
             // Handle other retryable errors (5xx server errors)
@@ -673,20 +670,10 @@ export class GeminiApiService {
                 throw error;
             }
 
-            // Handle 429 (Too Many Requests)
+            // Handle 429 (Too Many Requests) — same rationale as callApi: throw immediately so the
+            // pool manager fails over to another account instead of retrying this one.
             if (status === 429) {
-                const retryAfter = getRetryAfterMs(error);
-                if (retryAfter !== null) {
-                    logger.warn(`[Gemini API] Received 429 with Retry-After: ${retryAfter}ms during stream. Throwing to upper layer.`);
-                    throw error;
-                }
-                if (retryCount < maxRetries) {
-                    const delay = baseDelay * Math.pow(2, retryCount);
-                    logger.info(`[Gemini API] Received 429 (Too Many Requests) during stream. No Retry-After found. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${maxRetries})`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    yield* this.streamApi(method, body, isRetry, retryCount + 1, model);
-                    return;
-                }
+                throw error;
             }
 
             // Handle other retryable errors (5xx server errors)
@@ -728,8 +715,9 @@ export class GeminiApiService {
     }
 
     async generateContent(model, requestBody) {
+        if (!this.isInitialized) await this.initialize();
         logger.info(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
-        
+
         // 临时存储 monitorRequestId
         if (requestBody._monitorRequestId) {
             this.config._monitorRequestId = requestBody._monitorRequestId;
@@ -738,7 +726,7 @@ export class GeminiApiService {
         if (requestBody._requestBaseUrl) {
             delete requestBody._requestBaseUrl;
         }
-        
+
         // 检查 token 是否即将过期，如果是则推送到刷新队列
         if (this.isExpiryDateNear()) {
             const poolManager = getProviderPoolManager();
@@ -749,7 +737,7 @@ export class GeminiApiService {
                 });
             }
         }
-        
+
         let baseModel = model;
         if (!GEMINI_MODELS.includes(model)) {
             logger.warn(`[Gemini] Model '${model}' not found. Using default model: '${GEMINI_MODELS[0]}'`);
@@ -761,12 +749,13 @@ export class GeminiApiService {
             ensureRolesInContents({ ...requestBody })
         );
         const apiRequest = { model: baseModel, project: this.projectId, request: processedRequestBody };
-        
+
         const response = await this.callApi(API_ACTIONS.GENERATE_CONTENT, apiRequest, false, 0, baseModel);
         return toGeminiApiResponse(response.response);
     }
 
     async * generateContentStream(model, requestBody) {
+        if (!this.isInitialized) await this.initialize();
         logger.info(`[Auth Token] Time until expiry: ${formatExpiryTime(this.authClient.credentials.expiry_date)}`);
 
         // 临时存储 monitorRequestId
@@ -813,7 +802,7 @@ export class GeminiApiService {
             ensureRolesInContents({ ...requestBody })
         );
         const apiRequest = { model: baseModel, project: this.projectId, request: processedRequestBody };
-        
+
         const stream = this.streamApi(API_ACTIONS.STREAM_GENERATE_CONTENT, apiRequest, false, 0, baseModel);
         for await (const chunk of stream) {
             yield toGeminiApiResponse(chunk.response);
