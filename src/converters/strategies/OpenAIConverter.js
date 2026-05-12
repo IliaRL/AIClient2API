@@ -461,66 +461,37 @@ export class OpenAIConverter extends BaseConverter {
             const finishReason = choice.finish_reason;
             const events = [];
 
-            // 注释部分是为了兼容claude code，但是不兼容cherry studio
-            // 1. 处理 role (对应 message_start) 
-            // if (delta?.role === "assistant") {
-            //     events.push({
-            //         type: "message_start",
-            //         message: {
-            //             id: openaiChunk.id || `msg_${uuidv4()}`,
-            //             type: "message",
-            //             role: "assistant",
-            //             content: [],
-            //             model: model || openaiChunk.model || "unknown",
-            //             stop_reason: null,
-            //             stop_sequence: null,
-            //             usage: {
-            //                 input_tokens: openaiChunk.usage?.prompt_tokens || 0,
-            //                 output_tokens: 0
-            //             }
-            //         }
-            //     });
-            //     events.push({
-            //         type: "content_block_start",
-            //         index: 0,
-            //         content_block: {
-            //             type: "text",
-            //             text: ""
-            //         }
-            //     });
-            // }
-
             // 2. 处理 tool_calls (对应 content_block_start 和 content_block_delta)
-            // if (delta?.tool_calls) {
-            //     const toolCalls = delta.tool_calls;
-            //     for (const toolCall of toolCalls) {
-            //         // 如果有 function.name，说明是工具调用开始
-            //         if (toolCall.function?.name) {
-            //             events.push({
-            //                 type: "content_block_start",
-            //                 index: toolCall.index || 0,
-            //                 content_block: {
-            //                     type: "tool_use",
-            //                     id: toolCall.id || `tool_${uuidv4()}`,
-            //                     name: toolCall.function.name,
-            //                     input: {}
-            //                 }
-            //             });
-            //         }
+            if (delta?.tool_calls) {
+                const toolCalls = delta.tool_calls;
+                for (const toolCall of toolCalls) {
+                    // 如果有 function.name，说明是工具调用开始
+                    if (toolCall.function?.name) {
+                        events.push({
+                            type: "content_block_start",
+                            index: toolCall.index || 0,
+                            content_block: {
+                                type: "tool_use",
+                                id: toolCall.id || `tool_${uuidv4()}`,
+                                name: toolCall.function.name,
+                                input: {}
+                            }
+                        });
+                    }
 
-            //         // 如果有 function.arguments，说明是参数增量
-            //         if (toolCall.function?.arguments) {
-            //             events.push({
-            //                 type: "content_block_delta",
-            //                 index: toolCall.index || 0,
-            //                 delta: {
-            //                     type: "input_json_delta",
-            //                     partial_json: toolCall.function.arguments
-            //                 }
-            //             });
-            //         }
-            //     }
-            // }
+                    // 如果有 function.arguments，说明是参数增量
+                    if (toolCall.function?.arguments) {
+                        events.push({
+                            type: "content_block_delta",
+                            index: toolCall.index || 0,
+                            delta: {
+                                type: "input_json_delta",
+                                partial_json: toolCall.function.arguments
+                            }
+                        });
+                    }
+                }
+            }
 
             // 3. 处理 reasoning_content (对应 thinking 类型的 content_block)
             if (delta?.reasoning_content) {
@@ -553,7 +524,8 @@ export class OpenAIConverter extends BaseConverter {
                 // 映射 finish_reason
                 const stopReason = finishReason === "stop" ? "end_turn" :
                     finishReason === "length" ? "max_tokens" :
-                        "end_turn";
+                        finishReason === "tool_calls" ? "tool_use" : // Added tool_calls mapping
+                            "end_turn";
 
                 events.push({
                     type: "content_block_stop",
