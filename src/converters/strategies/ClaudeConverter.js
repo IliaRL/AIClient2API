@@ -246,7 +246,7 @@ export class ClaudeConverter extends BaseConverter {
                     function: {
                         name: tool.name || "",
                         description: tool.description || "",
-                        parameters: cleanJsonSchema(tool.input_schema || {})
+                        parameters: tool.input_schema || {}
                     }
                 });
             }
