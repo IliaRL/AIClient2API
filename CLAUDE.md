@@ -58,7 +58,7 @@ curl -s http://127.0.0.1:3000/provider_health | python3 -m json.tool | head -60
 
 # Live model list, broken down by provider
 curl -s http://127.0.0.1:3000/v1/models \
-  -H "Authorization: Bearer $(cat configs/pwd)" \
+  -H "Authorization: Bearer $(python3 -c "import json;print(json.load(open('configs/config.json'))['REQUIRED_API_KEY'])")" \
   | python3 -c "import sys,json; d=json.load(sys.stdin); by={}; \
     [by.setdefault(m['id'].split(':')[0] if ':' in m['id'] else m.get('owned_by','?'),[]).append(m['id']) for m in d['data']]; \
     print('total:', len(d['data'])); [print(f'  {k}: {len(v)}') for k,v in sorted(by.items())]"
@@ -95,7 +95,8 @@ for i in $(seq 1 30); do curl -sf http://127.0.0.1:3000/api/help -o /dev/null &&
 ## Configuration
 
 - `configs/config.json` — server config: port, `MODEL_PROVIDER` cascade, paths, key.
-- `configs/pwd` — static API key. Same value is used as the inference Bearer for `/v1/*` and as the admin password seed for `POST /api/login`.
+- `configs/config.json` field `REQUIRED_API_KEY` — static API key for `/v1/*` Bearer auth (e.g. `sk-...`). This is what clients use.
+- `configs/pwd` — **PBKDF2-hashed admin password** for `POST /api/login`. Not a usable Bearer for `/v1/*`. Don't confuse with `REQUIRED_API_KEY`.
 - `configs/provider_pools.json` — per-account credentials and pool metadata. **Contains live tokens** — see Rule 5.
 - `configs/custom_models.json` — user-defined model aliases with metadata (`contextLength`, `maxTokens`, `description`).
 - `configs/{gemini,antigravity,kiro,codex}/` — OAuth credentials, one JSON per account.
@@ -114,9 +115,9 @@ If `/v1/models` returns models for only the first provider in a comma-separated 
 
 ## Authentication
 
-- `/v1/*`, `/v1beta/*`, `/count_tokens` → use the **static API key** from `configs/pwd` as `Authorization: Bearer <key>`.
-- `/api/*`, `/health`, `/provider_health` → except public endpoints (`/api/help`, `/api/example`, `/provider_health`, `POST /api/login`), need a **dynamic admin token**: `POST /api/login` with the admin password, then use the returned token.
-- Common confusion: using the static API key for `/api/*` returns 401. Use the dynamic admin token.
+- `/v1/*`, `/v1beta/*`, `/count_tokens` → use the **static API key** from `REQUIRED_API_KEY` in `configs/config.json` (`sk-...`) as `Authorization: Bearer <key>`.
+- `/api/*`, `/health`, `/provider_health` → except public endpoints (`/api/help`, `/api/example`, `/provider_health`, `POST /api/login`), need a **dynamic admin token**: `POST /api/login` with the cleartext admin password (the original of what `configs/pwd` hashes to), then use the returned token.
+- Common confusion: `configs/pwd` is the **hashed** admin password (PBKDF2), not a usable Bearer. Using its raw contents as a `/v1/*` Bearer fails with 401.
 
 ---
 

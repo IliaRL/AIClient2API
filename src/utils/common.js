@@ -871,12 +871,15 @@ export async function handleStreamRequest(res, service, model, requestBody, from
             try {
                 // 动态导入以避免循环依赖
                 const { getApiServiceWithFallback } = await import('../services/service-manager.js');
+                // Mark the model that just failed as tried so modelFallbackMapping can't re-enter it.
+                if (retryContext?.triedModels && model) retryContext.triedModels.add(model);
                 // 使用 acquireSlot: true 以占用新凭证的并发插槽
-                const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: true });
-                
+                const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: true, triedModels: retryContext?.triedModels });
+
                 if (result && result.service) {
                     logger.info(`[Stream Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
-                    
+                    if (result.actualModel && retryContext?.triedModels) retryContext.triedModels.add(result.actualModel);
+
                     // 使用新服务重试
                     const newRetryContext = {
                         ...retryContext,
@@ -1082,12 +1085,15 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
             try {
                 // 动态导入以避免循环依赖
                 const { getApiServiceWithFallback } = await import('../services/service-manager.js');
+                // Mark the model that just failed as tried so modelFallbackMapping can't re-enter it.
+                if (retryContext?.triedModels && model) retryContext.triedModels.add(model);
                 // 使用 acquireSlot: true 以占用新凭证的并发插槽
-                const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: true });
-                
+                const result = await getApiServiceWithFallback(CONFIG, model, { acquireSlot: true, triedModels: retryContext?.triedModels });
+
                 if (result && result.service) {
                     logger.info(`[Unary Retry] Switched to new credential: ${result.uuid} (provider: ${result.actualProviderType})`);
-                    
+                    if (result.actualModel && retryContext?.triedModels) retryContext.triedModels.add(result.actualModel);
+
                     // 使用新服务重试
                     const newRetryContext = {
                         ...retryContext,
@@ -1426,7 +1432,12 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
     // - 凭证切换重试：凭证被标记不健康后切换到其他凭证
     // 当没有不同的健康凭证可用时，重试会自动停止
     const credentialSwitchMaxRetries = CONFIG.CREDENTIAL_SWITCH_MAX_RETRIES || 5;
-    const retryContext = { CONFIG, currentRetry: 0, maxRetries: credentialSwitchMaxRetries };
+    // triedModels: per-request set of every model name we've attempted via the fallback machinery.
+    // Threaded into selectProviderWithFallback / acquireSlotWithFallback so cycles in
+    // modelFallbackMapping (e.g. A→B→A) are broken instead of silently burning retries.
+    const triedModels = new Set();
+    if (model) triedModels.add(model);
+    const retryContext = { CONFIG, currentRetry: 0, maxRetries: credentialSwitchMaxRetries, triedModels };
     
     if (isStream) {
         await handleStreamRequest(res, service, model, processedRequestBody, fromProvider, toProvider, CONFIG.PROMPT_LOG_MODE, PROMPT_LOG_FILENAME, providerPoolManager, actualUuid, actualCustomName, retryContext);

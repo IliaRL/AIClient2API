@@ -69,8 +69,8 @@
       "targetProviderType": "claude-kiro-oauth"
     },
     "claude-opus-4-5": {
-      "targetModel": "gemini-3.1-pro-high",
-      "targetProviderType": "gemini-antigravity"
+      "targetModel": "anthropic/claude-opus-4-5",
+      "targetProviderType": "openai-custom"
     },
     "gemini-3.1-pro-high": {
       "targetModel": "gemini-3.1-pro-low",
@@ -121,12 +121,12 @@
       "targetProviderType": "openai-custom"
     },
     "google/gemini-2.5-pro": {
-      "targetModel": "anthropic/claude-opus-4-5",
+      "targetModel": "mistralai/mistral-large-2512",
       "targetProviderType": "openai-custom"
     },
     "anthropic/claude-opus-4-5": {
-      "targetModel": "mistralai/mistral-large-2512",
-      "targetProviderType": "openai-custom"
+      "targetModel": "gemini-3.1-pro-high",
+      "targetProviderType": "gemini-antigravity"
     },
     "mistralai/mistral-large-2512": {
       "targetModel": "nvidia/llama-3.1-nemotron-ultra-253b",
