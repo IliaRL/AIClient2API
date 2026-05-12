@@ -272,16 +272,6 @@ function geminiToAntigravity(modelName, payload, projectId) {
         }
     }
 
-    // 当模型是 Claude 时，禁止使用 tools
-    if (isClaudeModel) {
-        if (template.request.tools) {
-            delete template.request.tools;
-        }
-        if (template.request.toolConfig) {
-            delete template.request.toolConfig;
-        }
-    }
-
     // 对于非 Claude 模型，删除 maxOutputTokens
     // Claude 模型需要保留 maxOutputTokens
     // if (!isClaudeModel) { 注释了cc用不了
