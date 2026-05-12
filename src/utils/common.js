@@ -388,8 +388,14 @@ function appendCustomModelsToModelList(clientModelList, customEntries, providerT
  */
 export function getProtocolPrefix(provider) {
     // Special case for Codex - it needs its own protocol
-    if (provider === 'openai-codex-oauth') {
-        return 'codex';
+    if (provider === MODEL_PROVIDER.CODEX_API) {
+        return MODEL_PROTOCOL_PREFIX.CODEX;
+    }
+    if (provider === MODEL_PROVIDER.NVIDIA_NIM || provider.startsWith(MODEL_PROVIDER.NVIDIA_NIM + '-')) {
+        return MODEL_PROTOCOL_PREFIX.OPENAI;
+    }
+    if (provider === MODEL_PROVIDER.GITHUB_MODELS || provider.startsWith(MODEL_PROVIDER.GITHUB_MODELS + '-')) {
+        return MODEL_PROTOCOL_PREFIX.OPENAI;
     }
 
     const hyphenIndex = provider.indexOf('-');

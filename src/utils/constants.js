@@ -65,6 +65,8 @@ export const MODEL_PROVIDER = {
     CODEX_API: 'openai-codex-oauth',
     FORWARD_API: 'forward-api',
     GROK_WEB: 'grok-web',
+    NVIDIA_NIM: 'nvidia-nim',
+    GITHUB_MODELS: 'github-models',
     AUTO: 'auto',
 };
 

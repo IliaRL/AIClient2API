@@ -289,22 +289,25 @@ export class ClaudeApiService {
      * @returns {Promise<object>} List of models.
      */
     async listModels() {
-        logger.info('[ClaudeApiService] Listing available models.');
-        // Claude API 没有直接的 /models 端点来列出所有模型。
-        // 通常，你需要根据 Anthropic 的文档硬编码你希望支持的模型。
-        // 这里我们返回一些常见的 Claude 模型作为示例。
+        // Anthropic has no public /v1/models endpoint, so we return a static list.
+        // Probing each model with a paid round-trip is too slow and burns tokens.
         const models = [
-            { id: "claude-4-sonnet", name: "claude-4-sonnet" },
-            { id: "claude-sonnet-4-20250514", name: "claude-sonnet-4-20250514" },
-            { id: "claude-opus-4-20250514", name: "claude-opus-4-20250514" },
-            { id: "claude-3-7-sonnet-20250219", name: "claude-3-7-sonnet-20250219" },
-            { id: "claude-3-5-sonnet-20241022", name: "claude-3-5-sonnet-20241022" },
-            { id: "claude-3-5-haiku-20241022", name: "claude-3-5-haiku-20241022" },
-            { id: "claude-3-opus-20240229", name: "claude-3-opus-20240229" },
-            { id: "claude-3-haiku-20240307", name: "claude-3-haiku-20240307" },
+            { id: "claude-opus-4-7" },
+            { id: "claude-opus-4-6" },
+            { id: "claude-sonnet-4-6" },
+            { id: "claude-haiku-4-5" },
+            { id: "claude-opus-4-5" },
+            { id: "claude-opus-4-1" },
+            { id: "claude-sonnet-4-5" },
+            { id: "claude-sonnet-4-20250514" },
+            { id: "claude-opus-4-20250514" },
+            { id: "claude-3-7-sonnet-20250219" },
+            { id: "claude-3-5-sonnet-20241022" },
+            { id: "claude-3-5-haiku-20241022" },
+            { id: "claude-3-opus-20240229" },
+            { id: "claude-3-haiku-20240307" },
         ];
-
-        return { models: models.map(m => ({ name: m.name })) };
+        return { models: models.map(m => ({ name: m.id, id: m.id })) };
     }
 }
 

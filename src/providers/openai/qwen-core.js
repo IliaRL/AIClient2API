@@ -10,7 +10,7 @@ import * as https from 'https';
 import open from 'open';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'node:crypto';
-import { getProviderModels } from '../provider-models.js';
+import { getStaticProviderModels as getProviderModels } from '../provider-models.js';
 import { handleQwenOAuth } from '../../auth/oauth-handlers.js';
 import { configureAxiosProxy, configureTLSSidecar } from '../../utils/proxy-utils.js';
 import { isRetryableNetworkError, MODEL_PROVIDER, formatExpiryLog, getRetryAfterMs } from '../../utils/common.js';

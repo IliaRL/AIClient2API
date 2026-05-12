@@ -10,7 +10,7 @@ import {getProviderPoolManager} from '../../services/service-manager.js';
 import {configureTLSSidecar, isTLSSidecarEnabledForProvider} from '../../utils/proxy-utils.js';
 import {MODEL_PROVIDER, formatExpiryLog} from '../../utils/common.js';
 import {getProxyConfigForProvider} from '../../utils/proxy-utils.js';
-import {getProviderModels} from '../provider-models.js';
+import { getStaticProviderModels as getProviderModels } from '../provider-models.js';
 
 const baseModels = getProviderModels(MODEL_PROVIDER.CODEX_API);
 const fastModels = baseModels.map(m => `${m}-fast`);
@@ -106,7 +106,17 @@ export class CodexApiService {
             this.accountId = creds.account_id;
             this.email = creds.email;
             this.last_refresh = creds.last_refresh || this.last_refresh;
-            this.expiresAt = new Date(creds.expired); // 注意：字段名是 expired
+            // Field name on disk is `expired`. Validate at load — a NaN here causes isExpiryDateNear()
+            // to log a warn on every check; treat invalid/missing as already-expired so the first refresh runs once
+            // and writes a valid value back, instead of spamming "expiresAt is invalid (NaN)".
+            const expiredRaw = creds.expired ?? creds.expire ?? creds.expires_at ?? creds.expiresAt;
+            const parsedExpiry = expiredRaw ? new Date(expiredRaw) : null;
+            if (parsedExpiry && !Number.isNaN(parsedExpiry.getTime())) {
+                this.expiresAt = parsedExpiry;
+            } else {
+                logger.warn(`[Codex] Stored credential has invalid/missing expiry (${expiredRaw}); treating as expired`);
+                this.expiresAt = new Date(0);
+            }
 
             // 检查 token 是否需要刷新（异步触发，不阻塞加载）
             if (this.isExpiryDateNear()) {
