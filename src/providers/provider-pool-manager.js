@@ -263,7 +263,7 @@ export class ProviderPoolManager {
      */
     _enqueueRefresh(providerType, providerStatus, force = false) {
         const uuid = providerStatus.uuid;
-
+        this._log('debug', `Attempting to enqueue refresh for ${providerType}/${uuid}. Force: ${force}`);
         // Static-key providers (OpenAI-compatible with bare API key) have no refresh flow.
         // Short-circuit before any queue work so we don't spin on a refreshToken that doesn't exist.
         if (ProviderPoolManager.isStaticKeyProvider(providerType)) {
@@ -1200,6 +1200,12 @@ export class ProviderPoolManager {
             const targetProviderType = mapping.targetProviderType;
             const targetModel = mapping.targetModel;
 
+            // Cycle guard: see selectProviderWithFallback for the same check.
+            if (options.triedModels && targetModel && options.triedModels.has(targetModel)) {
+                this._log('info', `Skipping Model Fallback Mapping (acquireSlot) for ${requestedModel} -> ${targetModel}: already attempted in this request`);
+                return null;
+            }
+
             if (targetProviderType && targetModel) {
                 if (this.providerStatus[targetProviderType] && this.providerStatus[targetProviderType].length > 0) {
                     try {
@@ -1341,6 +1347,15 @@ export class ProviderPoolManager {
             const mapping = this.modelFallbackMapping[requestedModel];
             const targetProviderType = mapping.targetProviderType;
             const targetModel = mapping.targetModel;
+
+            // Cycle guard: per-request triedModels set is threaded through retries by
+            // handleStreamRequest / handleUnaryRequest. Without it, a back-edge in
+            // modelFallbackMapping silently burns CREDENTIAL_SWITCH_MAX_RETRIES.
+            if (options.triedModels && targetModel && options.triedModels.has(targetModel)) {
+                this._log('info', `Skipping Model Fallback Mapping for ${requestedModel} -> ${targetModel}: already attempted in this request`);
+                this._log('warn', `None available provider found for ${providerType} (Model: ${requestedModel}) after checking fallback chain and model mapping.`);
+                return null;
+            }
 
             if (targetProviderType && targetModel) {
                 this._log('info', `Trying Model Fallback Mapping for ${requestedModel}: -> ${targetProviderType} (${targetModel})`);
