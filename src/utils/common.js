@@ -1211,9 +1211,10 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             return { data: [] };
         };
 
-        // --- 核心逻辑: auto 路由模式下的模型聚合 ---
-        if (CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.AUTO && providerPoolManager) {
-            logger.info(`[ModelList] Aggregating models for 'auto' mode...`);
+        // --- 核心逻辑: auto 路由 OR 多提供商级联模式下的模型聚合 ---
+        const hasMultipleProviders = Array.isArray(CONFIG.DEFAULT_MODEL_PROVIDERS) && CONFIG.DEFAULT_MODEL_PROVIDERS.length > 1;
+        if ((CONFIG.MODEL_PROVIDER === MODEL_PROVIDER.AUTO || hasMultipleProviders) && providerPoolManager) {
+            logger.info(`[ModelList] Aggregating models across ${hasMultipleProviders ? CONFIG.DEFAULT_MODEL_PROVIDERS.length + ' configured providers' : "'auto' mode"}...`);
             clientModelList = await providerPoolManager.getAllAvailableModels(endpointType);
         } else {
             // --- 单提供商逻辑 ---
