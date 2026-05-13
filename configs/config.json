@@ -2,7 +2,7 @@
   "REQUIRED_API_KEY": "sk-a60f3efdf9b97e63c84ab4a3583f9d1c",
   "SERVER_PORT": 3000,
   "HOST": "0.0.0.0",
-  "MODEL_PROVIDER": "gemini-cli-oauth,gemini-antigravity,claude-kiro-oauth,openai-codex-oauth,grok-web,openai-custom,claude-custom,openaiResponses-custom",
+  "MODEL_PROVIDER": "gemini-antigravity,gemini-cli-oauth,claude-kiro-oauth,openai-codex-oauth,grok-web,openai-custom,claude-custom,openaiResponses-custom",
   "SYSTEM_PROMPT_FILE_PATH": "/Users/ilialiston/AIClient2API/configs/input_system_prompt.txt",
   "SYSTEM_PROMPT_MODE": "append",
   "SYSTEM_PROMPT_REPLACEMENTS": [],
@@ -205,8 +205,8 @@
   "TLS_SIDECAR_PROXY_URL": null,
   "SCHEDULED_HEALTH_CHECK": {
     "enabled": true,
-    "startupRun": true,
-    "interval": 600000,
+    "startupRun": false,
+    "interval": 1800000,
     "providerTypes": [
       "gemini-cli-oauth",
       "gemini-antigravity",

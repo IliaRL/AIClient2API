@@ -29,7 +29,7 @@ export const PROVIDER_MAPPINGS = [
         patterns: ['configs/gemini/', '/gemini/', '/.gemini/', 'configs/gemini-cli/'],
         providerType: 'gemini-cli-oauth',
         credPathKey: 'GEMINI_OAUTH_CREDS_FILE_PATH',
-        defaultCheckModel: 'gemini-2.5-flash',
+        defaultCheckModel: 'gemini-2.5-flash-lite',
         displayName: 'Gemini CLI OAuth',
         needsProjectId: true,
         urlKeys: ['GEMINI_BASE_URL']
@@ -52,7 +52,7 @@ export const PROVIDER_MAPPINGS = [
         patterns: ['configs/antigravity/', '/antigravity/', '/.antigravity/'],
         providerType: 'gemini-antigravity',
         credPathKey: 'ANTIGRAVITY_OAUTH_CREDS_FILE_PATH',
-        defaultCheckModel: 'gemini-2.5-computer-use-preview-10-2025',
+        defaultCheckModel: 'gemini-3-flash',
         displayName: 'Gemini Antigravity',
         needsProjectId: true,
         urlKeys: ['ANTIGRAVITY_BASE_URL_DAILY', 'ANTIGRAVITY_BASE_URL_AUTOPUSH']
