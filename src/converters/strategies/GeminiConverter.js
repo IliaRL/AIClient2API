@@ -949,7 +949,8 @@ export class GeminiConverter extends BaseConverter {
                     } catch (e) {
                         // 解码失败，保持原样
                     }
-                    toolUseBlock.signature = signature;
+                    // Anthropic rejects extra fields on tool_use; signature is only valid on thinking blocks.
+                    // toolUseBlock.signature = signature; // intentionally omitted
                 }
                 content.push(toolUseBlock);
             }
@@ -1063,7 +1064,8 @@ export class GeminiConverter extends BaseConverter {
                             } catch (e) {
                                 // 解码失败，保持原样
                             }
-                            toolUseBlock.signature = signature;
+                            // Anthropic rejects extra fields on tool_use; signature is only valid on thinking blocks.
+                    // toolUseBlock.signature = signature; // intentionally omitted
                         }
                         content.push(toolUseBlock);
                     }
