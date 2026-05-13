@@ -2385,8 +2385,9 @@ export class ProviderPoolManager {
         // 获取所有可能的请求格式
         const healthCheckRequests = this._buildHealthCheckRequests(providerType, modelName);
 
-        // 健康检查超时时间（15秒，避免长时间阻塞）
-        const healthCheckTimeout = 15000;
+        // Antigravity cold-start (OAuth refresh + Project ID discovery) takes 30-50s on first call.
+        // Use a longer timeout for antigravity; 15s for everything else.
+        const healthCheckTimeout = providerType === 'gemini-antigravity' ? 90000 : 15000;
         let lastError = null;
 
         // 重试机制：尝试不同的请求格式
@@ -2403,8 +2404,19 @@ export class ProviderPoolManager {
                 };
 
                 await serviceAdapter.generateContent(modelName, requestWithSignal);
-                
+
                 clearTimeout(timeoutId);
+
+                // Persist the discovered PROJECT_ID back to the pool config so subsequent
+                // restarts skip the 30-50s GCP project discovery on first call.
+                if (providerType === 'gemini-antigravity') {
+                    const discoveredProjectId = serviceAdapter.antigravityApiService?.projectId;
+                    if (discoveredProjectId && discoveredProjectId !== providerConfig.PROJECT_ID) {
+                        providerConfig.PROJECT_ID = discoveredProjectId;
+                        this._debouncedSave(providerType);
+                        this._log('info', `[Antigravity] Persisted PROJECT_ID ${discoveredProjectId} for ${providerConfig.uuid}`);
+                    }
+                }
                 // 注意：使用量计数由调用方处理（performHealthChecks/performInitialHealthChecks）
                 // 这里只返回成功结果，让调用方统一处理状态更新和计数
                 return { success: true, modelName, errorMessage: null };
