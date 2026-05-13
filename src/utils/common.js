@@ -870,8 +870,8 @@ export async function handleStreamRequest(res, service, model, requestBody, from
         // 凭证已被标记为不健康后，尝试切换到新凭证重试
         // 不再依赖状态码判断，只要凭证被标记不健康且可以重试，就尝试切换
         if (credentialMarkedUnhealthy && currentRetry < maxRetries && providerPoolManager && CONFIG) {
-            // 增加10秒内的随机等待时间，避免所有请求同时切换凭证
-            const randomDelay = Math.floor(Math.random() * 10000); // 0-10000毫秒
+            // Small jitter to avoid recursive retries hammering the pool simultaneously
+            const randomDelay = 50 + Math.floor(Math.random() * 100); // 50-150ms
             logger.info(`[Stream Retry] Credential marked unhealthy. Waiting ${randomDelay}ms before retry ${currentRetry + 1}/${maxRetries} with different credential...`);
             await new Promise(resolve => setTimeout(resolve, randomDelay));
             
@@ -1089,8 +1089,8 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
         // 凭证已被标记为不健康后，尝试切换到新凭证重试
         // 不再依赖状态码判断，只要凭证被标记不健康且可以重试，就尝试切换
         if (credentialMarkedUnhealthy && currentRetry < maxRetries && providerPoolManager && CONFIG) {
-            // 增加10秒内的随机等待时间，避免所有请求同时切换凭证
-            const randomDelay = Math.floor(Math.random() * 10000); // 0-10000毫秒
+            // Small jitter to avoid recursive retries hammering the pool simultaneously
+            const randomDelay = 50 + Math.floor(Math.random() * 100); // 50-150ms
             logger.info(`[Unary Retry] Credential marked unhealthy. Waiting ${randomDelay}ms before retry ${currentRetry + 1}/${maxRetries} with different credential...`);
             await new Promise(resolve => setTimeout(resolve, randomDelay));
             
