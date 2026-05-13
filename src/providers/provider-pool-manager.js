@@ -1078,6 +1078,13 @@ export class ProviderPoolManager {
 
         // 如果指定了模型，则排除不支持该模型的提供商
         if (requestedModel) {
+            // Exclude accounts with an active per-model cooldown for this specific model
+            const nowTs = Date.now();
+            availableAndHealthyProviders = availableAndHealthyProviders.filter(p => {
+                const cooldowns = p.config.modelCooldowns;
+                if (!cooldowns || !cooldowns[requestedModel]) return true;
+                return nowTs >= new Date(cooldowns[requestedModel]).getTime();
+            });
             const modelFilteredProviders = availableAndHealthyProviders.filter(p => {
                 const supportedModels = getConfiguredSupportedModels(providerType, p.config);
                 if (supportedModels.length > 0) {
@@ -1630,11 +1637,14 @@ export class ProviderPoolManager {
                 return;
             }
 
-            provider.config.needsRefresh = true;
-            this._log('info', `Marked provider ${providerConfig.uuid} as needsRefresh. Enqueuing...`);
-            
-            // 推入异步刷新队列
-            this._enqueueRefresh(providerType, provider, true);
+            if (!ProviderPoolManager.isStaticKeyProvider(providerType)) {
+                provider.config.needsRefresh = true;
+                this._log('info', `Marked provider ${providerConfig.uuid} as needsRefresh. Enqueuing...`);
+                // 推入异步刷新队列
+                this._enqueueRefresh(providerType, provider, true);
+            } else {
+                this._log('info', `Skipping refresh for static-key provider ${providerType}/${providerConfig.uuid} as it does not support token refresh.`);
+            }
             
             this._debouncedSave(providerType);
         } else {
@@ -1781,6 +1791,25 @@ export class ProviderPoolManager {
 
             this._debouncedSave(providerType);
         }
+    }
+
+    /**
+     * Applies a per-model cooldown to a specific account without marking the whole account unhealthy.
+     * The account remains available for other models; only requests for modelId are blocked until recoveryTime.
+     * @param {string} providerType
+     * @param {string} uuid
+     * @param {string} modelId
+     * @param {Date} recoveryTime
+     */
+    markModelCooldown(providerType, uuid, modelId, recoveryTime) {
+        if (!uuid || !modelId || !recoveryTime) return;
+        const provider = this._findProvider(providerType, uuid);
+        if (!provider) return;
+        if (!provider.config.modelCooldowns) provider.config.modelCooldowns = {};
+        const recoveryDate = recoveryTime instanceof Date ? recoveryTime : new Date(recoveryTime);
+        provider.config.modelCooldowns[modelId] = recoveryDate.toISOString();
+        this._log('info', `[ModelCooldown] Account ${uuid} (${providerType}) cooldown for model ${modelId} until ${recoveryDate.toISOString()}`);
+        this._debouncedSave(providerType);
     }
 
     /**
@@ -2010,17 +2039,30 @@ export class ProviderPoolManager {
                     const recoveryTime = new Date(config.scheduledRecoveryTime);
                     if (now >= recoveryTime) {
                         this._log('info', `Auto-recovering provider ${config.uuid} (${type}). Scheduled recovery time reached: ${recoveryTime.toISOString()}`);
-                        
+
                         // 恢复健康状态
                         config.isHealthy = true;
                         config.errorCount = 0;
                         config.lastErrorTime = null;
                         config.lastErrorMessage = null;
                         config.scheduledRecoveryTime = null; // 清除恢复时间
-                        
+
                         // 保存更改
                         this._debouncedSave(type);
                     }
+                }
+
+                // Expire per-model cooldowns that have passed their recovery time
+                if (config.modelCooldowns && Object.keys(config.modelCooldowns).length > 0) {
+                    let changed = false;
+                    for (const [modelId, cooldownUntil] of Object.entries(config.modelCooldowns)) {
+                        if (now >= new Date(cooldownUntil)) {
+                            delete config.modelCooldowns[modelId];
+                            this._log('info', `[ModelCooldown] Cooldown expired for model ${modelId} on account ${config.uuid} (${type})`);
+                            changed = true;
+                        }
+                    }
+                    if (changed) this._debouncedSave(type);
                 }
             }
         }

@@ -79,7 +79,7 @@ for i in $(seq 1 30); do curl -sf http://127.0.0.1:3000/api/help -o /dev/null &&
 | Static model catalog | `src/providers/provider-models.js:24` (`STATIC_PROVIDER_MODELS`) | Authoritative model list per provider; what `/v1/models` exposes |
 | Provider mapping (rotation) | `src/utils/provider-utils.js:14` (`PROVIDER_MAPPINGS`) | Maps credential file patterns to provider types; required for UI and usage tracking |
 | Static-key set | `src/providers/provider-pool-manager.js:49` (`STATIC_KEY_PROVIDERS`) | Bearer-only providers without OAuth refresh — see Rule 4 |
-| Pool selection | `src/providers/provider-pool-manager.js` (`selectProvider`, `_enqueueRefresh:263`, `getAllAvailableModels:1473`) | Rotation, health, refresh queue, model aggregation |
+| Pool selection | `src/providers/provider-pool-manager.js` (`selectProvider`, `_enqueueRefresh:263`, `getAllAvailableModels:1473`, `markModelCooldown`) | Rotation, health, refresh queue, model aggregation; `markModelCooldown` applies per-model 429 cooldown without marking whole account unhealthy |
 | Cascade parsing | `src/core/config-manager.js:12` (`normalizeConfiguredProviders`) | Splits comma-separated `MODEL_PROVIDER` into `DEFAULT_MODEL_PROVIDERS[]` and picks `[0]` as the default |
 | Request dispatch | `src/services/api-manager.js:32` (`handleAPIRequests`) | Maps HTTP path → endpoint type → handler |
 | Provider resolution | `src/services/service-manager.js:376` (`_resolveEffectiveRouting`), `:408` (`getApiService`) | Handles `provider:model` prefix routing, AUTO mode, pool selection |
@@ -143,6 +143,7 @@ E (Antigravity "hang") and F (Kiro 400) were investigated and found to be cold-c
 - **`PROMPT_LOG_MODE: "file"`** is the single highest-information debug tool. Flip it on in `configs/config.json`, restart, reproduce, then read `logs/<PROMPT_LOG_BASE_NAME>_*.log` to see the exact payload sent upstream.
 - **Health check defaults differ.** `defaultCheckModel` per provider is in `PROVIDER_MAPPINGS` (e.g. Antigravity uses `gemini-2.5-computer-use-preview-10-2025`); changing it changes which model the periodic health check exercises.
 - **OAuth providers must not appear in `STATIC_KEY_PROVIDERS`.** Adding them disables refresh and silently breaks every account after token expiry.
+- **`SCHEDULED_HEALTH_CHECK` is now enabled** for `gemini-cli-oauth`, `gemini-antigravity`, `claude-kiro-oauth`, `openai-codex-oauth`. After startup, Antigravity accounts whose GCP projects don't have the Staging CloudCode API enabled will appear unhealthy with HTTP 403 "API has not been used in project X before or it is disabled." This is a pre-existing account configuration issue — not a proxy bug. Remaining healthy accounts serve normally. Fix: visit the `console.developers.google.com` URL in the error and enable the API for that project.
 
 ---
 
@@ -151,7 +152,7 @@ E (Antigravity "hang") and F (Kiro 400) were investigated and found to be cold-c
 After any change touching routing, model configuration, or auth:
 
 1. Restart the proxy (`kill $(lsof -t -i:3000); npm start ...`).
-2. `curl /provider_health` — confirm count and that no expected provider is unhealthy.
+2. `curl /provider_health` — confirm count and check for unexpected unhealthy entries. Some Antigravity accounts may show unhealthy at startup if their GCP projects lack the Staging API — this is expected after enabling `SCHEDULED_HEALTH_CHECK` (see Gotchas). Focus on whether the providers you rely on are healthy.
 3. `curl /v1/models` — confirm model count matches expectations (the per-provider breakdown is the most useful signal).
 4. The specific scenario you changed — tool-use curl, streaming response, etc. State exact numbers ("70 models, 0 unhealthy items, tool_use response in 1.1s"), not assertions ("should work now").
 

@@ -8,6 +8,7 @@ import { convertData, getOpenAIStreamChunkStop } from '../convert/convert.js';
 import { ProviderStrategyFactory } from './provider-strategies.js';
 import { getPluginManager } from '../core/plugin-manager.js';
 import { MODEL_PROTOCOL_PREFIX, MODEL_PROVIDER } from './constants.js';
+import { getCachedResponse, setCachedResponse, clearCache } from '../services/service-manager.js';
 
 // ==================== 时间与时区 ====================
 
@@ -833,13 +834,19 @@ export async function handleStreamRequest(res, service, model, requestBody, from
 
         const rateLimitRecoveryTime = getRateLimitCooldownRecoveryTime(error, CONFIG);
         if (rateLimitRecoveryTime && providerPoolManager && pooluuid) {
-            logger.info(`[Provider Pool] Applying 429 cooldown for ${toProvider} (${pooluuid}) until ${rateLimitRecoveryTime.toISOString()}`);
-            providerPoolManager.markProviderUnhealthyWithRecoveryTime(toProvider, {
-                uuid: pooluuid
-            }, '429 Too Many Requests - short cooldown', rateLimitRecoveryTime);
+            if (model && typeof providerPoolManager.markModelCooldown === 'function') {
+                // Per-model cooldown: account remains available for other models
+                logger.info(`[Provider Pool] Applying per-model 429 cooldown for ${toProvider} (${pooluuid}) model=${model} until ${rateLimitRecoveryTime.toISOString()}`);
+                providerPoolManager.markModelCooldown(toProvider, pooluuid, model, rateLimitRecoveryTime);
+            } else {
+                logger.info(`[Provider Pool] Applying 429 cooldown for ${toProvider} (${pooluuid}) until ${rateLimitRecoveryTime.toISOString()}`);
+                providerPoolManager.markProviderUnhealthyWithRecoveryTime(toProvider, {
+                    uuid: pooluuid
+                }, '429 Too Many Requests - short cooldown', rateLimitRecoveryTime);
+            }
             credentialMarkedUnhealthy = true;
         }
-        
+
         // 如果底层未标记，且不跳过错误计数，则在此处标记
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
             // 400 报错码通常是请求参数问题，不记录为提供商错误
@@ -1047,13 +1054,18 @@ export async function handleUnaryRequest(res, service, model, requestBody, fromP
 
         const rateLimitRecoveryTime = getRateLimitCooldownRecoveryTime(error, CONFIG);
         if (rateLimitRecoveryTime && providerPoolManager && pooluuid) {
-            logger.info(`[Provider Pool] Applying 429 cooldown for ${toProvider} (${pooluuid}) until ${rateLimitRecoveryTime.toISOString()}`);
-            providerPoolManager.markProviderUnhealthyWithRecoveryTime(toProvider, {
-                uuid: pooluuid
-            }, '429 Too Many Requests - short cooldown', rateLimitRecoveryTime);
+            if (model && typeof providerPoolManager.markModelCooldown === 'function') {
+                logger.info(`[Provider Pool] Applying per-model 429 cooldown for ${toProvider} (${pooluuid}) model=${model} until ${rateLimitRecoveryTime.toISOString()}`);
+                providerPoolManager.markModelCooldown(toProvider, pooluuid, model, rateLimitRecoveryTime);
+            } else {
+                logger.info(`[Provider Pool] Applying 429 cooldown for ${toProvider} (${pooluuid}) until ${rateLimitRecoveryTime.toISOString()}`);
+                providerPoolManager.markProviderUnhealthyWithRecoveryTime(toProvider, {
+                    uuid: pooluuid
+                }, '429 Too Many Requests - short cooldown', rateLimitRecoveryTime);
+            }
             credentialMarkedUnhealthy = true;
         }
-        
+
         // 如果底层未标记，且不跳过错误计数，则在此处标记
         if (!credentialMarkedUnhealthy && !skipErrorCount && providerPoolManager && pooluuid) {
             // 400 报错码通常是请求参数问题，不记录为提供商错误
@@ -1158,7 +1170,16 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
 
     const fromProvider = clientProviderMap[endpointType];
 
-    try {        
+    try {
+        // 检查缓存
+        const apiKey = CONFIG.REQUIRED_API_KEY || ''; // /v1/models 需要 API Key
+        const cacheKey = `${endpointType}-${apiKey}`;
+        const cachedResponse = getCachedResponse(cacheKey);
+        if (cachedResponse) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(cachedResponse));
+            return;
+        }
         if (!fromProvider) {
             throw new Error(`Unsupported endpoint type for model list: ${endpointType}`);
         }
@@ -1238,6 +1259,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
             // service 可能未在上层预先注入（例如仅改了路径 provider 前缀），这里兜底获取
             let resolvedService = service;
             if (!resolvedService) {
+                // 动态导入以避免循环依赖
                 const { getApiService } = await import('../services/service-manager.js');
                 resolvedService = await getApiService(CONFIG, null, { skipUsageCount: true });
             }
@@ -1271,6 +1293,7 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         // logger.info(`[ModelList Response] Sending model list to client: ${JSON.stringify(clientModelList)}`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(clientModelList));
+        setCachedResponse(cacheKey, clientModelList); // 写入缓存
     } catch (error) {
         logger.error('\n[Server] Error during model list processing:', error.stack);
         // if (providerPoolManager && pooluuid && CONFIG.MODEL_PROVIDER !== MODEL_PROVIDER.AUTO) {
@@ -1282,7 +1305,6 @@ export async function handleModelListRequest(req, res, service, endpointType, CO
         handleError(res, error, CONFIG.MODEL_PROVIDER, fromProvider);
     }
 }
-
 
 /**
  * Handles requests for content generation (both unary and streaming). This function
@@ -1299,6 +1321,22 @@ export async function handleContentGenerationRequest(req, res, service, endpoint
 
     if (!originalRequestBody) {
         throw new Error("Request body is missing for content generation.");
+    }
+
+    // Anthropic 400-guard: tool_use blocks must not carry a `signature` field
+    // (only valid on thinking blocks). Older proxy versions (and any Gemini
+    // -> Claude conversion) sometimes wrote signature onto tool_use, which
+    // poisoned the client's conversation history. Strip it on the way in so
+    // existing histories can still be replayed against any Claude upstream.
+    if (endpointType === ENDPOINT_TYPE.CLAUDE_MESSAGE && Array.isArray(originalRequestBody?.messages)) {
+        for (const message of originalRequestBody.messages) {
+            if (!message || !Array.isArray(message.content)) continue;
+            for (const block of message.content) {
+                if (block && block.type === 'tool_use' && 'signature' in block) {
+                    delete block.signature;
+                }
+            }
+        }
     }
 
     const clientProviderMap = {

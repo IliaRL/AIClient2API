@@ -19,6 +19,49 @@ import { MODEL_PROVIDER } from '../utils/constants.js';
 // 存储 ProviderPoolManager 实例
 let providerPoolManager = null;
 
+// 缓存对象和 TTL (Time To Live)，单位：毫秒
+const responseCache = {};
+const CACHE_TTL = 5000; // 5 秒
+
+function getCacheKey(endpointType, apiKey = '') {
+    return `${endpointType}-${apiKey}`;
+}
+
+export function getCachedResponse(endpointType, apiKey = '') {
+    const key = getCacheKey(endpointType, apiKey);
+    const cached = responseCache[key];
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+        logger.debug(`[Cache] Cache hit for ${endpointType}`);
+        return cached.data;
+    }
+    logger.debug(`[Cache] Cache miss or expired for ${endpointType}`);
+    return null;
+}
+
+export function setCachedResponse(endpointType, data, apiKey = '') {
+    const key = getCacheKey(endpointType, apiKey);
+    responseCache[key] = {
+        data: data,
+        timestamp: Date.now()
+    };
+    logger.debug(`[Cache] Cached response for ${endpointType}`);
+}
+
+export function clearCache(endpointType = null, apiKey = '') {
+    if (endpointType) {
+        const key = getCacheKey(endpointType, apiKey);
+        delete responseCache[key];
+        logger.debug(`[Cache] Cleared cache for ${endpointType}`);
+    } else {
+        for (const key in responseCache) {
+            if (key.startsWith(`${apiKey}-`)) { // Clear all cache entries for a given API key
+                delete responseCache[key];
+            }
+        }
+        logger.debug(`[Cache] Cleared all cache entries for API key: ${apiKey}`);
+    }
+}
+
 /**
  * 扫描 configs 目录并自动关联未关联的配置文件到对应的提供商
  * @param {Object} config - 服务器配置对象

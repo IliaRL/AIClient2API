@@ -854,10 +854,11 @@ async saveCredentialsToFile(filePath, newData) {
                 requestBody.grantType = 'refresh_token';
             }
 
+            logger.debug(`[Kiro Auth] Refreshing token for ${this.authMethod} auth method. Request URL: ${refreshUrl}, Request Body: ${JSON.stringify(requestBody)}`);
             let response = null;
             // 使用更短的超时时间进行 token 刷新，避免阻塞其他请求
             const refreshConfig = { timeout: KIRO_CONSTANTS.TOKEN_REFRESH_TIMEOUT };
-            
+
             const axiosConfig = {
                 method: 'post',
                 url: refreshUrl,
@@ -873,6 +874,7 @@ async saveCredentialsToFile(filePath, newData) {
                 response = await this.axiosInstance.request(axiosConfig);
                 logger.info('[Kiro Auth] Token refresh idc response: ok');
             }
+            logger.debug(`[Kiro Auth] Token refresh successful. Response status: ${response.status}, data: ${JSON.stringify(response.data)}`);
 
             if (response.data && response.data.accessToken) {
                 this.accessToken = response.data.accessToken;
@@ -1980,7 +1982,6 @@ async saveCredentialsToFile(filePath, newData) {
         try {
             // Verify usage limits to confirm quota exhaustion
             const usageLimits = await this.getUsageLimits();
-            const isQuotaExhausted = usageLimits?.usedCount >= usageLimits?.limitCount;
             
             logger.info(`[Kiro] Quota confirmed exhausted: ${usageLimits?.usedCount}/${usageLimits?.limitCount}`);
             // Calculate recovery time: 1st day of next month at 00:00:00 UTC
