@@ -1,0 +1,29 @@
+name: Go Dependency Submission
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'tls-sidecar/go.mod'
+      - 'tls-sidecar/go.sum'
+      - '.github/workflows/dependency-graph-go.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  go-dependency-submission:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tls-sidecar/go.mod
+
+      - uses: actions/go-dependency-submission@v2
+        with:
+          go-mod-path: tls-sidecar/go.mod
+          go-build-target: tls-sidecar/main.go
